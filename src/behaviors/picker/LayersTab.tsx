@@ -4,6 +4,7 @@ import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_from_page_and_id } from "../../hid-usages";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
+import { getMinimalKeysLayerRole } from "../../keyboard/minimal-keys-layers";
 
 const KB = 7;
 
@@ -25,11 +26,16 @@ interface LayersTabProps {
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
-export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps) {
+export function LayersTab({
+  behaviors,
+  layers,
+  onApplyBinding,
+}: LayersTabProps) {
   const [selectedBehavior, setSelectedBehavior] = useState<string | null>(null);
   const [selectedLayer, setSelectedLayer] = useState<number | null>(null);
   const [selectedTapKey, setSelectedTapKey] = useState<TapKeyItem | null>(null);
-  const [selectedMouseButton, setSelectedMouseButton] = useState<ActionItem | null>(null);
+  const [selectedMouseButton, setSelectedMouseButton] =
+    useState<ActionItem | null>(null);
 
   const availableBehaviors = useMemo(
     () => behaviors.filter((b) => layerBehaviorNames.includes(b.displayName)),
@@ -74,6 +80,14 @@ export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps)
     setSelectedMouseButton(item);
   };
 
+  const layerButtonLabel = (layer: { name: string; index: number }): string => {
+    const base = layer.name || `Layer ${layer.index}`;
+    const role = getMinimalKeysLayerRole(layer.index);
+    if (role === "scroll") return `${base}（スクロール）`;
+    if (role === "autoMouse") return `${base}（自動マウス）`;
+    return base;
+  };
+
   const handleApply = () => {
     if (!selectedBehavior || selectedLayer === null) return;
     const behaviorId = behaviorIdMap[selectedBehavior];
@@ -102,7 +116,9 @@ export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps)
     <div className="flex flex-col gap-3">
       {/* Step 1: Choose behavior type */}
       <div>
-        <div className="text-sm text-base-content/60 mb-1">レイヤー機能を選択</div>
+        <div className="text-sm text-base-content/60 mb-1">
+          レイヤー機能を選択
+        </div>
         <div className="flex flex-wrap gap-1">
           {availableBehaviors.map((b) => {
             const desc = getBehaviorDescription(b.displayName);
@@ -126,7 +142,9 @@ export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps)
       {/* Step 2: Choose layer */}
       {selectedBehavior && (
         <div>
-          <div className="text-sm text-base-content/60 mb-1">レイヤーを選択</div>
+          <div className="text-sm text-base-content/60 mb-1">
+            レイヤーを選択
+          </div>
           <div className="flex flex-wrap gap-1">
             {layers.map((layer) => (
               <button
@@ -138,7 +156,7 @@ export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps)
                 }`}
                 onClick={() => handleLayerClick(layer.id)}
               >
-                {layer.name || `Layer ${layer.index}`}
+                {layerButtonLabel(layer)}
               </button>
             ))}
           </div>
@@ -148,13 +166,16 @@ export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps)
       {/* Step 3: For Layer-Tap, choose tap key */}
       {needsTapKey && selectedLayer !== null && (
         <div>
-          <div className="text-sm text-base-content/60 mb-1">タップキーを選択</div>
+          <div className="text-sm text-base-content/60 mb-1">
+            タップキーを選択
+          </div>
           <div className="grid grid-cols-8 gap-1 max-h-32 overflow-y-auto">
             {commonTapKeys.map((key) => (
               <button
                 key={key.modifier ? `s${key.hidId}` : key.hidId}
                 className={`px-2 py-1.5 text-sm rounded-md border text-center ${
-                  selectedTapKey?.hidId === key.hidId && selectedTapKey?.modifier === key.modifier
+                  selectedTapKey?.hidId === key.hidId &&
+                  selectedTapKey?.modifier === key.modifier
                     ? "bg-primary/10 text-primary border-primary/30 font-medium"
                     : "border-base-300 bg-white hover:bg-base-200 text-base-content"
                 }`}
@@ -170,7 +191,9 @@ export function LayersTab({ behaviors, layers, onApplyBinding }: LayersTabProps)
       {/* Step 3: For LAYER_TAP_MKP, choose mouse button */}
       {needsMouseButton && selectedLayer !== null && (
         <div>
-          <div className="text-sm text-base-content/60 mb-1">マウスクリックを選択</div>
+          <div className="text-sm text-base-content/60 mb-1">
+            マウスクリックを選択
+          </div>
           <div className="grid grid-cols-2 gap-1">
             {mouseItems.map((item) => (
               <button

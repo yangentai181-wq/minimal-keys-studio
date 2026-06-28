@@ -21,7 +21,13 @@ const layers = [
 describe("LayersTab", () => {
   it("renders layer behavior options", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     expect(screen.getByText("一時レイヤー")).toBeTruthy();
     expect(screen.getByText("レイヤー切替")).toBeTruthy();
     expect(screen.getByText("レイヤー / タップ")).toBeTruthy();
@@ -29,7 +35,13 @@ describe("LayersTab", () => {
 
   it("shows layer selection after behavior click", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     fireEvent.click(screen.getByText("一時レイヤー"));
     expect(screen.getByText("Base")).toBeTruthy();
     expect(screen.getByText("Symbols")).toBeTruthy();
@@ -38,15 +50,31 @@ describe("LayersTab", () => {
 
   it("Momentary Layer: apply immediately on layer click", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     fireEvent.click(screen.getByText("一時レイヤー"));
     fireEvent.click(screen.getByText("Symbols"));
-    expect(onApply).toHaveBeenCalledWith({ behaviorId: 10, param1: 1, param2: 0 });
+    expect(onApply).toHaveBeenCalledWith({
+      behaviorId: 10,
+      param1: 1,
+      param2: 0,
+    });
   });
 
   it("Layer-Tap: shows apply button disabled initially", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     fireEvent.click(screen.getByText("レイヤー / タップ"));
     const applyBtn = screen.getByText("適用する");
     expect(applyBtn).toHaveAttribute("disabled");
@@ -54,7 +82,13 @@ describe("LayersTab", () => {
 
   it("Layer-Tap: apply button enabled after both params", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     fireEvent.click(screen.getByText("レイヤー / タップ"));
     fireEvent.click(screen.getByText("Symbols"));
     fireEvent.click(screen.getByText("Space"));
@@ -64,7 +98,13 @@ describe("LayersTab", () => {
 
   it("Layer-Tap: apply sends correct binding", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     fireEvent.click(screen.getByText("レイヤー / タップ"));
     fireEvent.click(screen.getByText("Symbols"));
     fireEvent.click(screen.getByText("Space"));
@@ -78,7 +118,13 @@ describe("LayersTab", () => {
 
   it("LAYER_TAP_MKP: applies selected layer plus mouse button", () => {
     const onApply = vi.fn();
-    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        onApplyBinding={onApply}
+      />,
+    );
     fireEvent.click(screen.getByText("レイヤー / マウスクリック"));
     fireEvent.click(screen.getByText("Symbols"));
     fireEvent.click(screen.getByText("左クリック"));
@@ -87,6 +133,53 @@ describe("LayersTab", () => {
       behaviorId: 15,
       param1: 1,
       param2: 0x01,
+    });
+  });
+
+  describe("layer role labels", () => {
+    const layersWithRoles = [
+      { id: 0, index: 0, name: "Base" },
+      { id: 4, index: 4, name: "AutoMouse" },
+      { id: 7, index: 7, name: "Scroll" },
+    ];
+
+    it("shows （スクロール） suffix for scroll layer (index 7)", () => {
+      const onApply = vi.fn();
+      render(
+        <LayersTab
+          behaviors={mockBehaviors}
+          layers={layersWithRoles}
+          onApplyBinding={onApply}
+        />,
+      );
+      fireEvent.click(screen.getByText("一時レイヤー"));
+      expect(screen.getByText("Scroll（スクロール）")).toBeTruthy();
+    });
+
+    it("shows （自動マウス） suffix for auto mouse layer (index 4)", () => {
+      const onApply = vi.fn();
+      render(
+        <LayersTab
+          behaviors={mockBehaviors}
+          layers={layersWithRoles}
+          onApplyBinding={onApply}
+        />,
+      );
+      fireEvent.click(screen.getByText("一時レイヤー"));
+      expect(screen.getByText("AutoMouse（自動マウス）")).toBeTruthy();
+    });
+
+    it("shows no role suffix for plain layer (index 0)", () => {
+      const onApply = vi.fn();
+      render(
+        <LayersTab
+          behaviors={mockBehaviors}
+          layers={layersWithRoles}
+          onApplyBinding={onApply}
+        />,
+      );
+      fireEvent.click(screen.getByText("一時レイヤー"));
+      expect(screen.getByText("Base")).toBeTruthy();
     });
   });
 });
