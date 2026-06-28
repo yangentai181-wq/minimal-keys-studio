@@ -8,6 +8,7 @@ const mockBehaviors = [
   { id: 12, displayName: "Layer-Tap", metadata: [] },
   { id: 13, displayName: "Sticky Layer", metadata: [] },
   { id: 14, displayName: "To Layer", metadata: [] },
+  { id: 15, displayName: "LAYER_TAP_MKP", metadata: [] },
   { id: 1, displayName: "Key Press", metadata: [] },
 ];
 
@@ -72,6 +73,20 @@ describe("LayersTab", () => {
       behaviorId: 12,
       param1: 1,
       param2: (7 << 16) + 44, // KB page 7, Space = 44
+    });
+  });
+
+  it("LAYER_TAP_MKP: applies selected layer plus mouse button", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={layers} onApplyBinding={onApply} />);
+    fireEvent.click(screen.getByText("レイヤー / マウスクリック"));
+    fireEvent.click(screen.getByText("Symbols"));
+    fireEvent.click(screen.getByText("左クリック"));
+    fireEvent.click(screen.getByText("適用する"));
+    expect(onApply).toHaveBeenCalledWith({
+      behaviorId: 15,
+      param1: 1,
+      param2: 0x01,
     });
   });
 });

@@ -1,4 +1,5 @@
 import { hid_usage_from_page_and_id } from "../../hid-usages";
+import { mouseScrollParams } from "../../keyboard/key-descriptions";
 import type { UserOS } from "../use-cases";
 
 // HID Usage Page IDs (USB HID spec §3 "Usage Pages")
@@ -197,6 +198,10 @@ export const scrollItems: ActionItem[] = [
   { label: "スクロール下", description: "画面を下にスクロール", behaviorName: "Key Press", param1: consumer(0x234) },
   { label: "横スクロール左", description: "画面を左にスクロール", behaviorName: "Key Press", param1: consumer(0x236) },
   { label: "横スクロール右", description: "画面を右にスクロール", behaviorName: "Key Press", param1: consumer(0x237) },
+  { label: "ホイール上", description: "マウスホイールを上へ", behaviorName: "Mouse Scroll", param1: mouseScrollParams.up },
+  { label: "ホイール下", description: "マウスホイールを下へ", behaviorName: "Mouse Scroll", param1: mouseScrollParams.down },
+  { label: "ホイール左", description: "マウスホイールを左へ", behaviorName: "Mouse Scroll", param1: mouseScrollParams.left },
+  { label: "ホイール右", description: "マウスホイールを右へ", behaviorName: "Mouse Scroll", param1: mouseScrollParams.right },
 ];
 
 // --- Mouse (existing) ---

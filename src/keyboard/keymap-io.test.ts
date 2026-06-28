@@ -8,6 +8,7 @@ const mockBehaviors: GetBehaviorDetailsResponse[] = [
   { id: 3, displayName: "Mod-Tap", metadata: [] },
   { id: 4, displayName: "Momentary Layer", metadata: [] },
   { id: 5, displayName: "None", metadata: [] },
+  { id: 6, displayName: "LAYER_TAP_MKP", metadata: [] },
 ];
 
 const sampleKeymap = {
@@ -55,6 +56,28 @@ describe("serializeKeymap", () => {
     expect(result.keymap.layers[0].bindings[0].param1).toBe(0x70004);
     expect(result.keymap.layers[0].bindings[1].param2).toBe(0x7002c);
   });
+
+  it("exports minimal-keys auto mouse and scroll layer metadata when those fixed layers exist", () => {
+    const keymapWithFixedLayers = {
+      ...sampleKeymap,
+      layers: Array.from({ length: 8 }, (_, index) => ({
+        id: index,
+        name: index === 4 ? "Mouse" : index === 7 ? "Scroll" : `Layer ${index}`,
+        bindings: sampleKeymap.layers[0].bindings,
+      })),
+    };
+    const result = serializeKeymap(keymapWithFixedLayers, mockBehaviors, "1.0.0");
+    expect(result.minimalKeys).toEqual({
+      autoMouseLayerIndex: 4,
+      scrollLayerIndex: 7,
+    });
+  });
+
+  it("omits minimal-keys metadata when fixed layers do not exist", () => {
+    const result = serializeKeymap(sampleKeymap, mockBehaviors, "1.0.0");
+    expect(result.minimalKeys).toBeUndefined();
+  });
+
 
   it("handles unknown behaviorId gracefully", () => {
     const km = {
@@ -142,6 +165,18 @@ describe("deserializeKeymap", () => {
     exported.keymap.layers[0].bindings[1].behaviorName = "Momentary Layer";
     exported.keymap.layers[0].bindings[1].param1 = 99;
     exported.keymap.layers[0].bindings[1].param2 = 0;
+    const json = JSON.stringify(exported);
+    const result = deserializeKeymap(json, mockBehaviors, 2, 5);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.type).toBe("layerIndex");
+  });
+
+  it("rejects invalid LAYER_TAP_MKP layer index reference", () => {
+    const exported = serializeKeymap(sampleKeymap, mockBehaviors, "1.0.0");
+    exported.keymap.layers[0].bindings[0].behaviorName = "LAYER_TAP_MKP";
+    exported.keymap.layers[0].bindings[0].param1 = 99;
+    exported.keymap.layers[0].bindings[0].param2 = 0x01;
     const json = JSON.stringify(exported);
     const result = deserializeKeymap(json, mockBehaviors, 2, 5);
     expect(result.ok).toBe(false);

@@ -1,6 +1,10 @@
 import { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_page_and_id_from_usage } from "../hid-usages";
-import { getHidKeyDescription, getMouseKeyDescription } from "../keyboard/key-descriptions";
+import {
+  getHidKeyDescription,
+  getMouseKeyDescription,
+  getMouseScrollDescription,
+} from "../keyboard/key-descriptions";
 import { modifierSymbols } from "../keyboard/key-label-utils";
 
 /**
@@ -27,6 +31,11 @@ export function formatBindingDetail(
       const keyName = getHidKeyDescription(page, id).roleName;
       return `${layerName} + ${keyName}`;
     }
+    case "LAYER_TAP_MKP": {
+      const layerName = layers[binding.param1]?.name ?? `L${binding.param1}`;
+      const mouseName = getMouseKeyDescription(binding.param2).roleName;
+      return `${layerName} + ${mouseName}`;
+    }
     case "Mod-Tap": {
       const mod = modifierSymbols(binding.param1);
       const [rawPage, id] = hid_usage_page_and_id_from_usage(binding.param2);
@@ -36,6 +45,9 @@ export function formatBindingDetail(
     }
     case "Mouse Key Press": {
       return getMouseKeyDescription(binding.param1).roleName;
+    }
+    case "Mouse Scroll": {
+      return getMouseScrollDescription(binding.param1).roleName;
     }
     case "Momentary Layer":
     case "Toggle Layer":

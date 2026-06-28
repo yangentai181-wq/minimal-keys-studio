@@ -1,5 +1,9 @@
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
+import {
+  getMinimalKeysLayerMetadata,
+  type MinimalKeysLayerMetadata,
+} from "./minimal-keys-layers";
 
 export interface ExportBinding {
   behaviorName: string;
@@ -17,6 +21,7 @@ export interface KeymapExportFile {
   version: 1;
   exportDate: string;
   appVersion: string;
+  minimalKeys?: MinimalKeysLayerMetadata;
   keymap: {
     layers: ExportLayer[];
   };
@@ -51,6 +56,7 @@ const LAYER_BEHAVIOR_NAMES = [
   "Momentary Layer",
   "Toggle Layer",
   "Layer-Tap",
+  "LAYER_TAP_MKP",
   "Sticky Layer",
   "To Layer",
   "Conditional Layer",
@@ -66,11 +72,16 @@ export function serializeKeymap(
     behaviorIdToName.set(b.id, b.displayName);
   }
 
+  const minimalKeys = getMinimalKeysLayerMetadata(keymap.layers);
+
   return {
     format: "minimal-keys-studio-keymap",
     version: 1,
     exportDate: new Date().toISOString(),
     appVersion,
+    ...(minimalKeys.autoMouseLayerIndex !== null || minimalKeys.scrollLayerIndex !== null
+      ? { minimalKeys }
+      : {}),
     keymap: {
       layers: keymap.layers.map((layer) => ({
         name: layer.name,

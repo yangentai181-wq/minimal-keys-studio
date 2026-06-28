@@ -13,7 +13,11 @@ import {
 import { HidUsageLabel } from "./HidUsageLabel";
 import { resolveTooltipData } from "./tooltip-data";
 import { useOsMode } from "../OsModeContext";
-import { getHidKeyDescription, getMouseKeyDescription } from "./key-descriptions";
+import {
+  getHidKeyDescription,
+  getMouseKeyDescription,
+  getMouseScrollDescription,
+} from "./key-descriptions";
 import { hid_usage_page_and_id_from_usage } from "../hid-usages";
 import type { ReactNode } from "react";
 import { modifierSymbols } from "./key-label-utils";
@@ -54,6 +58,12 @@ function getKeyDisplay(
       return {
         header: shortLayerName(binding.param1, layerNames),
         children: <span>{hidParamLabel(binding.param2)}</span>,
+      };
+
+    case "LAYER_TAP_MKP":
+      return {
+        header: shortLayerName(binding.param1, layerNames),
+        children: <span>{getMouseKeyDescription(binding.param2).roleName}</span>,
       };
 
     case "Mod-Tap":
@@ -107,6 +117,14 @@ function getKeyDisplay(
       return {
         header: "",
         children: <span>{mouseDesc.roleName}</span>,
+      };
+    }
+
+    case "Mouse Scroll": {
+      const scrollDesc = getMouseScrollDescription(binding.param1);
+      return {
+        header: "Scroll",
+        children: <span>{scrollDesc.roleName}</span>,
       };
     }
 

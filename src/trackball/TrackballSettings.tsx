@@ -7,6 +7,12 @@ import {
 } from "../rpc/useCustomSubsystem";
 import { useToast } from "../misc/Toast";
 import * as RIP from "../proto/rip";
+import {
+  AUTO_MOUSE_LAYER_INDEX,
+  SCROLL_LAYER_INDEX,
+} from "../keyboard/minimal-keys-layers";
+
+const AUTO_MOUSE_TIMEOUT_MS = 700;
 
 export function TrackballSettings() {
   const subsystem = useCustomSubsystem(RIP.SUBSYSTEM_ID);
@@ -209,6 +215,21 @@ export function TrackballSettings() {
           </span>
         )}
       </h2>
+
+      <section className="rounded-xl border border-orange-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-slate-900">Auto Mouse Layer</span>
+          <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs text-orange-600">
+            Layer {AUTO_MOUSE_LAYER_INDEX}
+          </span>
+          <span className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs text-teal-700">
+            Timeout {AUTO_MOUSE_TIMEOUT_MS}ms
+          </span>
+          <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500">
+            Scroll Layer {SCROLL_LAYER_INDEX}
+          </span>
+        </div>
+      </section>
 
       {/* Processor selector (if multiple) */}
       {processors.length > 1 && (

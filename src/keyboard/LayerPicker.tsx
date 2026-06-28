@@ -10,6 +10,7 @@ import {
 } from "react-aria-components";
 import { useModalRef } from "../misc/useModalRef";
 import { GenericModal } from "../GenericModal";
+import { getMinimalKeysLayerRole } from "./minimal-keys-layers";
 
 interface Layer {
   id: number;
@@ -100,6 +101,23 @@ const EditLabelModal = ({
       </div>
     </GenericModal>
   );
+};
+
+const layerRoleBadge = (index: number) => {
+  const role = getMinimalKeysLayerRole(index);
+  if (role === "autoMouse") {
+    return {
+      label: "Auto Mouse",
+      className: "bg-orange-50 text-orange-600 border-orange-200",
+    };
+  }
+  if (role === "scroll") {
+    return {
+      label: "Scroll",
+      className: "bg-teal-50 text-teal-700 border-teal-200",
+    };
+  }
+  return null;
 };
 
 export const LayerPicker = ({
@@ -218,7 +236,20 @@ export const LayerPicker = ({
             textValue={layer_item.name}
             className="p-1 b-1 my-1 group grid grid-cols-[1fr_auto] items-center aria-selected:bg-primary aria-selected:text-primary-content border rounded border-transparent border-solid hover:bg-base-300"
           >
-            <span className="text-sm">{layer_item.name}</span>
+            <span className="min-w-0 flex items-center gap-1.5">
+              <span className="text-sm truncate">{layer_item.name}</span>
+              {(() => {
+                const badge = layerRoleBadge(layer_item.index);
+                if (!badge) return null;
+                return (
+                  <span
+                    className={`shrink-0 px-1.5 py-0.5 rounded border text-[10px] leading-none ${badge.className}`}
+                  >
+                    {badge.label}
+                  </span>
+                );
+              })()}
+            </span>
             <Pencil
               className="h-4 w-4 mx-1 invisible group-hover:visible"
               onClick={() =>

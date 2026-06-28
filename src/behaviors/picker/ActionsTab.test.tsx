@@ -5,6 +5,7 @@ import { ActionsTab } from "./ActionsTab";
 const mockBehaviors = [
   { id: 1, displayName: "Key Press", metadata: [] },
   { id: 2, displayName: "Mouse Key Press", metadata: [] },
+  { id: 3, displayName: "Mouse Scroll", metadata: [] },
 ];
 
 describe("ActionsTab", () => {
@@ -52,6 +53,8 @@ describe("ActionsTab", () => {
     expect(screen.getByText("スクロール下")).toBeTruthy();
     expect(screen.getByText("横スクロール左")).toBeTruthy();
     expect(screen.getByText("横スクロール右")).toBeTruthy();
+    expect(screen.getByText("ホイール上")).toBeTruthy();
+    expect(screen.getByText("ホイール下")).toBeTruthy();
   });
 
   it("shows mouse buttons when mouse subcategory selected", () => {
@@ -84,6 +87,14 @@ describe("ActionsTab", () => {
     fireEvent.click(screen.getByText("マウス"));
     fireEvent.click(screen.getByText("左クリック"));
     expect(onApply).toHaveBeenCalledWith({ behaviorId: 2, param1: 0x01, param2: 0 });
+  });
+
+  it("calls onApplyBinding for mouse wheel scroll", () => {
+    const onApply = vi.fn();
+    render(<ActionsTab behaviors={mockBehaviors} layers={[]} osMode="mac" onApplyBinding={onApply} />);
+    fireEvent.click(screen.getByText("スクロール"));
+    fireEvent.click(screen.getByText("ホイール上"));
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 3, param1: 100, param2: 0 });
   });
 
   it("shows browser shortcuts", () => {
