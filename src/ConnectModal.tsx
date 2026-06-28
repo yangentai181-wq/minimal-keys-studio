@@ -29,53 +29,40 @@ function SimpleDevicePicker({
   transports: TransportFactory[];
   onTransportCreated: (t: RpcTransport, isWireless?: boolean) => void;
 }) {
-  const [selectedTransport, setSelectedTransport] = useState<
-    TransportFactory | undefined
-  >(undefined);
+  const [connectingLabel, setConnectingLabel] = useState<string | undefined>(
+    undefined
+  );
 
-  useEffect(() => {
-    if (!selectedTransport) {
-      return;
-    }
-
-    let ignore = false;
-
-    async function connectTransport() {
+  const connectTransport = useCallback(
+    async (selectedTransport: TransportFactory) => {
+      setConnectingLabel(selectedTransport.label);
       try {
-        const transport = await selectedTransport?.connect?.();
+        const transport = await selectedTransport.connect?.();
 
-        if (!ignore) {
-          if (transport) {
-            onTransportCreated(transport, selectedTransport?.isWireless);
-          }
-          setSelectedTransport(undefined);
+        if (transport) {
+          onTransportCreated(transport, selectedTransport.isWireless);
         }
       } catch (e) {
-        if (!ignore) {
-          console.error(e);
-          if (e instanceof Error && !(e instanceof UserCancelledError)) {
-            alert(e.message);
-          }
-          setSelectedTransport(undefined);
+        console.error(e);
+        if (e instanceof Error && !(e instanceof UserCancelledError)) {
+          alert(e.message);
         }
+      } finally {
+        setConnectingLabel(undefined);
       }
-    }
-
-    connectTransport();
-
-    return () => {
-      ignore = true;
-    };
-  }, [selectedTransport, onTransportCreated]);
+    },
+    [onTransportCreated]
+  );
 
   const connections = transports.map((t) => (
     <li key={t.label} className="list-none">
       <button
         className="bg-base-300 hover:bg-primary hover:text-primary-content rounded px-2 py-1"
         type="button"
-        onClick={() => setSelectedTransport(t)}
+        onClick={() => connectTransport(t)}
+        disabled={connectingLabel !== undefined}
       >
-        {t.label}
+        {connectingLabel === t.label ? `${t.label} 接続中...` : t.label}
       </button>
     </li>
   ));
