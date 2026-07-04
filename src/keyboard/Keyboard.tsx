@@ -684,7 +684,8 @@ export default function Keyboard() {
             <LayerPicker
               layers={keymap.layers}
               selectedLayerIndex={selectedLayerIndex}
-              onLayerClicked={setSelectedLayerIndex}
+              selectionLocked
+              showInactiveAutoMouseLayer={false}
               onLayerMoved={moveLayer}
               canAdd={(keymap.availableLayers || 0) > 0}
               canRemove={(keymap.layers?.length || 0) > 1}

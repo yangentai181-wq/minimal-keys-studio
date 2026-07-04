@@ -25,6 +25,8 @@ interface LayerPickerProps {
   selectedLayerIndex: number;
   canAdd?: boolean;
   canRemove?: boolean;
+  selectionLocked?: boolean;
+  showInactiveAutoMouseLayer?: boolean;
 
   onLayerClicked?: LayerClickCallback;
   onLayerMoved?: LayerMovedCallback;
@@ -125,6 +127,8 @@ export const LayerPicker = ({
   selectedLayerIndex,
   canAdd,
   canRemove,
+  selectionLocked = false,
+  showInactiveAutoMouseLayer = true,
   onLayerClicked,
   onLayerMoved,
   onAddClicked,
@@ -137,23 +141,40 @@ export const LayerPicker = ({
   );
 
   const layer_items = useMemo(() => {
-    return layers.map((l, i) => ({
-      name: l.name || i.toLocaleString(),
-      id: l.id,
-      index: i,
-      selected: i === selectedLayerIndex,
-    }));
-  }, [layers, selectedLayerIndex]);
+    return layers
+      .map((l, i) => ({
+        name: l.name || i.toLocaleString(),
+        id: l.id,
+        index: i,
+        selected: i === selectedLayerIndex,
+      }))
+      .filter((item) => {
+        const role = getMinimalKeysLayerRole(item.index);
+        return (
+          showInactiveAutoMouseLayer ||
+          role !== "autoMouse" ||
+          item.selected
+        );
+      });
+  }, [layers, selectedLayerIndex, showInactiveAutoMouseLayer]);
+
+  const selectedLayerItem = useMemo(
+    () => layer_items.find((l) => l.index === selectedLayerIndex),
+    [layer_items, selectedLayerIndex]
+  );
 
   const selectionChanged = useCallback(
     (s: Selection) => {
-      if (s === "all") {
+      if (selectionLocked || s === "all") {
         return;
       }
 
-      onLayerClicked?.(layer_items.findIndex((l) => s.has(l.id)));
+      const selectedItem = layer_items.find((l) => s.has(l.id));
+      if (selectedItem) {
+        onLayerClicked?.(selectedItem.index);
+      }
     },
-    [onLayerClicked, layer_items]
+    [selectionLocked, onLayerClicked, layer_items]
   );
 
   const { dragAndDropHooks } = useDragAndDrop({
@@ -168,9 +189,11 @@ export const LayerPicker = ({
     getItems: (keys) =>
       [...keys].map((key) => ({ "text/plain": key.toLocaleString() })),
     onReorder(e) {
-      const startIndex = layer_items.findIndex((l) => e.keys.has(l.id));
-      const endIndex = layer_items.findIndex((l) => l.id === e.target.key);
-      onLayerMoved?.(startIndex, endIndex);
+      const startItem = layer_items.find((l) => e.keys.has(l.id));
+      const endItem = layer_items.find((l) => l.id === e.target.key);
+      if (startItem && endItem) {
+        onLayerMoved?.(startItem.index, endItem.index);
+      }
     },
   });
 
@@ -221,12 +244,8 @@ export const LayerPicker = ({
         selectionMode="single"
         items={layer_items}
         disallowEmptySelection={true}
-        selectedKeys={
-          layer_items[selectedLayerIndex]
-            ? [layer_items[selectedLayerIndex].id]
-            : []
-        }
-        className="ml-2 items-center justify-center cursor-pointer"
+        selectedKeys={selectedLayerItem ? [selectedLayerItem.id] : []}
+        className={`ml-2 items-center justify-center ${selectionLocked ? "cursor-default" : "cursor-pointer"}`}
         onSelectionChange={selectionChanged}
         dragAndDropHooks={dragAndDropHooks}
         {...props}
@@ -234,10 +253,15 @@ export const LayerPicker = ({
         {(layer_item) => (
           <ListBoxItem
             textValue={layer_item.name}
-            className="p-1 b-1 my-1 group grid grid-cols-[1fr_auto] items-center aria-selected:bg-primary aria-selected:text-primary-content border rounded border-transparent border-solid hover:bg-base-300"
+            className={`p-1 b-1 my-1 group grid grid-cols-[1fr_auto] items-center aria-selected:bg-primary aria-selected:text-primary-content border rounded border-transparent border-solid ${selectionLocked ? "" : "hover:bg-base-300"}`}
           >
             <span className="min-w-0 flex items-center gap-1.5">
               <span className="text-sm truncate">{layer_item.name}</span>
+              {layer_item.selected && (
+                <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] leading-none text-primary">
+                  Live
+                </span>
+              )}
               {(() => {
                 const badge = layerRoleBadge(layer_item.index);
                 if (!badge) return null;

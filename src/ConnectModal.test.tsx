@@ -34,17 +34,135 @@ describe("ConnectModal browser transports", () => {
     );
 
     const button = screen.getByRole("button", {
-      name: "USB",
+      name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
     }) as HTMLButtonElement;
     fireEvent.click(button);
 
     expect(connect).toHaveBeenCalledTimes(1);
     expect(button.disabled).toBe(true);
+    expect(button).toHaveTextContent("USB 接続中...");
 
     resolveConnect?.(transport);
 
     await waitFor(() => {
       expect(onTransportCreated).toHaveBeenCalledWith(transport, undefined);
     });
+  });
+
+  it("keeps showing connection state until the app finishes initializing the transport", async () => {
+    const transport = {} as RpcTransport;
+    let resolveAppConnect: (() => void) | undefined;
+    const connect = vi.fn().mockResolvedValue(transport);
+    const onTransportCreated = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveAppConnect = resolve;
+        }),
+    );
+    const transports: TransportFactory[] = [{ label: "USB", connect }];
+
+    render(
+      <ConnectModal
+        open
+        transports={transports}
+        onTransportCreated={onTransportCreated}
+      />,
+    );
+
+    const button = screen.getByRole("button", {
+      name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+    }) as HTMLButtonElement;
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(onTransportCreated).toHaveBeenCalledWith(transport, undefined);
+    });
+
+    expect(button.disabled).toBe(true);
+    expect(button).toHaveTextContent("USB 接続中...");
+
+    resolveAppConnect?.();
+
+    await waitFor(() => {
+      expect(button.disabled).toBe(false);
+    });
+  });
+
+  it("shows an inline error when app initialization fails after transport creation", async () => {
+    const transport = {} as RpcTransport;
+    const connect = vi.fn().mockResolvedValue(transport);
+    const onTransportCreated = vi
+      .fn()
+      .mockRejectedValue(new Error("デバイスへの接続に失敗しました"));
+    const transports: TransportFactory[] = [{ label: "USB", connect }];
+
+    render(
+      <ConnectModal
+        open
+        transports={transports}
+        onTransportCreated={onTransportCreated}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+      }),
+    );
+
+    expect(
+      await screen.findByText("デバイスへの接続に失敗しました"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows polished connection guidance for USB and BLE choices", () => {
+    const transports: TransportFactory[] = [
+      { label: "USB", connect: vi.fn() },
+      { label: "BLE", isWireless: true, connect: vi.fn() },
+    ];
+
+    render(
+      <ConnectModal
+        open
+        transports={transports}
+        onTransportCreated={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("キーボードを接続")).toBeInTheDocument();
+    expect(screen.getByText("電源を入れて、接続方法を選んでください。")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "BLEで接続 minimal-keys推奨。ワイヤレスで編集する",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the BLE choice before USB when both are available", () => {
+    const transports: TransportFactory[] = [
+      { label: "USB", connect: vi.fn() },
+      { label: "BLE", isWireless: true, connect: vi.fn() },
+    ];
+
+    render(
+      <ConnectModal
+        open
+        transports={transports}
+        onTransportCreated={vi.fn()}
+      />,
+    );
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons[0]).toHaveAccessibleName(
+      "BLEで接続 minimal-keys推奨。ワイヤレスで編集する",
+    );
+    expect(buttons[1]).toHaveAccessibleName(
+      "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+    );
   });
 });

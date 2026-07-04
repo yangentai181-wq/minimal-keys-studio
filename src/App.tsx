@@ -19,7 +19,7 @@ import { Dispatch, useCallback, useEffect, useRef, useState } from "react";
 import { ConnectModal, TransportFactory } from "./ConnectModal";
 
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
-import { connect as serial_connect } from "@zmkfirmware/zmk-studio-ts-client/transport/serial";
+import { connect as serial_connect } from "./transport/serial";
 import { connect as gatt_connect } from "./transport/gatt";
 import {
   connect as tauri_ble_connect,
@@ -44,7 +44,6 @@ import { pub, useSub } from "./usePubSub";
 import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
 import { LockStateContext } from "./rpc/LockStateContext";
 import { UnlockModal } from "./UnlockModal";
-import { valueAfter } from "./misc/async";
 import { AppFooter } from "./AppFooter";
 import { AboutModal } from "./AboutModal";
 import { LicenseNoticeModal } from "./misc/LicenseNoticeModal";
@@ -52,6 +51,8 @@ import { ToastProvider, useToast } from "./misc/Toast";
 import { OsModeProvider } from "./OsModeContext";
 import { TelemetryProvider, useTelemetry } from "./telemetry/TelemetryProvider";
 import { OptInDialog } from "./telemetry/OptInDialog";
+import { disposeTransport } from "./rpc/transportLifecycle";
+import { requestDeviceInfo } from "./rpc/deviceInfo";
 
 declare global {
   interface Window {
@@ -89,6 +90,9 @@ const TRANSPORTS: TransportFactory[] = [
     ? [{ label: "BLE", isWireless: true, connect: gatt_connect }]
     : []),
 ].filter((t) => t !== undefined);
+
+const USB_DEVICE_INFO_TIMEOUT_MS = 5000;
+const WIRELESS_DEVICE_INFO_TIMEOUT_MS = 8000;
 
 async function listen_for_notifications(
   notification_stream: ReadableStream<Notification>,
@@ -147,24 +151,31 @@ async function connect(
   transport: RpcTransport,
   setConn: Dispatch<ConnectionState>,
   setConnectedDeviceName: Dispatch<string | undefined>,
-  signal: AbortSignal,
+  abortController: AbortController,
   onError: (msg: string) => void,
   isWireless?: boolean
 ) {
+  const signal = abortController.signal;
   const conn = await create_rpc_connection(transport, { signal });
 
-  const timeout = isWireless ? 5000 : 1000;
+  const timeout = isWireless
+    ? WIRELESS_DEVICE_INFO_TIMEOUT_MS
+    : USB_DEVICE_INFO_TIMEOUT_MS;
+  let details;
 
-  const details = await Promise.race([
-    call_rpc(conn, { core: { getDeviceInfo: true } })
-      .then((r) => r?.core?.getDeviceInfo)
-      .catch(() => undefined),
-    valueAfter(undefined, timeout),
-  ]);
-
-  if (!details) {
-    onError("デバイスへの接続に失敗しました");
-    return;
+  try {
+    details = await requestDeviceInfo(conn, timeout, call_rpc, {
+      transport: isWireless ? "ble" : "usb",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "デバイスへの接続に失敗しました";
+    abortController.abort("Device info request failed");
+    await disposeTransport(transport, "Device info request failed");
+    onError(message);
+    throw error instanceof Error ? error : new Error(message);
   }
 
   listen_for_notifications(conn.notification_readable, signal)
@@ -339,8 +350,12 @@ function AppInner() {
         return;
       }
 
-      await conn.conn.request_writable.close();
       connectionAbort.abort("User disconnected");
+      await conn.conn.request_writable.close().catch((error) => {
+        console.warn("Failed to close request stream:", error);
+      });
+      setConn({ conn: null });
+      setConnectedDeviceName(undefined);
       setConnectionAbort(new AbortController());
     }
 
@@ -351,7 +366,14 @@ function AppInner() {
     (t: RpcTransport, isWireless?: boolean) => {
       const ac = new AbortController();
       setConnectionAbort(ac);
-      connect(t, setConn, setConnectedDeviceName, ac.signal, (msg) => toast(msg, "error"), isWireless);
+      return connect(
+        t,
+        setConn,
+        setConnectedDeviceName,
+        ac,
+        (msg) => toast(msg, "error"),
+        isWireless,
+      );
     },
     [setConn, setConnectedDeviceName, toast]
   );
@@ -373,19 +395,19 @@ function AppInner() {
             open={showLicenseNotice}
             onClose={() => setShowLicenseNotice(false)}
           />
-          <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_1fr_auto] overflow-hidden">
-            <AppHeader
-              connectedDeviceLabel={connectedDeviceName}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              onUndo={undo}
-              onRedo={redo}
-              onSave={save}
-              onDiscard={discard}
-              onDisconnect={disconnect}
-              onResetSettings={resetSettings}
-            />
-            {conn.conn && (
+          {conn.conn && (
+            <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_1fr_auto] overflow-hidden">
+              <AppHeader
+                connectedDeviceLabel={connectedDeviceName}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={undo}
+                onRedo={redo}
+                onSave={save}
+                onDiscard={discard}
+                onDisconnect={disconnect}
+                onResetSettings={resetSettings}
+              />
               <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
                 {TAB_GROUPS.map((group, gi) => (
                   <div key={gi} className="flex items-center gap-0.5">
@@ -411,22 +433,22 @@ function AppInner() {
                   </div>
                 ))}
               </nav>
-            )}
-            <div className="min-h-0 overflow-hidden h-full">
-              <div className={activeTab === "keymap" ? "h-full" : "hidden"}><Keyboard key={keymapVersion} /></div>
-              {mountedTabs.has("trackball") && <div className={activeTab === "trackball" ? "h-full" : "hidden"}><TrackballSettings /></div>}
-              {mountedTabs.has("encoder") && <div className={activeTab === "encoder" ? "h-full" : "hidden"}><EncoderSettings /></div>}
-              {mountedTabs.has("combo") && <div className={activeTab === "combo" ? "h-full" : "hidden"}><ComboSettings /></div>}
-              {mountedTabs.has("bluetooth") && <div className={activeTab === "bluetooth" ? "h-full" : "hidden"}><BleManagement /></div>}
-              {mountedTabs.has("holdtap") && <div className={activeTab === "holdtap" ? "h-full" : "hidden"}><HoldTapSettings /></div>}
-              {mountedTabs.has("battery") && <div className={activeTab === "battery" ? "h-full" : "hidden"}><BatteryHistory /></div>}
-              {mountedTabs.has("settings") && <div className={activeTab === "settings" ? "h-full" : "hidden"}><DeviceSettings /></div>}
+              <div className="min-h-0 overflow-hidden h-full">
+                <div className={activeTab === "keymap" ? "h-full" : "hidden"}><Keyboard key={keymapVersion} /></div>
+                {mountedTabs.has("trackball") && <div className={activeTab === "trackball" ? "h-full" : "hidden"}><TrackballSettings /></div>}
+                {mountedTabs.has("encoder") && <div className={activeTab === "encoder" ? "h-full" : "hidden"}><EncoderSettings /></div>}
+                {mountedTabs.has("combo") && <div className={activeTab === "combo" ? "h-full" : "hidden"}><ComboSettings /></div>}
+                {mountedTabs.has("bluetooth") && <div className={activeTab === "bluetooth" ? "h-full" : "hidden"}><BleManagement /></div>}
+                {mountedTabs.has("holdtap") && <div className={activeTab === "holdtap" ? "h-full" : "hidden"}><HoldTapSettings /></div>}
+                {mountedTabs.has("battery") && <div className={activeTab === "battery" ? "h-full" : "hidden"}><BatteryHistory /></div>}
+                {mountedTabs.has("settings") && <div className={activeTab === "settings" ? "h-full" : "hidden"}><DeviceSettings /></div>}
+              </div>
+              <AppFooter
+                onShowAbout={() => setShowAbout(true)}
+                onShowLicenseNotice={() => setShowLicenseNotice(true)}
+              />
             </div>
-            <AppFooter
-              onShowAbout={() => setShowAbout(true)}
-              onShowLicenseNotice={() => setShowLicenseNotice(true)}
-            />
-          </div>
+          )}
         </CustomSubsystemsProvider>
         </BehaviorsProvider>
         </UndoRedoContext.Provider>

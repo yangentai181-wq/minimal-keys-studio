@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bluetooth, Cable, Loader2, RefreshCw } from "lucide-react";
 
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
 import { UserCancelledError } from "@zmkfirmware/zmk-studio-ts-client/transport/errors";
@@ -16,10 +17,66 @@ export type TransportFactory = {
   };
 };
 
+type TransportCreatedHandler = (
+  t: RpcTransport,
+  isWireless?: boolean,
+) => Promise<void> | void;
+
 export interface ConnectModalProps {
   open?: boolean;
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => void;
+  onTransportCreated: TransportCreatedHandler;
+}
+
+function getConnectionErrorMessage(error: unknown): string | undefined {
+  if (error instanceof UserCancelledError) {
+    return undefined;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "接続中にエラーが発生しました。";
+}
+
+function ConnectionErrorNotice({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <p
+      className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error"
+      role="alert"
+    >
+      {message}
+    </p>
+  );
+}
+
+function isWirelessTransport(transport: TransportFactory): boolean {
+  return transport.isWireless || transport.label.toUpperCase() === "BLE";
+}
+
+function getTransportCopy(transport: TransportFactory) {
+  const isBle = isWirelessTransport(transport);
+
+  return isBle
+    ? {
+        title: "BLEで接続",
+        connecting: "BLE 接続中...",
+        description: "minimal-keys推奨。ワイヤレスで編集する",
+        badge: "wireless",
+        Icon: Bluetooth,
+      }
+    : {
+        title: "USBで接続",
+        connecting: "USB 接続中...",
+        description: "USB Studio対応ファーム用。反応しない時はBLE",
+        badge: "stable",
+        Icon: Cable,
+      };
 }
 
 function SimpleDevicePicker({
@@ -27,25 +84,30 @@ function SimpleDevicePicker({
   onTransportCreated,
 }: {
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => void;
+  onTransportCreated: TransportCreatedHandler;
 }) {
   const [connectingLabel, setConnectingLabel] = useState<string | undefined>(
+    undefined
+  );
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(
     undefined
   );
 
   const connectTransport = useCallback(
     async (selectedTransport: TransportFactory) => {
       setConnectingLabel(selectedTransport.label);
+      setErrorMessage(undefined);
       try {
         const transport = await selectedTransport.connect?.();
 
         if (transport) {
-          onTransportCreated(transport, selectedTransport.isWireless);
+          await onTransportCreated(transport, selectedTransport.isWireless);
         }
       } catch (e) {
         console.error(e);
-        if (e instanceof Error && !(e instanceof UserCancelledError)) {
-          alert(e.message);
+        const message = getConnectionErrorMessage(e);
+        if (message) {
+          setErrorMessage(message);
         }
       } finally {
         setConnectingLabel(undefined);
@@ -54,22 +116,63 @@ function SimpleDevicePicker({
     [onTransportCreated]
   );
 
-  const connections = transports.map((t) => (
+  const orderedTransports = useMemo(
+    () =>
+      [...transports].sort(
+        (a, b) => Number(isWirelessTransport(b)) - Number(isWirelessTransport(a)),
+      ),
+    [transports],
+  );
+
+  const connections = orderedTransports.map((t) => {
+    const copy = getTransportCopy(t);
+    const isConnecting = connectingLabel === t.label;
+    const Icon = copy.Icon;
+
+    return (
     <li key={t.label} className="list-none">
       <button
-        className="bg-base-300 hover:bg-primary hover:text-primary-content rounded px-2 py-1"
+        className="group flex min-h-16 w-full items-center gap-3 rounded-xl border border-base-300 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
         type="button"
+        aria-label={
+          isConnecting
+            ? copy.connecting
+            : `${copy.title} ${copy.description}`
+        }
         onClick={() => connectTransport(t)}
         disabled={connectingLabel !== undefined}
       >
-        {connectingLabel === t.label ? `${t.label} 接続中...` : t.label}
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {isConnecting ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Icon className="h-5 w-5" aria-hidden="true" />
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-base-content">
+            {isConnecting ? copy.connecting : copy.title}
+          </span>
+          <span className="mt-0.5 block text-xs text-base-content/60">
+            {copy.description}
+          </span>
+        </span>
       </button>
     </li>
-  ));
+    );
+  });
   return (
-    <div>
-      <p className="text-base">接続方法を選択してください</p>
-      <ul className="flex gap-3 pt-3">{connections}</ul>
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-base-content">
+          キーボードを接続
+        </h2>
+        <p className="mt-1 text-sm text-base-content/60">
+          電源を入れて、接続方法を選んでください。
+        </p>
+      </div>
+      <ConnectionErrorNotice message={errorMessage} />
+      <ul className="grid gap-3 sm:grid-cols-2">{connections}</ul>
     </div>
   );
 }
@@ -81,7 +184,7 @@ function DeviceList({
 }: {
   open: boolean;
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => void;
+  onTransportCreated: TransportCreatedHandler;
 }) {
   const [devices, setDevices] = useState<
     Array<[TransportFactory, AvailableDevice]>
@@ -89,6 +192,9 @@ function DeviceList({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(
+    undefined
+  );
 
   const loadDevices = useCallback(async () => {
     setRefreshing(true);
@@ -119,13 +225,15 @@ function DeviceList({
     if (selectedIndex === null) return;
     const [transport, device] = devices[selectedIndex];
     setConnecting(true);
+    setErrorMessage(undefined);
     try {
       const rpcTransport = await transport.pick_and_connect!.connect(device);
-      onTransportCreated(rpcTransport, transport.isWireless);
+      await onTransportCreated(rpcTransport, transport.isWireless);
     } catch (e) {
       console.error("Failed to connect:", e);
-      if (e instanceof Error) {
-        alert(e.message);
+      const message = getConnectionErrorMessage(e);
+      if (message) {
+        setErrorMessage(message);
       }
     } finally {
       setConnecting(false);
@@ -133,32 +241,44 @@ function DeviceList({
   }, [selectedIndex, devices, onTransportCreated]);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <p className="text-base">接続するデバイスを選択してください</p>
+        <div>
+          <h2 className="text-base font-semibold text-base-content">
+            接続するデバイス
+          </h2>
+          <p className="mt-1 text-sm text-base-content/60">
+            見つかったデバイスを選んで接続してください。
+          </p>
+        </div>
         <button
-          className="bg-base-300 hover:bg-primary hover:text-primary-content rounded px-2 py-1 text-sm"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-base-300 bg-white px-3 py-2 text-sm font-medium text-base-content shadow-sm hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           type="button"
           onClick={loadDevices}
           disabled={refreshing}
         >
+          <RefreshCw
+            className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            aria-hidden="true"
+          />
           {refreshing ? "スキャン中..." : "更新"}
         </button>
       </div>
+      <ConnectionErrorNotice message={errorMessage} />
       {devices.length === 0 && !refreshing && (
-        <p className="text-base-content/60 text-sm">
+        <p className="rounded-xl border border-base-300 bg-white px-4 py-3 text-sm text-base-content/60">
           デバイスが見つかりません。キーボードの電源が入っているか確認してください
         </p>
       )}
       {devices.length > 0 && (
-        <ul className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+        <ul className="flex max-h-60 flex-col gap-2 overflow-y-auto">
           {devices.map(([transport, device], index) => (
             <li key={`${transport.label}-${device.id}`} className="list-none">
               <button
-                className={`w-full text-left rounded px-3 py-2 flex items-center gap-2 ${
+                className={`flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
                   selectedIndex === index
-                    ? "bg-primary text-primary-content"
-                    : "bg-base-300 hover:bg-base-200"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-base-300 bg-white hover:border-primary/40 hover:bg-primary/5"
                 }`}
                 type="button"
                 onClick={() => setSelectedIndex(index)}
@@ -167,7 +287,7 @@ function DeviceList({
                   connectToSelected();
                 }}
               >
-                <span className="text-xs opacity-60">
+                <span className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
                   {transport.isWireless ? "BLE" : "USB"}
                 </span>
                 <span>{device.label}</span>
@@ -177,7 +297,7 @@ function DeviceList({
         </ul>
       )}
       <button
-        className="bg-primary text-primary-content hover:bg-primary/80 rounded px-4 py-2 disabled:opacity-50"
+        className="min-h-12 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-content shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         type="button"
         onClick={connectToSelected}
         disabled={selectedIndex === null || connecting}
@@ -190,12 +310,12 @@ function DeviceList({
 
 function NoTransportsPrompt() {
   return (
-    <div className="m-4 flex flex-col gap-2">
+    <div className="rounded-xl border border-base-300 bg-white px-4 py-3 text-sm text-base-content/70">
       <p>
         お使いのブラウザはWeb Serial / Web Bluetoothに対応していません。Chrome（バージョン89以降）をお使いください。またはデスクトップアプリをご利用ください。
       </p>
 
-      <div>
+      <div className="mt-2">
         <p>minimal-keys カスタマイズを使うには、対応ブラウザまたはデスクトップアプリが必要です。</p>
       </div>
     </div>
@@ -208,7 +328,7 @@ function ConnectOptions({
   open,
 }: {
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => void;
+  onTransportCreated: TransportCreatedHandler;
   open?: boolean;
 }) {
   const useSimplePicker = useMemo(
@@ -240,23 +360,41 @@ export const ConnectModal = ({
   const haveTransports = useMemo(() => transports.length > 0, [transports]);
 
   return (
-    <GenericModal ref={dialog} className="max-w-xl">
-      <div className="flex flex-col items-center gap-3 py-2 mb-4">
-        <img src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`} alt="Logo" className="h-12 rounded" />
-        <h1 className="text-xl font-semibold">minimal-keys カスタマイズ</h1>
-        <p className="text-sm text-base-content/60 text-center">
-          キーボードを接続して設定を始めましょう
+    <GenericModal
+      ref={dialog}
+      className="w-[min(92vw,34rem)] p-0 backdrop:bg-base-200"
+    >
+      <div className="border-b border-base-300 px-5 py-5">
+        <div className="flex items-center gap-3">
+          <img
+            src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`}
+            alt="minimal-keys"
+            className="h-12 w-12 rounded-xl shadow-sm"
+          />
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+              minimal-keys studio
+            </p>
+            <h1 className="text-xl font-bold text-base-content">
+              minimal-keys カスタマイズ
+            </h1>
+          </div>
+        </div>
+        <p className="mt-4 text-sm leading-6 text-base-content/65">
+          接続後にキーマップ、トラックボール、コンボ、Bluetooth設定を編集できます。
         </p>
       </div>
-      {haveTransports ? (
-        <ConnectOptions
-          transports={transports}
-          onTransportCreated={onTransportCreated}
-          open={open}
-        />
-      ) : (
-        <NoTransportsPrompt />
-      )}
+      <div className="px-5 py-5">
+        {haveTransports ? (
+          <ConnectOptions
+            transports={transports}
+            onTransportCreated={onTransportCreated}
+            open={open}
+          />
+        ) : (
+          <NoTransportsPrompt />
+        )}
+      </div>
     </GenericModal>
   );
 };
