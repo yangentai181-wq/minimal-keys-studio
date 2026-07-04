@@ -22,7 +22,7 @@ export class DeviceInfoTimeoutError extends Error {
     const message =
       transport === "ble"
         ? `キーボードから応答がありません。BLE接続を解除して、${seconds}秒ほど待ってからもう一度接続してください。`
-        : `キーボードから応答がありません。USBシリアルは開けましたが Studio RPC の応答がないため、BLEでの接続も試してください。USBで編集したい場合は右側に studio-rpc-usb-uart 対応ファームを書き込んでください。`;
+        : `キーボードから応答がありません。USBシリアルは開けましたが Studio RPC が応答しません。キーボードの出力先がBLEになっている可能性が高いです（Studio RPCは選択中の出力先でしか待ち受けません）。iPadなどとのBLE接続を切るか、出力切替キー（&out OUT_USB）でUSBに切り替えてから再試行してください。BLEで編集することもできます。`;
     super(message);
     Object.setPrototypeOf(this, DeviceInfoTimeoutError.prototype);
   }

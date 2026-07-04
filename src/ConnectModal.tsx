@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bluetooth, Cable, Loader2, RefreshCw } from "lucide-react";
+import { Bluetooth, Cable, Loader2, RefreshCw, Usb } from "lucide-react";
 
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
 import { UserCancelledError } from "@zmkfirmware/zmk-studio-ts-client/transport/errors";
@@ -26,6 +26,14 @@ export interface ConnectModalProps {
   open?: boolean;
   transports: TransportFactory[];
   onTransportCreated: TransportCreatedHandler;
+  /**
+   * Right-hand USB main flow (WebHID monitor + Studio RPC probe).
+   * When provided, this is rendered as the primary button and the
+   * transport list is demoted to a secondary "detailed" section.
+   */
+  onConnectRightUsb?: () => Promise<void>;
+  /** Latest coordinator message ("which contract was established"). */
+  connectionNotice?: { title: string; body: string };
 }
 
 function getConnectionErrorMessage(error: unknown): string | undefined {
@@ -55,6 +63,8 @@ function ConnectionErrorNotice({ message }: { message?: string }) {
   );
 }
 
+const RIGHT_USB_LABEL = "__right_usb__";
+
 function isWirelessTransport(transport: TransportFactory): boolean {
   return transport.isWireless || transport.label.toUpperCase() === "BLE";
 }
@@ -66,14 +76,14 @@ function getTransportCopy(transport: TransportFactory) {
     ? {
         title: "BLEで接続",
         connecting: "BLE 接続中...",
-        description: "minimal-keys推奨。ワイヤレスで編集する",
+        description: "補助経路。ワイヤレスで編集のみ（モニター不可）",
         badge: "wireless",
         Icon: Bluetooth,
       }
     : {
-        title: "USBで接続",
+        title: "USBシリアルで接続",
         connecting: "USB 接続中...",
-        description: "USB Studio対応ファーム用。反応しない時はBLE",
+        description: "エディターのみ（Studio RPC）。通常は右手USBで接続",
         badge: "stable",
         Icon: Cable,
       };
@@ -82,16 +92,39 @@ function getTransportCopy(transport: TransportFactory) {
 function SimpleDevicePicker({
   transports,
   onTransportCreated,
+  onConnectRightUsb,
+  connectionNotice,
 }: {
   transports: TransportFactory[];
   onTransportCreated: TransportCreatedHandler;
+  onConnectRightUsb?: () => Promise<void>;
+  connectionNotice?: { title: string; body: string };
 }) {
   const [connectingLabel, setConnectingLabel] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(
-    undefined
+    undefined,
   );
+
+  const connectRightUsb = useCallback(async () => {
+    if (!onConnectRightUsb) {
+      return;
+    }
+    setConnectingLabel(RIGHT_USB_LABEL);
+    setErrorMessage(undefined);
+    try {
+      await onConnectRightUsb();
+    } catch (e) {
+      console.error(e);
+      const message = getConnectionErrorMessage(e);
+      if (message) {
+        setErrorMessage(message);
+      }
+    } finally {
+      setConnectingLabel(undefined);
+    }
+  }, [onConnectRightUsb]);
 
   const connectTransport = useCallback(
     async (selectedTransport: TransportFactory) => {
@@ -113,13 +146,15 @@ function SimpleDevicePicker({
         setConnectingLabel(undefined);
       }
     },
-    [onTransportCreated]
+    [onTransportCreated],
   );
 
+  // USB (stable, editor probe) before BLE (auxiliary) in the fallback list.
   const orderedTransports = useMemo(
     () =>
       [...transports].sort(
-        (a, b) => Number(isWirelessTransport(b)) - Number(isWirelessTransport(a)),
+        (a, b) =>
+          Number(isWirelessTransport(a)) - Number(isWirelessTransport(b)),
       ),
     [transports],
   );
@@ -130,37 +165,37 @@ function SimpleDevicePicker({
     const Icon = copy.Icon;
 
     return (
-    <li key={t.label} className="list-none">
-      <button
-        className="group flex min-h-16 w-full items-center gap-3 rounded-xl border border-base-300 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
-        type="button"
-        aria-label={
-          isConnecting
-            ? copy.connecting
-            : `${copy.title} ${copy.description}`
-        }
-        onClick={() => connectTransport(t)}
-        disabled={connectingLabel !== undefined}
-      >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          {isConnecting ? (
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Icon className="h-5 w-5" aria-hidden="true" />
-          )}
-        </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-bold text-base-content">
-            {isConnecting ? copy.connecting : copy.title}
+      <li key={t.label} className="list-none">
+        <button
+          className="group flex min-h-16 w-full items-center gap-3 rounded-xl border border-base-300 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+          type="button"
+          aria-label={
+            isConnecting ? copy.connecting : `${copy.title} ${copy.description}`
+          }
+          onClick={() => connectTransport(t)}
+          disabled={connectingLabel !== undefined}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            {isConnecting ? (
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            )}
           </span>
-          <span className="mt-0.5 block text-xs text-base-content/60">
-            {copy.description}
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-base-content">
+              {isConnecting ? copy.connecting : copy.title}
+            </span>
+            <span className="mt-0.5 block text-xs text-base-content/60">
+              {copy.description}
+            </span>
           </span>
-        </span>
-      </button>
-    </li>
+        </button>
+      </li>
     );
   });
+  const isRightUsbConnecting = connectingLabel === RIGHT_USB_LABEL;
+
   return (
     <div className="space-y-4">
       <div>
@@ -168,11 +203,64 @@ function SimpleDevicePicker({
           キーボードを接続
         </h2>
         <p className="mt-1 text-sm text-base-content/60">
-          電源を入れて、接続方法を選んでください。
+          {onConnectRightUsb
+            ? "右手側（ケーブルを挿す側）をUSBでつないで接続してください。"
+            : "電源を入れて、接続方法を選んでください。"}
         </p>
       </div>
       <ConnectionErrorNotice message={errorMessage} />
-      <ul className="grid gap-3 sm:grid-cols-2">{connections}</ul>
+      {connectionNotice && (
+        <div
+          className="rounded-xl border border-base-300 bg-base-200/60 px-4 py-3"
+          role="status"
+        >
+          <p className="text-sm font-semibold text-base-content">
+            {connectionNotice.title}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-base-content/70">
+            {connectionNotice.body}
+          </p>
+        </div>
+      )}
+      {onConnectRightUsb && (
+        <button
+          className="group flex min-h-20 w-full items-center gap-3 rounded-xl border-2 border-primary/50 bg-primary/5 px-4 py-3 text-left shadow-sm transition-colors hover:border-primary hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+          type="button"
+          aria-label={
+            isRightUsbConnecting
+              ? "右手USB 接続中..."
+              : "右手USBで接続 モニターとエディターをまとめて接続（推奨）"
+          }
+          onClick={connectRightUsb}
+          disabled={connectingLabel !== undefined}
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-content">
+            {isRightUsbConnecting ? (
+              <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+            ) : (
+              <Usb className="h-6 w-6" aria-hidden="true" />
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-base font-bold text-base-content">
+              {isRightUsbConnecting ? "右手USB 接続中..." : "右手USBで接続"}
+            </span>
+            <span className="mt-0.5 block text-xs text-base-content/60">
+              モニターとエディターをまとめて接続（推奨）
+            </span>
+          </span>
+        </button>
+      )}
+      {onConnectRightUsb ? (
+        <details className="rounded-xl border border-base-300 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-base-content/70">
+            詳細な接続方法（BLE / USBシリアルのみ）
+          </summary>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2">{connections}</ul>
+        </details>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">{connections}</ul>
+      )}
     </div>
   );
 }
@@ -193,7 +281,7 @@ function DeviceList({
   const [refreshing, setRefreshing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(
-    undefined
+    undefined,
   );
 
   const loadDevices = useCallback(async () => {
@@ -204,7 +292,7 @@ function DeviceList({
         const devs = await t.pick_and_connect?.list();
         if (!devs) continue;
         entries.push(
-          ...devs.map<[TransportFactory, AvailableDevice]>((d) => [t, d])
+          ...devs.map<[TransportFactory, AvailableDevice]>((d) => [t, d]),
         );
       } catch (e) {
         console.error(`Failed to list ${t.label} devices:`, e);
@@ -312,11 +400,15 @@ function NoTransportsPrompt() {
   return (
     <div className="rounded-xl border border-base-300 bg-white px-4 py-3 text-sm text-base-content/70">
       <p>
-        お使いのブラウザはWeb Serial / Web Bluetoothに対応していません。Chrome（バージョン89以降）をお使いください。またはデスクトップアプリをご利用ください。
+        お使いのブラウザはWeb Serial / Web
+        Bluetoothに対応していません。Chrome（バージョン89以降）をお使いください。またはデスクトップアプリをご利用ください。
       </p>
 
       <div className="mt-2">
-        <p>minimal-keys カスタマイズを使うには、対応ブラウザまたはデスクトップアプリが必要です。</p>
+        <p>
+          minimal-keys
+          カスタマイズを使うには、対応ブラウザまたはデスクトップアプリが必要です。
+        </p>
       </div>
     </div>
   );
@@ -326,20 +418,26 @@ function ConnectOptions({
   transports,
   onTransportCreated,
   open,
+  onConnectRightUsb,
+  connectionNotice,
 }: {
   transports: TransportFactory[];
   onTransportCreated: TransportCreatedHandler;
   open?: boolean;
+  onConnectRightUsb?: () => Promise<void>;
+  connectionNotice?: { title: string; body: string };
 }) {
   const useSimplePicker = useMemo(
     () => transports.every((t) => !t.pick_and_connect),
-    [transports]
+    [transports],
   );
 
   return useSimplePicker ? (
     <SimpleDevicePicker
       transports={transports}
       onTransportCreated={onTransportCreated}
+      onConnectRightUsb={onConnectRightUsb}
+      connectionNotice={connectionNotice}
     />
   ) : (
     <DeviceList
@@ -354,10 +452,15 @@ export const ConnectModal = ({
   open,
   transports,
   onTransportCreated,
+  onConnectRightUsb,
+  connectionNotice,
 }: ConnectModalProps) => {
   const dialog = useModalRef(open || false, false, false);
 
-  const haveTransports = useMemo(() => transports.length > 0, [transports]);
+  const haveTransports = useMemo(
+    () => transports.length > 0 || !!onConnectRightUsb,
+    [transports, onConnectRightUsb],
+  );
 
   return (
     <GenericModal
@@ -390,6 +493,8 @@ export const ConnectModal = ({
             transports={transports}
             onTransportCreated={onTransportCreated}
             open={open}
+            onConnectRightUsb={onConnectRightUsb}
+            connectionNotice={connectionNotice}
           />
         ) : (
           <NoTransportsPrompt />

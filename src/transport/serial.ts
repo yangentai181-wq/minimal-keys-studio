@@ -12,6 +12,17 @@ const SERIAL_ABORT_CLOSE_DELAY_MS = 50;
 
 const closingPorts = new WeakMap<SerialPort, Promise<void>>();
 
+/**
+ * The port (or its previous session) is held open — by another
+ * tab/app or by an in-flight close that could not finish.
+ */
+export class SerialPortBusyError extends Error {
+  constructor(message: string) {
+    super(message);
+    Object.setPrototypeOf(this, SerialPortBusyError.prototype);
+  }
+}
+
 function isAlreadyOpenError(error: unknown): boolean {
   return (
     error instanceof DOMException &&
@@ -77,7 +88,7 @@ async function ensureSerialPortClosed(
   try {
     await closeOpenSerialPort(port, reason);
   } catch {
-    throw new Error(SERIAL_CLOSE_ERROR_MESSAGE);
+    throw new SerialPortBusyError(SERIAL_CLOSE_ERROR_MESSAGE);
   }
 }
 
@@ -90,7 +101,7 @@ async function openPort(port: SerialPort): Promise<void> {
     });
   } catch (error) {
     if (isPermissionOrBusyError(error)) {
-      throw new Error(SERIAL_BUSY_ERROR_MESSAGE);
+      throw new SerialPortBusyError(SERIAL_BUSY_ERROR_MESSAGE);
     }
 
     throw error;
@@ -103,15 +114,12 @@ export async function openSerialPort(port: SerialPort): Promise<void> {
     try {
       await pendingClose;
     } catch {
-      throw new Error(SERIAL_CLOSE_ERROR_MESSAGE);
+      throw new SerialPortBusyError(SERIAL_CLOSE_ERROR_MESSAGE);
     }
   }
 
   if (port.readable || port.writable) {
-    await ensureSerialPortClosed(
-      port,
-      "Reopening an already-open serial port",
-    );
+    await ensureSerialPortClosed(port, "Reopening an already-open serial port");
   }
 
   try {
@@ -123,7 +131,7 @@ export async function openSerialPort(port: SerialPort): Promise<void> {
         await openPort(port);
       } catch (retryError) {
         if (isAlreadyOpenError(retryError)) {
-          throw new Error(SERIAL_STILL_OPEN_ERROR_MESSAGE);
+          throw new SerialPortBusyError(SERIAL_STILL_OPEN_ERROR_MESSAGE);
         }
 
         throw retryError;

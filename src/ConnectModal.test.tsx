@@ -12,6 +12,13 @@ beforeAll(() => {
   };
 });
 
+const USB_BUTTON_NAME =
+  "USBシリアルで接続 エディターのみ（Studio RPC）。通常は右手USBで接続";
+const BLE_BUTTON_NAME =
+  "BLEで接続 補助経路。ワイヤレスで編集のみ（モニター不可）";
+const RIGHT_USB_BUTTON_NAME =
+  "右手USBで接続 モニターとエディターをまとめて接続（推奨）";
+
 describe("ConnectModal browser transports", () => {
   it("starts a simple transport from the button click and shows connection state", async () => {
     const transport = {} as RpcTransport;
@@ -34,7 +41,7 @@ describe("ConnectModal browser transports", () => {
     );
 
     const button = screen.getByRole("button", {
-      name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+      name: USB_BUTTON_NAME,
     }) as HTMLButtonElement;
     fireEvent.click(button);
 
@@ -70,7 +77,7 @@ describe("ConnectModal browser transports", () => {
     );
 
     const button = screen.getByRole("button", {
-      name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+      name: USB_BUTTON_NAME,
     }) as HTMLButtonElement;
     fireEvent.click(button);
 
@@ -106,7 +113,7 @@ describe("ConnectModal browser transports", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+        name: USB_BUTTON_NAME,
       }),
     );
 
@@ -115,38 +122,49 @@ describe("ConnectModal browser transports", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows polished connection guidance for USB and BLE choices", () => {
+  it("shows contract-oriented guidance for USB and BLE choices", () => {
     const transports: TransportFactory[] = [
       { label: "USB", connect: vi.fn() },
       { label: "BLE", isWireless: true, connect: vi.fn() },
     ];
 
     render(
-      <ConnectModal
-        open
-        transports={transports}
-        onTransportCreated={vi.fn()}
-      />,
+      <ConnectModal open transports={transports} onTransportCreated={vi.fn()} />,
     );
 
     expect(screen.getByText("キーボードを接続")).toBeInTheDocument();
-    expect(screen.getByText("電源を入れて、接続方法を選んでください。")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", {
-        name: "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
-      }),
+      screen.getByText("電源を入れて、接続方法を選んでください。"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", {
-        name: "BLEで接続 minimal-keys推奨。ワイヤレスで編集する",
-      }),
+      screen.getByRole("button", { name: USB_BUTTON_NAME }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: BLE_BUTTON_NAME }),
     ).toBeInTheDocument();
   });
 
-  it("shows the BLE choice before USB when both are available", () => {
+  it("shows the USB choice before BLE (BLE is the auxiliary path)", () => {
     const transports: TransportFactory[] = [
-      { label: "USB", connect: vi.fn() },
       { label: "BLE", isWireless: true, connect: vi.fn() },
+      { label: "USB", connect: vi.fn() },
+    ];
+
+    render(
+      <ConnectModal open transports={transports} onTransportCreated={vi.fn()} />,
+    );
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons[0]).toHaveAccessibleName(USB_BUTTON_NAME);
+    expect(buttons[1]).toHaveAccessibleName(BLE_BUTTON_NAME);
+  });
+});
+
+describe("ConnectModal right-USB main flow", () => {
+  it("renders the right-USB connect as the primary button above the transport list", () => {
+    const transports: TransportFactory[] = [
+      { label: "BLE", isWireless: true, connect: vi.fn() },
+      { label: "USB", connect: vi.fn() },
     ];
 
     render(
@@ -154,15 +172,70 @@ describe("ConnectModal browser transports", () => {
         open
         transports={transports}
         onTransportCreated={vi.fn()}
+        onConnectRightUsb={vi.fn().mockResolvedValue(undefined)}
       />,
     );
 
     const buttons = screen.getAllByRole("button");
-    expect(buttons[0]).toHaveAccessibleName(
-      "BLEで接続 minimal-keys推奨。ワイヤレスで編集する",
+    expect(buttons[0]).toHaveAccessibleName(RIGHT_USB_BUTTON_NAME);
+    // BLE/USB serial are demoted into the secondary details section.
+    expect(
+      screen.getByText("詳細な接続方法（BLE / USBシリアルのみ）"),
+    ).toBeInTheDocument();
+  });
+
+  it("runs the right-USB flow from the primary button", async () => {
+    let resolveFlow: (() => void) | undefined;
+    const onConnectRightUsb = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFlow = resolve;
+        }),
     );
-    expect(buttons[1]).toHaveAccessibleName(
-      "USBで接続 USB Studio対応ファーム用。反応しない時はBLE",
+
+    render(
+      <ConnectModal
+        open
+        transports={[]}
+        onTransportCreated={vi.fn()}
+        onConnectRightUsb={onConnectRightUsb}
+      />,
     );
+
+    const button = screen.getByRole("button", {
+      name: RIGHT_USB_BUTTON_NAME,
+    }) as HTMLButtonElement;
+    fireEvent.click(button);
+
+    expect(onConnectRightUsb).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(true);
+    expect(button).toHaveTextContent("右手USB 接続中...");
+
+    resolveFlow?.();
+    await waitFor(() => {
+      expect(button.disabled).toBe(false);
+    });
+  });
+
+  it("shows the coordinator notice describing the established contract", () => {
+    render(
+      <ConnectModal
+        open
+        transports={[]}
+        onTransportCreated={vi.fn()}
+        onConnectRightUsb={vi.fn()}
+        connectionNotice={{
+          title: "モニターのみ利用可（Studio RPC応答なし）",
+          body: "USBシリアルは開けましたが、Studio RPCが応答しません。",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("モニターのみ利用可（Studio RPC応答なし）"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("USBシリアルは開けましたが、Studio RPCが応答しません。"),
+    ).toBeInTheDocument();
   });
 });

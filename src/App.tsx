@@ -53,6 +53,9 @@ import { TelemetryProvider, useTelemetry } from "./telemetry/TelemetryProvider";
 import { OptInDialog } from "./telemetry/OptInDialog";
 import { disposeTransport } from "./rpc/transportLifecycle";
 import { requestDeviceInfo } from "./rpc/deviceInfo";
+import { UnifiedStudioPreview } from "./UnifiedStudioPreview";
+import { useRightUsbConnection } from "./connection/useRightUsbConnection";
+import { MonitorPanel } from "./monitor/MonitorPanel";
 
 declare global {
   interface Window {
@@ -96,7 +99,7 @@ const WIRELESS_DEVICE_INFO_TIMEOUT_MS = 8000;
 
 async function listen_for_notifications(
   notification_stream: ReadableStream<Notification>,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<void> {
   const reader = notification_stream.getReader();
   const onAbort = () => {
@@ -117,9 +120,7 @@ async function listen_for_notifications(
 
       pub("rpc_notification", value);
 
-      const subsystem = Object.entries(value).find(
-        ([, v]) => v !== undefined
-      );
+      const subsystem = Object.entries(value).find(([, v]) => v !== undefined);
       if (!subsystem) {
         continue;
       }
@@ -153,7 +154,7 @@ async function connect(
   setConnectedDeviceName: Dispatch<string | undefined>,
   abortController: AbortController,
   onError: (msg: string) => void,
-  isWireless?: boolean
+  isWireless?: boolean,
 ) {
   const signal = abortController.signal;
   const conn = await create_rpc_connection(transport, { signal });
@@ -169,9 +170,7 @@ async function connect(
     });
   } catch (error) {
     const message =
-      error instanceof Error
-        ? error.message
-        : "デバイスへの接続に失敗しました";
+      error instanceof Error ? error.message : "デバイスへの接続に失敗しました";
     abortController.abort("Device info request failed");
     await disposeTransport(transport, "Device info request failed");
     onError(message);
@@ -192,7 +191,15 @@ async function connect(
   setConn({ conn });
 }
 
-type ActiveTab = "keymap" | "trackball" | "encoder" | "combo" | "bluetooth" | "battery" | "holdtap" | "settings";
+type ActiveTab =
+  | "keymap"
+  | "trackball"
+  | "encoder"
+  | "combo"
+  | "bluetooth"
+  | "battery"
+  | "holdtap"
+  | "settings";
 
 type TabDef = { id: ActiveTab; label: string; icon: React.ReactNode };
 type TabGroup = { tabs: TabDef[] };
@@ -200,18 +207,46 @@ type TabGroup = { tabs: TabDef[] };
 const TAB_GROUPS: TabGroup[] = [
   {
     tabs: [
-      { id: "keymap", label: "キーマップ", icon: <Grid3x3 className="w-4 h-4" /> },
-      { id: "holdtap", label: "長押し設定", icon: <Timer className="w-4 h-4" /> },
-      { id: "encoder", label: "エンコーダー", icon: <RotateCw className="w-4 h-4" /> },
+      {
+        id: "keymap",
+        label: "キーマップ",
+        icon: <Grid3x3 className="w-4 h-4" />,
+      },
+      {
+        id: "holdtap",
+        label: "長押し設定",
+        icon: <Timer className="w-4 h-4" />,
+      },
+      {
+        id: "encoder",
+        label: "エンコーダー",
+        icon: <RotateCw className="w-4 h-4" />,
+      },
       { id: "combo", label: "コンボ", icon: <Combine className="w-4 h-4" /> },
     ],
   },
   {
     tabs: [
-      { id: "trackball", label: "トラックボール", icon: <MousePointer2 className="w-4 h-4" /> },
-      { id: "bluetooth", label: "Bluetooth", icon: <Bluetooth className="w-4 h-4" /> },
-      { id: "battery", label: "バッテリー", icon: <BatteryMedium className="w-4 h-4" /> },
-      { id: "settings", label: "設定", icon: <SlidersHorizontal className="w-4 h-4" /> },
+      {
+        id: "trackball",
+        label: "トラックボール",
+        icon: <MousePointer2 className="w-4 h-4" />,
+      },
+      {
+        id: "bluetooth",
+        label: "Bluetooth",
+        icon: <Bluetooth className="w-4 h-4" />,
+      },
+      {
+        id: "battery",
+        label: "バッテリー",
+        icon: <BatteryMedium className="w-4 h-4" />,
+      },
+      {
+        id: "settings",
+        label: "設定",
+        icon: <SlidersHorizontal className="w-4 h-4" />,
+      },
     ],
   },
 ];
@@ -228,11 +263,13 @@ function AppInner() {
   const [showLicenseNotice, setShowLicenseNotice] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
   const [activeTab, setActiveTab] = useState<ActiveTab>("keymap");
-  const [mountedTabs, setMountedTabs] = useState<Set<ActiveTab>>(new Set(["keymap"]));
+  const [mountedTabs, setMountedTabs] = useState<Set<ActiveTab>>(
+    new Set(["keymap"]),
+  );
   const [keymapVersion, setKeymapVersion] = useState(0);
 
   const [lockState, setLockState] = useState<LockState>(
-    LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED
+    LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED,
   );
 
   useSub("rpc_notification.core.lockStateChanged", (ls) => {
@@ -272,7 +309,7 @@ function AppInner() {
 
       setLockState(
         locked_resp.core?.getLockState ||
-          LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED
+          LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED,
       );
     }
 
@@ -375,82 +412,213 @@ function AppInner() {
         isWireless,
       );
     },
-    [setConn, setConnectedDeviceName, toast]
+    [setConn, setConnectedDeviceName, toast],
   );
+
+  // Studio RPC probe for the right-USB flow: only a successful
+  // core.getDeviceInfo counts as an editor connection.
+  const probeStudioRpc = useCallback(
+    (t: RpcTransport) => onConnect(t, false),
+    [onConnect],
+  );
+
+  const rightUsb = useRightUsbConnection({ probeStudioRpc });
+  const { notifyBleReady } = rightUsb;
+
+  // Transport list flows (BLE / USB serial only). Report BLE success to the
+  // coordinator so its contract display stays truthful.
+  const onTransportCreated = useCallback(
+    async (t: RpcTransport, isWireless?: boolean) => {
+      await onConnect(t, isWireless);
+      if (isWireless) {
+        notifyBleReady();
+      }
+    },
+    [onConnect, notifyBleReady],
+  );
+
+  // Auxiliary BLE editor path launched from the monitor surface.
+  const connectBleFromMonitor = useCallback(async () => {
+    const ble = TRANSPORTS.find((t) => t.isWireless && t.connect !== undefined);
+    if (!ble?.connect) {
+      toast("このブラウザではBLE接続を利用できません", "error");
+      return;
+    }
+    try {
+      const transport = await ble.connect();
+      await onTransportCreated(transport, true);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [onTransportCreated, toast]);
+
+  const hasRightUsbFlow = !window.__TAURI_INTERNALS__ && !!navigator.serial;
+  const showMonitorOnly = !conn.conn && rightUsb.monitorActive;
 
   return (
     <ConnectionContext.Provider value={conn}>
       <LockStateContext.Provider value={lockState}>
         <UndoRedoContext.Provider value={doIt}>
           <BehaviorsProvider>
-          <CustomSubsystemsProvider>
-          <UnlockModal />
-          <ConnectModal
-            open={!conn.conn}
-            transports={TRANSPORTS}
-            onTransportCreated={onConnect}
-          />
-          <AboutModal open={showAbout} onClose={() => setShowAbout(false)} />
-          <LicenseNoticeModal
-            open={showLicenseNotice}
-            onClose={() => setShowLicenseNotice(false)}
-          />
-          {conn.conn && (
-            <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_1fr_auto] overflow-hidden">
-              <AppHeader
-                connectedDeviceLabel={connectedDeviceName}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                onUndo={undo}
-                onRedo={redo}
-                onSave={save}
-                onDiscard={discard}
-                onDisconnect={disconnect}
-                onResetSettings={resetSettings}
+            <CustomSubsystemsProvider>
+              <UnlockModal />
+              <ConnectModal
+                open={!conn.conn && !showMonitorOnly}
+                transports={TRANSPORTS}
+                onTransportCreated={onTransportCreated}
+                onConnectRightUsb={
+                  hasRightUsbFlow ? rightUsb.connectRightUsb : undefined
+                }
+                connectionNotice={
+                  rightUsb.state.phase !== "idle"
+                    ? {
+                        title: rightUsb.description.title,
+                        body: rightUsb.description.body,
+                      }
+                    : undefined
+                }
               />
-              <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
-                {TAB_GROUPS.map((group, gi) => (
-                  <div key={gi} className="flex items-center gap-0.5">
-                    {gi > 0 && <div className="w-px h-6 bg-gray-300 mx-2" />}
-                    {group.tabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${
-                          activeTab === tab.id
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-base-content/60 hover:text-base-content hover:bg-base-200"
-                        }`}
-                        onClick={() => {
-                          setActiveTab(tab.id);
-                          setMountedTabs((prev) => new Set(prev).add(tab.id));
-                          trackEvent("tab_switched", { tab: tab.id });
-                        }}
-                      >
-                        {tab.icon}
-                        <span className="hidden sm:inline">{tab.label}</span>
-                      </button>
+              {showMonitorOnly && (
+                <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] overflow-hidden">
+                  <MonitorPanel
+                    snapshot={rightUsb.monitor}
+                    description={rightUsb.description}
+                    editorAvailable={false}
+                    busy={rightUsb.connecting}
+                    onRetryEditor={rightUsb.retryEditor}
+                    onConnectBle={connectBleFromMonitor}
+                    onClose={rightUsb.closeMonitor}
+                  />
+                </div>
+              )}
+              <AboutModal
+                open={showAbout}
+                onClose={() => setShowAbout(false)}
+              />
+              <LicenseNoticeModal
+                open={showLicenseNotice}
+                onClose={() => setShowLicenseNotice(false)}
+              />
+              {conn.conn && (
+                <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_1fr_auto] overflow-hidden">
+                  <AppHeader
+                    connectedDeviceLabel={connectedDeviceName}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    onUndo={undo}
+                    onRedo={redo}
+                    onSave={save}
+                    onDiscard={discard}
+                    onDisconnect={disconnect}
+                    onResetSettings={resetSettings}
+                  />
+                  <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
+                    {TAB_GROUPS.map((group, gi) => (
+                      <div key={gi} className="flex items-center gap-0.5">
+                        {gi > 0 && (
+                          <div className="w-px h-6 bg-gray-300 mx-2" />
+                        )}
+                        {group.tabs.map((tab) => (
+                          <button
+                            key={tab.id}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${
+                              activeTab === tab.id
+                                ? "bg-primary/10 text-primary font-medium"
+                                : "text-base-content/60 hover:text-base-content hover:bg-base-200"
+                            }`}
+                            onClick={() => {
+                              setActiveTab(tab.id);
+                              setMountedTabs((prev) =>
+                                new Set(prev).add(tab.id),
+                              );
+                              trackEvent("tab_switched", { tab: tab.id });
+                            }}
+                          >
+                            {tab.icon}
+                            <span className="hidden sm:inline">
+                              {tab.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     ))}
+                  </nav>
+                  <div className="min-h-0 overflow-hidden h-full">
+                    <div
+                      className={activeTab === "keymap" ? "h-full" : "hidden"}
+                    >
+                      <Keyboard key={keymapVersion} />
+                    </div>
+                    {mountedTabs.has("trackball") && (
+                      <div
+                        className={
+                          activeTab === "trackball" ? "h-full" : "hidden"
+                        }
+                      >
+                        <TrackballSettings />
+                      </div>
+                    )}
+                    {mountedTabs.has("encoder") && (
+                      <div
+                        className={
+                          activeTab === "encoder" ? "h-full" : "hidden"
+                        }
+                      >
+                        <EncoderSettings />
+                      </div>
+                    )}
+                    {mountedTabs.has("combo") && (
+                      <div
+                        className={activeTab === "combo" ? "h-full" : "hidden"}
+                      >
+                        <ComboSettings />
+                      </div>
+                    )}
+                    {mountedTabs.has("bluetooth") && (
+                      <div
+                        className={
+                          activeTab === "bluetooth" ? "h-full" : "hidden"
+                        }
+                      >
+                        <BleManagement />
+                      </div>
+                    )}
+                    {mountedTabs.has("holdtap") && (
+                      <div
+                        className={
+                          activeTab === "holdtap" ? "h-full" : "hidden"
+                        }
+                      >
+                        <HoldTapSettings />
+                      </div>
+                    )}
+                    {mountedTabs.has("battery") && (
+                      <div
+                        className={
+                          activeTab === "battery" ? "h-full" : "hidden"
+                        }
+                      >
+                        <BatteryHistory />
+                      </div>
+                    )}
+                    {mountedTabs.has("settings") && (
+                      <div
+                        className={
+                          activeTab === "settings" ? "h-full" : "hidden"
+                        }
+                      >
+                        <DeviceSettings />
+                      </div>
+                    )}
                   </div>
-                ))}
-              </nav>
-              <div className="min-h-0 overflow-hidden h-full">
-                <div className={activeTab === "keymap" ? "h-full" : "hidden"}><Keyboard key={keymapVersion} /></div>
-                {mountedTabs.has("trackball") && <div className={activeTab === "trackball" ? "h-full" : "hidden"}><TrackballSettings /></div>}
-                {mountedTabs.has("encoder") && <div className={activeTab === "encoder" ? "h-full" : "hidden"}><EncoderSettings /></div>}
-                {mountedTabs.has("combo") && <div className={activeTab === "combo" ? "h-full" : "hidden"}><ComboSettings /></div>}
-                {mountedTabs.has("bluetooth") && <div className={activeTab === "bluetooth" ? "h-full" : "hidden"}><BleManagement /></div>}
-                {mountedTabs.has("holdtap") && <div className={activeTab === "holdtap" ? "h-full" : "hidden"}><HoldTapSettings /></div>}
-                {mountedTabs.has("battery") && <div className={activeTab === "battery" ? "h-full" : "hidden"}><BatteryHistory /></div>}
-                {mountedTabs.has("settings") && <div className={activeTab === "settings" ? "h-full" : "hidden"}><DeviceSettings /></div>}
-              </div>
-              <AppFooter
-                onShowAbout={() => setShowAbout(true)}
-                onShowLicenseNotice={() => setShowLicenseNotice(true)}
-              />
-            </div>
-          )}
-        </CustomSubsystemsProvider>
-        </BehaviorsProvider>
+                  <AppFooter
+                    onShowAbout={() => setShowAbout(true)}
+                    onShowLicenseNotice={() => setShowLicenseNotice(true)}
+                  />
+                </div>
+              )}
+            </CustomSubsystemsProvider>
+          </BehaviorsProvider>
         </UndoRedoContext.Provider>
       </LockStateContext.Provider>
     </ConnectionContext.Provider>
@@ -458,6 +626,14 @@ function AppInner() {
 }
 
 function App() {
+  const isIntegratedPreview =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("preview") === "integrated";
+
+  if (isIntegratedPreview) {
+    return <UnifiedStudioPreview />;
+  }
+
   return (
     <ToastProvider>
       <OsModeProvider>
