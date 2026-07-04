@@ -61,6 +61,11 @@ export function useRightUsbConnection(options: {
   const [connecting, setConnecting] = useState(false);
   const storeRef = useRef(createMonitorStore());
   const subscriptionRef = useRef<RawHidSubscription | null>(null);
+  // Bumped by closeMonitor. An in-flight openMonitor compares its captured
+  // generation on resolve; on mismatch the monitor was closed mid-open and
+  // the late subscription must be discarded instead of leaking an opened
+  // HIDDevice behind a closed UI.
+  const monitorGenerationRef = useRef(0);
 
   const monitor = useSyncExternalStore(
     storeRef.current.subscribe,
@@ -71,10 +76,20 @@ export function useRightUsbConnection(options: {
     if (subscriptionRef.current) {
       return subscriptionRef.current;
     }
+    const generation = monitorGenerationRef.current;
     const subscription = await connectRawHidMonitor((frame) =>
       storeRef.current.push(frame),
     );
-    subscriptionRef.current = subscription ?? null;
+    if (!subscription) {
+      return undefined;
+    }
+    if (monitorGenerationRef.current !== generation) {
+      // closeMonitor ran while the picker/open was pending: close the
+      // late subscription right away instead of resurrecting it.
+      await subscription.close();
+      return undefined;
+    }
+    subscriptionRef.current = subscription;
     return subscription;
   }, []);
 
@@ -126,6 +141,7 @@ export function useRightUsbConnection(options: {
   }, [connecting, probeStudioRpc]);
 
   const closeMonitor = useCallback(async () => {
+    monitorGenerationRef.current += 1;
     const subscription = subscriptionRef.current;
     subscriptionRef.current = null;
     if (subscription) {
