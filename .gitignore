@@ -25,3 +25,7 @@ src/data
 *.sw?
 
 *storybook.log
+
+# Local Codex/Superpowers workspaces and design mockups
+.worktrees/
+.superpowers/
