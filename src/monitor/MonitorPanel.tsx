@@ -7,8 +7,11 @@ import type { ConnectionDescription } from "../connection/coordinator";
 import { isLayerActive } from "../connection/rawHidFrames";
 import { LayerPicker } from "../keyboard/LayerPicker";
 import { AUTO_MOUSE_LAYER_INDEX } from "../keyboard/minimal-keys-layers";
+import { StudioConnectionOverview } from "../StudioConnectionOverview";
 import type { MonitorSnapshot } from "./monitorStore";
 
+import { MinimalKeysMonitorLayout } from "./MinimalKeysMonitorLayout";
+import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import { MONITOR_LAYER_NAMES } from "./layerNames";
 
 export interface MonitorPanelProps {
@@ -38,7 +41,7 @@ export function MonitorPanel({
   );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 overflow-y-auto p-4">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto p-4">
       <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -57,6 +60,14 @@ export function MonitorPanel({
           </button>
         )}
       </header>
+
+      <StudioConnectionOverview
+        monitor={snapshot}
+        monitorActive={true}
+        editorAvailable={editorAvailable}
+        connectionTitle={description.title}
+        connectionBody={description.body}
+      />
 
       <section
         className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"
@@ -96,7 +107,7 @@ export function MonitorPanel({
         )}
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
         <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
           {/* Layer display follows the Raw HID layer frames; manual layer
               switching is intentionally disabled in monitor mode. */}
@@ -109,6 +120,11 @@ export function MonitorPanel({
         </section>
 
         <div className="flex flex-col gap-4">
+          <MinimalKeysMonitorLayout
+            activeLayerIndex={snapshot.activeLayerIndex}
+            pressed={snapshot.pressed}
+          />
+
           <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
             <h2 className="text-sm font-semibold text-base-content">
               押下中のキー
@@ -124,7 +140,7 @@ export function MonitorPanel({
                     key={position}
                     className="rounded-md bg-primary/10 px-2 py-1 font-mono text-xs text-primary"
                   >
-                    #{position}
+                    #{position} {getMonitorKeyLabel(position, snapshot.activeLayerIndex).label}
                   </li>
                 ))}
               </ul>

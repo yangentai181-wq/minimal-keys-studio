@@ -4,6 +4,7 @@ import {
   Timer,
   RotateCw,
   MousePointer2,
+  Cable,
   Bluetooth,
   BatteryMedium,
   SlidersHorizontal,
@@ -56,6 +57,7 @@ import { requestDeviceInfo } from "./rpc/deviceInfo";
 import { UnifiedStudioPreview } from "./UnifiedStudioPreview";
 import { useRightUsbConnection } from "./connection/useRightUsbConnection";
 import { MonitorPanel } from "./monitor/MonitorPanel";
+import { StudioConnectionOverview } from "./StudioConnectionOverview";
 
 declare global {
   interface Window {
@@ -500,7 +502,7 @@ function AppInner() {
                 onClose={() => setShowLicenseNotice(false)}
               />
               {conn.conn && (
-                <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_1fr_auto] overflow-hidden">
+                <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_auto_1fr_auto] overflow-hidden">
                   <AppHeader
                     connectedDeviceLabel={connectedDeviceName}
                     canUndo={canUndo}
@@ -511,6 +513,28 @@ function AppInner() {
                     onDiscard={discard}
                     onDisconnect={disconnect}
                     onResetSettings={resetSettings}
+                  />
+                  <StudioConnectionOverview
+                    monitor={rightUsb.monitor}
+                    monitorActive={rightUsb.monitorActive}
+                    editorAvailable={!!conn.conn}
+                    connectionTitle={rightUsb.description.title}
+                    connectionBody={rightUsb.description.body}
+                    deviceName={connectedDeviceName}
+                    showLayout={rightUsb.monitorActive}
+                    actions={
+                      !rightUsb.monitorActive && hasRightUsbFlow ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50"
+                          onClick={rightUsb.connectRightUsb}
+                          disabled={rightUsb.connecting}
+                        >
+                          <Cable className="h-4 w-4" aria-hidden="true" />
+                          右手USBモニターを接続
+                        </button>
+                      ) : undefined
+                    }
                   />
                   <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
                     {TAB_GROUPS.map((group, gi) => (

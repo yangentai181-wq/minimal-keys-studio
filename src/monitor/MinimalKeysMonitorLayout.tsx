@@ -1,0 +1,112 @@
+import type { CSSProperties } from "react";
+
+import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
+import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
+
+const layoutWidth = MINIMAL_KEYS_POSITIONS.reduce(
+  (max, key) => Math.max(max, key.x + key.width),
+  0,
+);
+const layoutHeight = MINIMAL_KEYS_POSITIONS.reduce(
+  (max, key) => Math.max(max, key.y + key.height),
+  0,
+);
+
+function keyStyle(position: (typeof MINIMAL_KEYS_POSITIONS)[number]): CSSProperties {
+  return {
+    left: `${(position.x / layoutWidth) * 100}%`,
+    top: `${(position.y / layoutHeight) * 100}%`,
+    width: `${(position.width / layoutWidth) * 100}%`,
+    height: `${(position.height / layoutHeight) * 100}%`,
+  };
+}
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+export interface MinimalKeysMonitorLayoutProps {
+  activeLayerIndex: number;
+  pressed: ReadonlySet<number>;
+  className?: string;
+}
+
+export function MinimalKeysMonitorLayout({
+  activeLayerIndex,
+  pressed,
+  className,
+}: MinimalKeysMonitorLayoutProps) {
+  return (
+    <div
+      className={cx(
+        "overflow-x-auto rounded-lg border border-base-300 bg-base-200 p-3",
+        className,
+      )}
+    >
+      <div
+        className="relative min-w-[680px]"
+        role="grid"
+        aria-label="minimal-keys 実配列モニター"
+        style={{ aspectRatio: `${layoutWidth} / ${layoutHeight}` }}
+      >
+        <div
+          className="absolute rounded-full border border-primary/20 bg-primary/5 text-[10px] font-bold text-primary"
+          style={{
+            left: `${(600 / layoutWidth) * 100}%`,
+            top: `${(74 / layoutHeight) * 100}%`,
+            width: `${(100 / layoutWidth) * 100}%`,
+            height: `${(100 / layoutHeight) * 100}%`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="flex h-full items-center justify-center">enc</span>
+        </div>
+        <div
+          className="absolute rounded-full border border-accent/30 bg-orange-50 text-[10px] font-bold text-accent"
+          style={{
+            left: `${(930 / layoutWidth) * 100}%`,
+            top: `${(292 / layoutHeight) * 100}%`,
+            width: `${(160 / layoutWidth) * 100}%`,
+            height: `${(92 / layoutHeight) * 100}%`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="flex h-full items-center justify-center">ball</span>
+        </div>
+
+        {MINIMAL_KEYS_POSITIONS.map((position, index) => {
+          const isPressed = pressed.has(index);
+          const { label, transparent } = getMonitorKeyLabel(
+            index,
+            activeLayerIndex,
+          );
+
+          return (
+            <div
+              key={position.id}
+              role="gridcell"
+              aria-label={`pos ${index} ${label}${isPressed ? " 押下中" : ""}`}
+              aria-pressed={isPressed}
+              title={`pos ${index}: ${label}`}
+              className="absolute p-0.5"
+              style={keyStyle(position)}
+            >
+              <div
+                className={cx(
+                  "flex h-full w-full min-w-0 items-center justify-center rounded-md border px-1 text-center text-xs font-bold leading-tight shadow-sm transition",
+                  isPressed
+                    ? "border-primary bg-primary text-primary-content ring-2 ring-primary/30"
+                    : transparent
+                      ? "border-base-300 bg-white/60 text-base-content/35"
+                      : "border-base-300 bg-white text-base-content",
+                )}
+              >
+                <span className="line-clamp-2 break-words">{label}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

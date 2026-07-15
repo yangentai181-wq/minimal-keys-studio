@@ -1,7 +1,4 @@
 import {
-  BatteryMedium,
-  Bluetooth,
-  Cable,
   Check,
   ChevronDown,
   CircleDot,
@@ -14,35 +11,40 @@ import {
   RotateCw,
   Save,
   SlidersHorizontal,
-  Usb,
 } from "lucide-react";
+import { StudioConnectionOverview } from "./StudioConnectionOverview";
+import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
+import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 
-const layers = [
-  { id: 0, name: "基本入力", state: "待機" },
-  { id: 1, name: "ナビゲーション", state: "入力中" },
-  { id: 2, name: "記号入力", state: "固定" },
-  { id: 3, name: "数字入力", state: "待機" },
-  { id: 4, name: "オートマウス", state: "自動" },
-];
+const previewActiveLayer = 3;
+const previewPressedKeys = new Set([30]);
+const previewMonitor = {
+  pressed: previewPressedKeys,
+  defaultLayer: 0,
+  activeLayerMask: 1 << previewActiveLayer,
+  activeLayerIndex: previewActiveLayer,
+  pointer: {
+    dx: 12,
+    dy: -4,
+    wheel: 0,
+    hwheel: 0,
+    buttons: 0,
+    at: 100,
+  },
+  encoders: {},
+  lastEventAt: 100,
+};
 
-const keyRows = [
-  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-  ["A", "S", "D", "F", "G", "H", "J", "K", "L", ";"],
-  ["Z", "X", "C", "V", "B", "N", "M", "読点", "句点", "スラッシュ"],
-  ["Command", "Lower", "Space", "Enter", "Raise", "Backspace", "Symbol", "Nav"],
-];
+const layers = MONITOR_LAYER_NAMES.map((name, id) => ({
+  id,
+  name,
+  state: id === previewActiveLayer ? "入力中" : "待機",
+}));
 
 const monitorEvents = [
-  { label: "現在レイヤー", value: "記号入力", tone: "accent" },
-  { label: "最新キー", value: "R4 / C8 スラッシュ", tone: "primary" },
+  { label: "現在レイヤー", value: "記号", tone: "accent" },
+  { label: "最新キー", value: "#30 /", tone: "primary" },
   { label: "トラックボール", value: "dx +12 / dy -4", tone: "neutral" },
-];
-
-const fitChecks = [
-  "リアルタイムモニター",
-  "右手USBで接続中",
-  "Studio RPC未確認",
-  "オートマウス使用中",
 ];
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -74,32 +76,6 @@ function StatusPill({
   );
 }
 
-function Keycap({
-  label,
-  active,
-  selected,
-}: {
-  label: string;
-  active?: boolean;
-  selected?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className={cx(
-        "keycap relative flex h-14 min-w-0 items-center justify-center rounded-lg border text-sm font-bold shadow-sm transition",
-        selected
-          ? "border-accent bg-orange-50 text-accent ring-2 ring-accent/20"
-          : active
-            ? "border-primary bg-primary text-primary-content"
-            : "border-base-300 bg-white text-base-content hover:border-primary/50",
-      )}
-    >
-      <span className="truncate px-1">{label}</span>
-    </button>
-  );
-}
-
 function KeyboardCanvas() {
   return (
     <section className="min-h-0 rounded-lg border border-base-300 bg-white p-4 shadow-sm">
@@ -124,30 +100,10 @@ function KeyboardCanvas() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-base-300 bg-base-200 p-4">
-        <div className="grid gap-2">
-          {keyRows.map((row, rowIndex) => (
-            <div
-              key={rowIndex}
-              className={cx(
-                "grid gap-2",
-                rowIndex === 3
-                  ? "grid-cols-8"
-                  : "grid-cols-10",
-              )}
-            >
-              {row.map((label) => (
-                <Keycap
-                  key={`${rowIndex}-${label}`}
-                  label={label}
-                  active={label === "NAV" || label === "SYM"}
-                  selected={label === "スラッシュ"}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      <MinimalKeysMonitorLayout
+        activeLayerIndex={previewActiveLayer}
+        pressed={previewPressedKeys}
+      />
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         {monitorEvents.map((event) => (
@@ -192,7 +148,7 @@ function LayerRail() {
             key={layer.id}
             className={cx(
               "flex items-center justify-between rounded-lg border px-3 py-2",
-              layer.name === "記号入力"
+              layer.id === previewActiveLayer
                 ? "border-primary/30 bg-primary/10"
                 : "border-base-300 bg-white",
             )}
@@ -205,7 +161,7 @@ function LayerRail() {
                 {layer.state}
               </p>
             </div>
-            {layer.name === "記号入力" && (
+            {layer.id === previewActiveLayer && (
               <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             )}
           </div>
@@ -224,7 +180,7 @@ function EditorPanel() {
             選択中のキー
           </p>
           <h2 className="truncate whitespace-nowrap text-base font-bold text-base-content">
-            R3 / C9 スラッシュ
+            pos 30 / スラッシュ
           </h2>
         </div>
         <span className="shrink-0 rounded-lg bg-orange-50 px-3 py-1 text-xs font-bold text-accent">
@@ -275,84 +231,6 @@ function EditorPanel() {
   );
 }
 
-function DeviceCard({
-  icon,
-  title,
-  detail,
-  active,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-  active?: boolean;
-}) {
-  return (
-    <div
-      className={cx(
-        "min-w-0 rounded-lg border px-4 py-3 shadow-sm",
-        active ? "border-primary/30 bg-primary/10" : "border-base-300 bg-white",
-      )}
-    >
-      <div
-        className={cx(
-          "flex min-w-0 items-center gap-2 text-sm font-bold",
-          active ? "text-primary" : "text-base-content",
-        )}
-      >
-        <span className="shrink-0">{icon}</span>
-        <span className="min-w-0 truncate whitespace-nowrap">{title}</span>
-      </div>
-      <p className="mt-1 truncate whitespace-nowrap text-xs text-base-content/60">
-        {detail}
-      </p>
-    </div>
-  );
-}
-
-function DeviceStrip() {
-  return (
-    <div className="grid gap-3 lg:grid-cols-4">
-      <DeviceCard
-        active
-        icon={<Usb className="h-4 w-4" aria-hidden="true" />}
-        title="右手USBで接続中"
-        detail="Raw HIDリアルタイム監視中"
-      />
-      <DeviceCard
-        icon={<Cable className="h-4 w-4 text-accent" aria-hidden="true" />}
-        title="Studio RPC未確認"
-        detail="編集保存にはプローブが必要"
-      />
-      <DeviceCard
-        icon={<Bluetooth className="h-4 w-4 text-primary" aria-hidden="true" />}
-        title="BLEは補助接続"
-        detail="USBが主導線"
-      />
-      <DeviceCard
-        icon={<BatteryMedium className="h-4 w-4 text-success" aria-hidden="true" />}
-        title="バッテリー表示"
-        detail="右82% / 左76%"
-      />
-    </div>
-  );
-}
-
-function TextFitStrip() {
-  return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      {fitChecks.map((label) => (
-        <div
-          key={label}
-          className="flex h-10 min-w-0 items-center rounded-lg border border-base-300 bg-white px-3 text-xs font-bold text-base-content shadow-sm"
-          title={label}
-        >
-          <span className="min-w-0 truncate whitespace-nowrap">{label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function UnifiedStudioPreview() {
   return (
     <div className="min-h-dvh bg-base-200 text-base-content">
@@ -392,11 +270,16 @@ export function UnifiedStudioPreview() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4 pb-28 lg:grid-cols-[240px_minmax(0,1fr)_320px] lg:px-6 lg:pb-6">
-        <div className="space-y-4 lg:col-span-3">
-          <DeviceStrip />
-          <TextFitStrip />
-        </div>
+      <StudioConnectionOverview
+        monitor={previewMonitor}
+        monitorActive
+        editorAvailable
+        connectionTitle="エディタ / モニタ統合"
+        connectionBody="Raw HIDのライブ入力とStudio RPCの編集状態を同じ画面で扱います。"
+        deviceName="minimal-keys"
+      />
+
+      <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4 pb-28 xl:grid-cols-[240px_minmax(0,1fr)_320px] xl:px-6 xl:pb-6">
         <LayerRail />
         <KeyboardCanvas />
         <EditorPanel />
@@ -432,7 +315,7 @@ export function UnifiedStudioPreview() {
         </div>
       </nav>
 
-      <div className="fixed bottom-24 right-4 hidden rounded-lg border border-base-300 bg-white px-4 py-3 shadow-sm lg:block">
+      <div className="fixed bottom-24 right-4 hidden rounded-lg border border-base-300 bg-white px-4 py-3 shadow-sm xl:block">
         <div className="flex items-center gap-3">
           <Gauge className="h-5 w-5 text-primary" aria-hidden="true" />
           <div>
