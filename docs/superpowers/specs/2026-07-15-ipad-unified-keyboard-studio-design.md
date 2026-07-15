@@ -48,6 +48,15 @@ The result bar below the keyboard contains:
 
 Low-frequency diagnostic detail for encoder samples and connection recovery is available through compact secondary controls, not permanent large cards.
 
+## Auto Mouse Control
+
+- Auto Mouse is exposed as the same synchronized setting in two places: a quick switch in the monitor result bar and a described switch in the trackball settings editor.
+- Both controls read `tempLayerEnabled` from the selected Runtime Input Processor and write changes with `encodeSetTempLayerEnabled` through the existing `cormoran_rip` Studio RPC subsystem.
+- The device notification is the source of truth. Both controls update together when `inputProcessorChanged` reports the new value.
+- While a write is pending, both controls are disabled and show a busy state. A failed or timed-out write restores the last device-reported value and shows an error toast.
+- When Studio RPC is unavailable, the monitor displays Auto Mouse activity from the Raw HID layer mask but renders the switch disabled with a concise reason. Raw HID alone cannot change the setting.
+- Reconnection reads the value reported by the device instead of reusing stale browser state.
+
 ## Typing Practice
 
 Typing practice supports two local modes:
@@ -110,6 +119,10 @@ Renders the accessible two-state toggle, disabled editor state, and keyboard foc
 
 Composes typing practice, `MinimalKeysMonitorLayout`, live Raw HID metrics, and monitor recovery actions.
 
+### `AutoMouseSettingProvider`
+
+Discovers the selected Runtime Input Processor, owns the latest device-reported `tempLayerEnabled` value and pending state, and exposes one update action to both monitor and trackball controls. It uses the existing `cormoran_rip` subsystem and does not duplicate transport ownership.
+
 ### `TypingPractice`
 
 Owns practice mode, collapsed state, input text, prompt selection, timer state, reset behavior, and derived metrics. Pure metric calculations live in a separate module so they can be tested without rendering React.
@@ -128,6 +141,7 @@ Replaces the workspace only when the viewport is portrait. It does not alter con
 - `AppInner` continues to own Studio RPC connection and editor actions.
 - `AppInner` passes both into `StudioWorkspace`.
 - `StudioWorkspace` passes the snapshot to `MonitorWorkspace` and connection availability to `StudioModeToggle`.
+- `AutoMouseSettingProvider` derives editable Auto Mouse state from `cormoran_rip`; `MonitorWorkspace` and `TrackballSettings` consume the same state and update action.
 - Practice input and statistics remain inside `TypingPractice`.
 - Mode changes affect presentation only and do not call connection APIs.
 
@@ -135,6 +149,7 @@ Replaces the workspace only when the viewport is portrait. It does not alter con
 
 - Raw HID unavailable: monitor mode shows an idle keyboard and a compact connect action.
 - Studio RPC unavailable: editor mode is disabled and the retry action remains available.
+- Auto Mouse RPC write failure: the switch returns to the last confirmed value and an error toast identifies the failed setting.
 - Both unavailable: the existing connection modal remains the entry point.
 - Practice input empty: statistics show zero values without starting a timer.
 - Portrait viewport: rotation notice replaces the workspace without disconnecting devices.
@@ -151,6 +166,7 @@ Replaces the workspace only when the viewport is portrait. It does not alter con
 
 - Unit tests cover practice metrics for empty input, correct text, mistakes, elapsed time, completion, and reset.
 - Component tests cover the collapsed default, expand/collapse state preservation, free/prompt mode switching, input placement before the keyboard, reset, next prompt, and visible statistics.
+- Auto Mouse tests cover device-reported initialization, synchronized controls, pending state, successful notification confirmation, timeout rollback, and Raw-HID-only disabled behavior.
 - Workspace tests assert that only one keyboard surface is visible and that mode switching preserves connection state.
 - Orientation tests assert that portrait shows the rotation notice and landscape restores the workspace.
 - Existing Raw HID, Studio RPC, keyboard editor, lint, and production build tests must continue to pass.
