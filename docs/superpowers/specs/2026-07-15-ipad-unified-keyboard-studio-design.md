@@ -19,7 +19,7 @@ Replace the currently stacked monitor and editor surfaces with one iPad-landscap
 The connected application uses four vertical regions:
 
 1. A compact header with the product name, centered mode toggle, and connection status.
-2. A mode-specific upper panel: typing practice in monitor mode, editor navigation in editor mode.
+2. A mode-specific upper strip: collapsed typing practice in monitor mode, editor navigation in editor mode.
 3. A single keyboard stage occupying the largest available area.
 4. A bottom action and metrics area sized for touch.
 
@@ -52,6 +52,8 @@ Low-frequency diagnostic detail for encoder samples and connection recovery is a
 
 Typing practice supports two local modes:
 
+The practice surface starts in a collapsed state. The collapsed state is one compact horizontal strip above the physical keyboard containing the practice-mode toggle, a single-line input, words per minute, accuracy, and an expand icon button. Prompted mode keeps the current target visible as an inline guide in the input area. Expanding the surface reveals the full prompt, detailed statistics, reset, and next-prompt actions. Collapsing it never clears text, timing, or results.
+
 ### Free Input
 
 - The user can type arbitrary text into a multi-line input.
@@ -81,6 +83,7 @@ Practice state remains local to the browser and is not sent to the keyboard, tel
 - Touch targets are at least 44 x 44 CSS pixels.
 - The keyboard stage uses responsive constraints rather than viewport-scaled font sizes.
 - The bottom result/action area remains reachable without covering the keyboard.
+- The collapsed practice strip is the default on every new application session so the keyboard receives the maximum vertical area.
 - In portrait orientation, the application shows a rotation notice with the current connection preserved. Returning to landscape restores the previous mode and state.
 
 ## Visual System
@@ -109,7 +112,7 @@ Composes typing practice, `MinimalKeysMonitorLayout`, live Raw HID metrics, and 
 
 ### `TypingPractice`
 
-Owns practice mode, input text, prompt selection, timer state, reset behavior, and derived metrics. Pure metric calculations live in a separate module so they can be tested without rendering React.
+Owns practice mode, collapsed state, input text, prompt selection, timer state, reset behavior, and derived metrics. Pure metric calculations live in a separate module so they can be tested without rendering React.
 
 ### Existing `Keyboard`
 
@@ -147,7 +150,7 @@ Replaces the workspace only when the viewport is portrait. It does not alter con
 ## Testing
 
 - Unit tests cover practice metrics for empty input, correct text, mistakes, elapsed time, completion, and reset.
-- Component tests cover free/prompt mode switching, input placement before the keyboard, reset, next prompt, and visible statistics.
+- Component tests cover the collapsed default, expand/collapse state preservation, free/prompt mode switching, input placement before the keyboard, reset, next prompt, and visible statistics.
 - Workspace tests assert that only one keyboard surface is visible and that mode switching preserves connection state.
 - Orientation tests assert that portrait shows the rotation notice and landscape restores the workspace.
 - Existing Raw HID, Studio RPC, keyboard editor, lint, and production build tests must continue to pass.
