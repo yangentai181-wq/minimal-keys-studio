@@ -2,9 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 import { useTrackballPrecision } from "./TrackballPrecisionContext";
+import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
 
 const updateDraft = vi.fn();
 const save = vi.fn();
+const selection = (analysis: { supported: true; tapLabel: string; holdLabel: string } | { supported: false; reason: string } | null) => ({ keymap: undefined, behaviors: [], analysis });
 
 vi.mock("./TrackballPrecisionContext", () => ({
   useTrackballPrecision: vi.fn(() => ({
@@ -25,12 +27,11 @@ vi.mock("./TrackballPrecisionContext", () => ({
 }));
 
 vi.mock("./PrecisionKeyPicker", () => ({
-  ConnectedPrecisionKeyPicker: ({ onAnalysis }: { onAnalysis?(analysis: { supported: boolean; reason?: string }, position: number): void }) => (
-    <div data-testid="precision-key-picker">
-      <button onClick={() => onAnalysis?.({ supported: true }, 0)}>対応キー</button>
-      <button onClick={() => onAnalysis?.({ supported: false, reason: "このキーは選べません" }, 0)}>非対応キー</button>
-    </div>
-  ),
+  ConnectedPrecisionKeyPicker: () => <div data-testid="precision-key-picker" />,
+}));
+
+vi.mock("./useConnectedPrecisionSelection", () => ({
+  useConnectedPrecisionSelection: vi.fn(() => selection({ supported: true, tapLabel: "A", holdLabel: "なし" })),
 }));
 
 describe("TrackballPrecisionSettings", () => {
@@ -68,7 +69,19 @@ describe("TrackballPrecisionSettings", () => {
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   });
 
-  it("blocks enabled saves until the selected physical key is confirmed supported", () => {
+  it("allows disabled drafts to save without key analysis", () => {
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save, reload: vi.fn(),
+    });
+    vi.mocked(useConnectedPrecisionSelection).mockReturnValue(selection(null));
+    render(<TrackballPrecisionSettings />);
+
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+  });
+
+  it("blocks re-enabled saves until the same selected position has current supported analysis", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue({
       availability: "available",
       confirmed: null,
@@ -80,25 +93,27 @@ describe("TrackballPrecisionSettings", () => {
       save,
       reload: vi.fn(),
     });
-    render(<TrackballPrecisionSettings />);
+    vi.mocked(useConnectedPrecisionSelection).mockReturnValue(selection(null));
+    const view = render(<TrackballPrecisionSettings />);
 
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "対応キー" }));
+    vi.mocked(useConnectedPrecisionSelection).mockReturnValue(selection({ supported: true, tapLabel: "A", holdLabel: "なし" }));
+    // Re-render models the synchronous analysis returned after the latest selected key data arrives.
+    view.rerender(<TrackballPrecisionSettings />);
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     expect(save).toHaveBeenCalledOnce();
     expect(screen.getByTestId("precision-key-picker")).toBeInTheDocument();
   });
 
-  it("shows the unsupported key reason and blocks enabled saves", () => {
+  it("shows the current unsupported key reason and blocks enabled saves", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue({
       availability: "available", confirmed: null,
       draft: { normalCpi: 800, precisionCpi: 200, enabled: true, selectedPosition: 0 },
       dirty: true, saving: false, error: null, updateDraft, save, reload: vi.fn(),
     });
+    vi.mocked(useConnectedPrecisionSelection).mockReturnValue(selection({ supported: false, reason: "このキーは選べません" }));
     render(<TrackballPrecisionSettings />);
-
-    fireEvent.click(screen.getByRole("button", { name: "非対応キー" }));
 
     expect(screen.getByText("このキーは選べません")).toBeVisible();
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();

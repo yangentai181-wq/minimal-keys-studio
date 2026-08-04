@@ -28,6 +28,14 @@ export function canEditUserLayer(index: number): boolean {
   return index >= 0 && index < PRECISION_LAYER_INDEX;
 }
 
+export function canMoveUserLayer(start: number, end: number): boolean {
+  return canEditUserLayer(start) && canEditUserLayer(end);
+}
+
+export function canChangeUserLayerStructure(layers: unknown[]): boolean {
+  return !hasPrecisionLayer(layers);
+}
+
 export function getMinimalKeysLayerMetadata(layers: unknown[]): MinimalKeysLayerMetadata {
   return {
     autoMouseLayerIndex: layers.length > AUTO_MOUSE_LAYER_INDEX ? AUTO_MOUSE_LAYER_INDEX : null,

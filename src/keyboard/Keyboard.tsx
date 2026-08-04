@@ -45,7 +45,7 @@ import {
   downloadJson,
   openFilePicker,
 } from "./keymap-io";
-import { canEditUserLayer, hasPrecisionLayer } from "./minimal-keys-layers";
+import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer } from "./minimal-keys-layers";
 
 // Keeps loading state visible for at least minMs so users always see feedback.
 function useMinLoadingTime(isLoading: boolean, minMs = 500): boolean {
@@ -378,7 +378,7 @@ export default function Keyboard() {
 
   const moveLayer = useCallback(
     (start: number, end: number) => {
-      if (!canEditUserLayer(start) || !canEditUserLayer(end)) return;
+      if (!canMoveUserLayer(start, end)) return;
       const doMove = async (startIndex: number, destIndex: number) => {
         if (!conn.conn) {
           return;
@@ -405,7 +405,7 @@ export default function Keyboard() {
   );
 
   const addLayer = useCallback(() => {
-    if (keymap && hasPrecisionLayer(keymap.layers)) return;
+    if (keymap && !canChangeUserLayerStructure(keymap.layers)) return;
     async function doAdd(): Promise<number> {
       if (!conn.conn || !keymap) {
         throw new Error("Not connected");
@@ -519,7 +519,7 @@ export default function Keyboard() {
     }
 
     const index = selectedLayerIndex;
-    if (!canEditUserLayer(index) || hasPrecisionLayer(keymap.layers)) return;
+    if (!canEditUserLayer(index) || !canChangeUserLayerStructure(keymap.layers)) return;
     const layerId = keymap.layers[index].id;
     undoRedo?.(async () => {
       await doRemove(index);
@@ -692,8 +692,8 @@ export default function Keyboard() {
               selectionLocked
               showInactiveAutoMouseLayer={false}
               onLayerMoved={moveLayer}
-              canAdd={!hasPrecisionLayer(keymap.layers) && (keymap.availableLayers || 0) > 0}
-              canRemove={!hasPrecisionLayer(keymap.layers) && (keymap.layers?.length || 0) > 1}
+              canAdd={canChangeUserLayerStructure(keymap.layers) && (keymap.availableLayers || 0) > 0}
+              canRemove={canChangeUserLayerStructure(keymap.layers) && (keymap.layers?.length || 0) > 1}
               layerOperationsLockedMessage={hasPrecisionLayer(keymap.layers) ? "精密モード用レイヤーを保護するため、レイヤーの追加と削除はできません" : undefined}
               onAddClicked={addLayer}
               onRemoveClicked={removeLayer}

@@ -109,4 +109,15 @@ describe("LayerPicker minimal-keys layer badges", () => {
     expect(screen.queryByText("Precision")).toBeNull();
     expect(screen.queryByText("精密モード")).toBeNull();
   });
+
+  it("disables add and remove controls when the reserved layer is present", () => {
+    const layers = Array.from({ length: 9 }, (_, index) => ({ id: index + 20, name: `Layer ${index}` }));
+    const reason = "精密モード用レイヤーを保護するため、レイヤーの追加と削除はできません";
+
+    render(<LayerPicker layers={layers} selectedLayerIndex={0} canAdd canRemove onAddClicked={vi.fn()} onRemoveClicked={vi.fn()} layerOperationsLockedMessage={reason} />);
+
+    expect(screen.getAllByTitle(reason)).toHaveLength(2);
+    expect(screen.getAllByTitle(reason)[0]).toBeDisabled();
+    expect(screen.getAllByTitle(reason)[1]).toBeDisabled();
+  });
 });

@@ -1,8 +1,7 @@
-import { useCallback, useState } from "react";
 import { Button } from "react-aria-components";
 import { ConnectedPrecisionKeyPicker } from "./PrecisionKeyPicker";
-import type { PrecisionBindingAnalysis } from "./precision-binding";
 import { useTrackballPrecision } from "./TrackballPrecisionContext";
+import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
 import { validateDraft } from "./precision-state";
 
 const MIN_CPI = 200;
@@ -11,14 +10,13 @@ const CPI_STEP = 200;
 
 export function TrackballPrecisionSettings() {
   const { availability, confirmed, draft, dirty, saving, error, updateDraft, save } = useTrackballPrecision();
-  const [selectionAnalysis, setSelectionAnalysis] = useState<{ analysis: PrecisionBindingAnalysis; position: number | null } | null>(null);
+  const selection = useConnectedPrecisionSelection();
   const validationError = draft ? validateDraft(draft) : null;
   const unavailable = availability !== "available";
-  const selectionError = draft?.enabled && (!selectionAnalysis || selectionAnalysis.position !== draft.selectedPosition || !selectionAnalysis.analysis.supported)
-    ? selectionAnalysis && selectionAnalysis.position === draft.selectedPosition && !selectionAnalysis.analysis.supported ? selectionAnalysis.analysis.reason : "選んだキーを確認しています"
+  const selectionError = draft?.enabled && (!selection.analysis || !selection.analysis.supported)
+    ? selection.analysis && !selection.analysis.supported ? selection.analysis.reason : "選んだキーを確認しています"
     : null;
   const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null || selectionError !== null;
-  const handleAnalysis = useCallback((analysis: PrecisionBindingAnalysis, position: number | null) => setSelectionAnalysis({ analysis, position }), []);
 
   return (
     <section aria-labelledby="trackball-precision-title" className="rounded-xl border border-primary/20 bg-white p-4 shadow-sm space-y-4">
@@ -40,7 +38,7 @@ export function TrackballPrecisionSettings() {
             />
             精密モードを使う
           </label>
-          {draft.enabled && <ConnectedPrecisionKeyPicker onAnalysis={handleAnalysis} />}
+          {draft.enabled && <ConnectedPrecisionKeyPicker selection={selection} confirmed={confirmed} draftPosition={draft.selectedPosition} updateDraft={updateDraft} />}
         </>
       ) : (
         <p role="status" className="text-sm text-base-content/70">設定を読み込んでいます…</p>

@@ -10,7 +10,7 @@ import {
 } from "react-aria-components";
 import { useModalRef } from "../misc/useModalRef";
 import { GenericModal } from "../GenericModal";
-import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "./minimal-keys-layers";
+import { getMinimalKeysLayerRole, hasPrecisionLayer, isPrecisionLayerIndex } from "./minimal-keys-layers";
 
 interface Layer {
   id: number;
@@ -141,6 +141,7 @@ export const LayerPicker = ({
   const [editLabelData, setEditLabelData] = useState<EditLabelData | null>(
     null
   );
+  const layerOperationsLocked = hasPrecisionLayer(layers);
 
   const layer_items = useMemo(() => {
     return layers
@@ -217,7 +218,7 @@ export const LayerPicker = ({
           <button
             type="button"
             className="hover:text-primary-content hover:bg-primary rounded-sm"
-            disabled={!canRemove}
+            disabled={!canRemove || layerOperationsLocked}
             title={layerOperationsLockedMessage}
             onClick={onRemoveClicked}
           >
@@ -227,7 +228,7 @@ export const LayerPicker = ({
         {onAddClicked && (
           <button
             type="button"
-            disabled={!canAdd}
+            disabled={!canAdd || layerOperationsLocked}
             title={layerOperationsLockedMessage}
             className="hover:text-primary-content ml-1 hover:bg-primary rounded-sm disabled:text-gray-500 disabled:hover:bg-base-300 disabled:cursor-not-allowed"
             onClick={onAddClicked}
