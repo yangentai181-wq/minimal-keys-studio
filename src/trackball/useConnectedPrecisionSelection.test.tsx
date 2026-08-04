@@ -49,4 +49,28 @@ describe("useConnectedPrecisionSelection", () => {
 
     expect(screen.getByText("透明キーは選択できません")).toBeInTheDocument();
   });
+
+  it("invalidates synchronously after an event until its latest refetch resolves", async () => {
+    let resolveRefresh: (value: typeof unsupported) => void;
+    callRpc.mockResolvedValueOnce(supported).mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+    renderConsumer();
+    await waitFor(() => expect(screen.getByText("supported")).toBeInTheDocument());
+
+    await act(async () => { await pub(KEYMAP_CHANGED_EVENT, undefined); });
+
+    expect(screen.getByText("loading")).toBeInTheDocument();
+    await act(async () => resolveRefresh!(unsupported));
+    await waitFor(() => expect(screen.getByText("透明キーは選択できません")).toBeInTheDocument());
+  });
+
+  it("does not restore a pending keymap after disconnect", async () => {
+    let resolveOld: (value: typeof supported) => void;
+    callRpc.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    const view = renderConsumer();
+    view.rerender(<ConnectionContext.Provider value={{ conn: null }}><LockStateContext.Provider value={0}><Consumer /></LockStateContext.Provider></ConnectionContext.Provider>);
+
+    await act(async () => resolveOld!(supported));
+
+    expect(screen.getByText("loading")).toBeInTheDocument();
+  });
 });
