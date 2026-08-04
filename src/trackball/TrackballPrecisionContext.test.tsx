@@ -194,6 +194,36 @@ describe("TrackballPrecisionProvider", () => {
     expect(screen.getByTestId("draft")).toHaveTextContent("1200");
   });
 
+  it("ignores an in-flight save from a disconnected subsystem after reconnect", async () => {
+    let resolveOldApply: ((value: Uint8Array) => void) | undefined;
+    const oldSubsystem = {
+      subsystemIndex: 4,
+      callRPC: vi.fn()
+        .mockResolvedValueOnce(getResponse(initialConfig))
+        .mockImplementationOnce(() => new Promise<Uint8Array>((resolve) => { resolveOldApply = resolve; })),
+    };
+    subsystem = oldSubsystem;
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByTestId("availability")).toHaveTextContent("available"));
+    await act(async () => screen.getByText("edit").click());
+    await act(async () => screen.getByText("save").click());
+    expect(screen.getByTestId("saving")).toHaveTextContent("true");
+
+    subsystem = null;
+    view.rerender(<TrackballPrecisionProvider><Consumer /></TrackballPrecisionProvider>);
+    subsystem = { subsystemIndex: 5, callRPC: vi.fn().mockResolvedValue(getResponse({ ...initialConfig, revision: 9, normalCpi: 1400 })) };
+    view.rerender(<TrackballPrecisionProvider><Consumer /></TrackballPrecisionProvider>);
+    await waitFor(() => expect(screen.getByTestId("confirmed")).toHaveTextContent("1400"));
+
+    await act(async () => resolveOldApply?.(applyResponse(ApplyResult.OK, { ...initialConfig, revision: 8, normalCpi: 1200 })));
+
+    expect(screen.getByTestId("confirmed")).toHaveTextContent("1400");
+    expect(screen.getByTestId("draft")).toHaveTextContent("1400");
+    expect(screen.getByTestId("error")).toHaveTextContent("none");
+    expect(screen.getByTestId("saving")).toHaveTextContent("false");
+    expect(oldSubsystem.callRPC).toHaveBeenCalledTimes(2);
+  });
+
   it("reports legacy firmware as unavailable while leaving the runtime editor mounted", () => {
     renderProvider();
 

@@ -59,40 +59,50 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expectedRevisionRef = useRef<number | null>(null);
   const pendingDraftRef = useRef<PrecisionDraft | null>(null);
+  const generationRef = useRef(0);
 
   stateRef.current = state;
 
-  const finishSaving = useCallback(() => {
+  const finishSaving = useCallback((generation?: number) => {
+    if (generation !== undefined && generation !== generationRef.current) return;
     if (saveTimeoutRef.current !== null) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
     expectedRevisionRef.current = null;
     pendingDraftRef.current = null;
-    setSaving(false);
+    setSaving((current) => generation !== undefined && generation !== generationRef.current ? current : false);
   }, []);
 
-  const reload = useCallback(async () => {
-    if (!subsystem) return;
+  const reloadFrom = useCallback(async (activeSubsystem: NonNullable<typeof subsystem>, generation: number) => {
+    if (generation !== generationRef.current) return;
     try {
-      const response = decodeResponse(await subsystem.callRPC(encodeGet()));
+      const response = decodeResponse(await activeSubsystem.callRPC(encodeGet()));
+      if (generation !== generationRef.current) return;
       if (!response.get) throw new Error("トラックボール設定の応答が不正です");
 
       const expectedRevision = expectedRevisionRef.current;
       if (pendingDraftRef.current && expectedRevision !== null) {
         if (!matchesPending(response.get, pendingDraftRef.current, expectedRevision)) return;
-        setState((previous) => acceptConfig(previous, response.get!));
-        finishSaving();
+        setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
+        finishSaving(generation);
         return;
       }
-      setState((previous) => acceptConfig(previous, response.get!));
+      setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
     } catch (error) {
-      setState((previous) => transportError(previous, errorMessage(error)));
-      finishSaving();
+      if (generation !== generationRef.current) return;
+      setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
+      finishSaving(generation);
     }
-  }, [finishSaving, subsystem]);
+  }, [finishSaving]);
+
+  const reload = useCallback(async () => {
+    if (!subsystem) return;
+    await reloadFrom(subsystem, generationRef.current);
+  }, [reloadFrom, subsystem]);
 
   useEffect(() => {
+    const generation = ++generationRef.current;
     if (!subsystem) {
       finishSaving();
       setAvailability("firmware-update-required");
@@ -109,14 +119,14 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     async function discover() {
       try {
         const response = decodeResponse(await activeSubsystem.callRPC(encodeGet()));
-        if (cancelled) return;
+        if (cancelled || generation !== generationRef.current) return;
         if (!response.get) throw new Error("トラックボール設定の応答が不正です");
-        setState((previous) => acceptConfig(previous, response.get!));
-        setAvailability("available");
+        setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
+        setAvailability((current) => generation === generationRef.current ? "available" : current);
       } catch (error) {
-        if (cancelled) return;
-        setState((previous) => transportError(previous, errorMessage(error)));
-        setAvailability("available");
+        if (cancelled || generation !== generationRef.current) return;
+        setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
+        setAvailability((current) => generation === generationRef.current ? "available" : current);
       }
     }
 
@@ -129,18 +139,19 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
   }, []);
 
   useCustomNotification(subsystem?.subsystemIndex, (payload) => {
+    const generation = generationRef.current;
     try {
       const config = decodeNotification(payload);
       const expectedRevision = expectedRevisionRef.current;
       if (pendingDraftRef.current && expectedRevision !== null) {
         if (!matchesPending(config, pendingDraftRef.current, expectedRevision)) return;
-        setState((previous) => acceptConfig(previous, config));
-        finishSaving();
+        setState((previous) => generation === generationRef.current ? acceptConfig(previous, config) : previous);
+        finishSaving(generation);
         return;
       }
-      setState((previous) => acceptConfig(previous, config));
+      setState((previous) => generation === generationRef.current ? acceptConfig(previous, config) : previous);
     } catch (error) {
-      setState((previous) => transportError(previous, errorMessage(error)));
+      setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
     }
   });
 
@@ -150,6 +161,8 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
 
   const save = useCallback(async () => {
     if (!subsystem) return;
+    const activeSubsystem = subsystem;
+    const generation = generationRef.current;
     const current = stateRef.current;
     if (!current.draft || !current.confirmed || current.pending) return;
 
@@ -163,42 +176,45 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     const expectedRevision = current.confirmed.revision;
     expectedRevisionRef.current = expectedRevision;
     pendingDraftRef.current = draft;
-    setState((previous) => beginSave(previous));
+    setState((previous) => generation === generationRef.current ? beginSave(previous) : previous);
     setSaving(true);
     saveTimeoutRef.current = setTimeout(() => {
-      setState((previous) => transportError(previous, "保存の確認がタイムアウトしました"));
-      finishSaving();
+      if (generation !== generationRef.current) return;
+      setState((previous) => generation === generationRef.current ? transportError(previous, "保存の確認がタイムアウトしました") : previous);
+      finishSaving(generation);
     }, SAVE_TIMEOUT_MS);
 
     try {
-      const response = decodeResponse(await subsystem.callRPC(encodeApply(draft, expectedRevision)));
+      const response = decodeResponse(await activeSubsystem.callRPC(encodeApply(draft, expectedRevision)));
+      if (generation !== generationRef.current) return;
       if (!response.apply) throw new Error("トラックボール設定の応答が不正です");
 
       if (response.apply.result === ApplyResult.STALE_REVISION) {
-        setState((previous) => handleApplyResponse(previous, response.apply!));
-        finishSaving();
-        await reload();
+        setState((previous) => generation === generationRef.current ? handleApplyResponse(previous, response.apply!) : previous);
+        finishSaving(generation);
+        await reloadFrom(activeSubsystem, generation);
         return;
       }
       if (response.apply.result !== ApplyResult.OK) {
-        setState((previous) => handleApplyResponse(previous, response.apply!));
-        finishSaving();
+        setState((previous) => generation === generationRef.current ? handleApplyResponse(previous, response.apply!) : previous);
+        finishSaving(generation);
         return;
       }
 
       const config = response.apply.config;
       if (config && matchesPending(config, draft, expectedRevision)) {
-        setState((previous) => handleApplyResponse(previous, response.apply!));
-        finishSaving();
+        setState((previous) => generation === generationRef.current ? handleApplyResponse(previous, response.apply!) : previous);
+        finishSaving(generation);
         return;
       }
 
-      await reload();
+      await reloadFrom(activeSubsystem, generation);
     } catch (error) {
-      setState((previous) => transportError(previous, errorMessage(error)));
-      finishSaving();
+      if (generation !== generationRef.current) return;
+      setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
+      finishSaving(generation);
     }
-  }, [finishSaving, reload, subsystem]);
+  }, [finishSaving, reloadFrom, subsystem]);
 
   const value: TrackballPrecisionContextValue = {
     availability,
