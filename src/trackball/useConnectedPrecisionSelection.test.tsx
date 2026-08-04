@@ -1,5 +1,5 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionContext } from "../rpc/ConnectionContext";
 import { LockStateContext } from "../rpc/LockStateContext";
 import { pub } from "../usePubSub";
@@ -7,6 +7,10 @@ import { KEYMAP_CHANGED_EVENT } from "../keyboard/keymap-events";
 import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
 
 const callRpc = vi.fn();
+afterEach(() => {
+  cleanup();
+  callRpc.mockReset();
+});
 vi.mock("../rpc/logging", () => ({ call_rpc: (...args: unknown[]) => callRpc(...args) }));
 vi.mock("@zmkfirmware/zmk-studio-ts-client/core", () => ({ LockState: { ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED: 0 } }));
 vi.mock("../behaviors/BehaviorsContext", () => ({ useBehaviorList: () => [{ id: 1, displayName: "Key Press", metadata: [] }, { id: 2, displayName: "Transparent", metadata: [] }] }));
@@ -72,5 +76,43 @@ describe("useConnectedPrecisionSelection", () => {
     await act(async () => resolveOld!(supported));
 
     expect(screen.getByText("loading")).toBeInTheDocument();
+  });
+
+  it("keeps the newest confirmed analysis when an older request rejects afterwards", async () => {
+    let rejectOld: (error: Error) => void;
+    let resolveLatest: (value: typeof unsupported) => void;
+    callRpc.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveLatest = resolve; }));
+    renderConsumer();
+    await act(async () => { await pub(KEYMAP_CHANGED_EVENT, undefined); });
+    await act(async () => resolveLatest!(unsupported));
+    await waitFor(() => expect(screen.getByText("透明キーは選択できません")).toBeInTheDocument());
+
+    await act(async () => rejectOld!(new Error("old request failed")));
+
+    expect(screen.getByText("透明キーは選択できません")).toBeInTheDocument();
+  });
+
+  it("accepts only the final generation after rapid events complete in arbitrary order", async () => {
+    let resolveSecond: (value: typeof supported) => void;
+    let rejectThird: (error: Error) => void;
+    let resolveFinal: (value: typeof unsupported) => void;
+    callRpc.mockResolvedValueOnce(supported)
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }))
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectThird = reject; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFinal = resolve; }));
+    renderConsumer();
+    await waitFor(() => expect(screen.getByText("supported")).toBeInTheDocument());
+    await act(async () => { await pub(KEYMAP_CHANGED_EVENT, undefined); });
+    await waitFor(() => expect(callRpc).toHaveBeenCalledTimes(2));
+    await act(async () => { await pub(KEYMAP_CHANGED_EVENT, undefined); });
+    await waitFor(() => expect(callRpc).toHaveBeenCalledTimes(3));
+    await act(async () => { await pub(KEYMAP_CHANGED_EVENT, undefined); });
+    await waitFor(() => expect(callRpc).toHaveBeenCalledTimes(4));
+    await act(async () => resolveSecond!(supported));
+    await act(async () => rejectThird!(new Error("superseded")));
+    await act(async () => resolveFinal!(unsupported));
+
+    await waitFor(() => expect(screen.getByText("透明キーは選択できません")).toBeInTheDocument());
   });
 });
