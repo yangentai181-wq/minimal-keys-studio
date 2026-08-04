@@ -32,6 +32,7 @@ import {
 } from "./tauri/serial";
 import Keyboard from "./keyboard/Keyboard";
 import { TrackballSettings } from "./trackball/TrackballSettings";
+import { TrackballPrecisionProvider } from "./trackball/TrackballPrecisionContext";
 import { EncoderSettings } from "./encoder/EncoderSettings";
 import { BleManagement } from "./bluetooth/BleManagement";
 import { BatteryHistory } from "./battery/BatteryHistory";
@@ -463,7 +464,8 @@ function AppInner() {
         <UndoRedoContext.Provider value={doIt}>
           <BehaviorsProvider>
             <CustomSubsystemsProvider>
-              <UnlockModal />
+              <TrackballPrecisionProvider>
+                <UnlockModal />
               <ConnectModal
                 open={!conn.conn && !showMonitorOnly}
                 transports={TRANSPORTS}
@@ -501,7 +503,7 @@ function AppInner() {
                 open={showLicenseNotice}
                 onClose={() => setShowLicenseNotice(false)}
               />
-              {conn.conn && (
+                {conn.conn && (
                 <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_auto_1fr_auto] overflow-hidden">
                   <AppHeader
                     connectedDeviceLabel={connectedDeviceName}
@@ -640,7 +642,8 @@ function AppInner() {
                     onShowLicenseNotice={() => setShowLicenseNotice(true)}
                   />
                 </div>
-              )}
+                )}
+              </TrackballPrecisionProvider>
             </CustomSubsystemsProvider>
           </BehaviorsProvider>
         </UndoRedoContext.Provider>
