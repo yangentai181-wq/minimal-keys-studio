@@ -33,12 +33,14 @@ export function PrecisionKeyPicker({ keymap, behaviors, confirmed, draftPosition
 
   const physicalBindings = baseLayer.bindings.slice(0, MINIMAL_KEYS_POSITIONS.length);
   const displayBindings = physicalBindings.map((binding, position) =>
-    confirmed?.enabled && confirmed.selectedPosition === position && confirmed.originalBinding
+    confirmed?.enabled && draftPosition === confirmed.selectedPosition && confirmed.selectedPosition === position && confirmed.originalBinding
       ? confirmed.originalBinding
       : binding,
   );
   const analyses = displayBindings.map((binding, position) => analyzePrecisionBinding(binding, behaviors, position));
-  const current = analysisForConfirmed(confirmed, displayBindings, behaviors) ?? analyses[draftPosition] ?? null;
+  const current = confirmed?.enabled && draftPosition === confirmed.selectedPosition
+    ? analysisForConfirmed(confirmed, displayBindings, behaviors)
+    : analyses[draftPosition] ?? null;
   const positions: KeyPosition[] = MINIMAL_KEYS_POSITIONS.slice(0, physicalBindings.length).map((position, index) => ({
     ...position,
     x: position.x / 100,

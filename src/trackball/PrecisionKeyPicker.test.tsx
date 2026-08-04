@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import { describe, expect, it, vi } from "vitest";
 import { PrecisionKeyPicker } from "./PrecisionKeyPicker";
@@ -37,6 +38,43 @@ const keymap = {
 };
 
 describe("PrecisionKeyPicker", () => {
+  it("switches displayed actions to the newly selected draft key before save", () => {
+    const wrappedKeymap = {
+      ...keymap,
+      layers: [{
+        ...keymap.layers[0],
+        bindings: keymap.layers[0].bindings.map((binding, position) => position === 1
+          ? { behaviorId: 2, param1: 8, param2: key(8) }
+          : binding),
+      }],
+    };
+    const confirmed = {
+      schemaVersion: 1, normalCpi: 800, precisionCpi: 200, enabled: true, selectedPosition: 1,
+      originalBinding: { behaviorId: 4, param1: 2, param2: key(5) }, revision: 1, precisionActive: false, currentCpi: 800,
+    };
+    function ControlledPicker() {
+      const [draftPosition, setDraftPosition] = useState(1);
+      return <PrecisionKeyPicker
+        keymap={wrappedKeymap}
+        behaviors={behaviors}
+        confirmed={confirmed}
+        draftPosition={draftPosition}
+        updateDraft={({ selectedPosition }) => setDraftPosition(selectedPosition)}
+      />;
+    }
+
+    render(<ControlledPicker />);
+    expect(screen.getByText("タップ: B")).toBeVisible();
+    expect(screen.getByText("長押し: 左Shift")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: /選択可.*キー 2/ }));
+
+    expect(screen.getByText("タップ: C")).toBeVisible();
+    expect(screen.getByText("長押し: なし")).toBeVisible();
+    expect(screen.queryByText("タップ: B")).not.toBeInTheDocument();
+    expect(screen.queryByText("長押し: 左Shift")).not.toBeInTheDocument();
+  });
+
   it("shows the original confirmed action and updates the draft from the visible physical key", () => {
     const updateDraft = vi.fn();
     const wrappedKeymap = {
