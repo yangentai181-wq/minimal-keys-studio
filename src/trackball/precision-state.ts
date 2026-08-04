@@ -79,6 +79,10 @@ function matchesDraft(config: TrackballConfig, draft: PrecisionDraft): boolean {
 }
 
 export function handleApplyResponse(state: PrecisionState, response: ApplyResponse): PrecisionState {
+  if (response.result === ApplyResult.STALE_REVISION) {
+    if (response.config === null) return { ...state, pending: null, error: applyErrorMessage(response.result) };
+    return updateConfirmedKeepingDraft(state, response.config, applyErrorMessage(response.result), null);
+  }
   if (response.result !== ApplyResult.OK) return { ...state, pending: null, error: applyErrorMessage(response.result) };
   if (response.config === null) return state;
   if (state.pending !== null && matchesDraft(response.config, state.pending)) {
