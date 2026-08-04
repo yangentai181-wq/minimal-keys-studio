@@ -16,6 +16,7 @@ import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { getMonitorKeyLabel } from "./monitor/minimalKeysMonitorLabels";
 import type { MonitorSnapshot } from "./monitor/monitorStore";
+import { TrackballPrecisionStatus } from "./monitor/TrackballPrecisionStatus";
 
 interface StudioConnectionOverviewProps {
   monitor: MonitorSnapshot;
@@ -187,6 +188,8 @@ export function StudioConnectionOverview({
             <MetricCard label="トラックボール" value={pointerSummary} />
           </div>
         </div>
+
+        {editorAvailable && <TrackballPrecisionStatus />}
 
         {showLayout && (
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
