@@ -135,13 +135,13 @@ function decodeApplyResponse(reader: _m0.Reader, length: number): ApplyResponse 
 
 export function decodeResponse(payload: Uint8Array): TrackballResponse {
   const reader = _m0.Reader.create(payload);
-  const response: TrackballResponse = {};
+  let response: TrackballResponse = {};
   while (reader.pos < reader.len) {
     const tag = reader.uint32();
     switch (tag >>> 3) {
-      case 1: response.get = decodeConfig(reader, reader.uint32()); break;
-      case 2: response.validate = decodeApplyResponse(reader, reader.uint32()); break;
-      case 3: response.apply = decodeApplyResponse(reader, reader.uint32()); break;
+      case 1: response = { get: decodeConfig(reader, reader.uint32()) }; break;
+      case 2: response = { validate: decodeApplyResponse(reader, reader.uint32()) }; break;
+      case 3: response = { apply: decodeApplyResponse(reader, reader.uint32()) }; break;
       default: reader.skipType(tag & 7); break;
     }
   }

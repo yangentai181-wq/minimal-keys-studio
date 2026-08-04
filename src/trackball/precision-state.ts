@@ -1,4 +1,4 @@
-import type { PrecisionDraft, TrackballConfig } from "../proto/trackball-settings";
+import { ApplyResult, type ApplyResponse, type PrecisionDraft, type TrackballConfig } from "../proto/trackball-settings";
 
 export type { PrecisionDraft } from "../proto/trackball-settings";
 
@@ -53,8 +53,42 @@ export function acceptConfig(state: PrecisionState, config: TrackballConfig): Pr
   if (state.confirmed !== null && config.revision < state.confirmed.revision) {
     return { ...state, error: "再読み込みが必要です" };
   }
+  if (state.confirmed !== null && state.dirty && config.revision === state.confirmed.revision) {
+    return updateConfirmedKeepingDraft(state, config, state.error, state.pending);
+  }
   const draft = draftFromConfig(config);
   return { confirmed: config, draft, pending: null, dirty: false, error: null };
+}
+
+function updateConfirmedKeepingDraft(
+  state: PrecisionState,
+  config: TrackballConfig,
+  error: string | null,
+  pending: PrecisionDraft | null,
+): PrecisionState {
+  if (state.confirmed !== null && config.revision < state.confirmed.revision) {
+    return { ...state, pending, error };
+  }
+  const draft = state.draft ?? draftFromConfig(config);
+  return { confirmed: config, draft, pending, dirty: isDirty(config, draft), error };
+}
+
+function matchesDraft(config: TrackballConfig, draft: PrecisionDraft): boolean {
+  return config.normalCpi === draft.normalCpi && config.precisionCpi === draft.precisionCpi &&
+    config.enabled === draft.enabled && config.selectedPosition === draft.selectedPosition;
+}
+
+export function handleApplyResponse(state: PrecisionState, response: ApplyResponse): PrecisionState {
+  if (response.result === ApplyResult.STALE_REVISION) {
+    if (response.config === null) return { ...state, pending: null, error: "再読み込みが必要です" };
+    return updateConfirmedKeepingDraft(state, response.config, "再読み込みが必要です", null);
+  }
+  if (response.result !== ApplyResult.OK || response.config === null) return state;
+  if (state.pending !== null && matchesDraft(response.config, state.pending)) {
+    return acceptConfig(state, response.config);
+  }
+  if (state.dirty) return updateConfirmedKeepingDraft(state, response.config, state.error, state.pending);
+  return acceptConfig(state, response.config);
 }
 
 export function transportError(state: PrecisionState, error: string): PrecisionState {

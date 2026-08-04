@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { TrackballConfig } from "../proto/trackball-settings";
+import { ApplyResult, type ApplyResponse, type TrackballConfig } from "../proto/trackball-settings";
 import {
   acceptConfig,
   beginSave,
   createPrecisionState,
+  handleApplyResponse,
   reconnect,
   transportError,
   updateDraft,
@@ -53,5 +54,36 @@ describe("precision state", () => {
     const stale = acceptConfig(initial, config(2));
     expect(stale.confirmed?.revision).toBe(3);
     expect(stale.error).toBe("再読み込みが必要です");
+  });
+
+  it("keeps a dirty draft when a same-revision changed notification updates live state", () => {
+    const state = updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 });
+    const changed = { ...config(), precisionActive: true, currentCpi: 200 };
+    const next = acceptConfig(state, changed);
+    expect(next.confirmed).toEqual(changed);
+    expect(next.draft?.normalCpi).toBe(1000);
+    expect(next.dirty).toBe(true);
+    expect(next.pending).toBeNull();
+  });
+
+  it("only confirms a pending draft from a matching successful apply response", () => {
+    const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 }));
+    const response: ApplyResponse = { result: ApplyResult.OK, config: { ...config(2), normalCpi: 1000 } };
+    const next = handleApplyResponse(state, response);
+    expect(next.confirmed).toEqual(response.config);
+    expect(next.draft).toEqual({ normalCpi: 1000, precisionCpi: 200, enabled: true, selectedPosition: 0 });
+    expect(next.pending).toBeNull();
+    expect(next.dirty).toBe(false);
+  });
+
+  it("maps stale apply responses without confirming the draft", () => {
+    const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 }));
+    const response: ApplyResponse = { result: ApplyResult.STALE_REVISION, config: { ...config(2), normalCpi: 1200 } };
+    const next = handleApplyResponse(state, response);
+    expect(next.confirmed).toEqual(response.config);
+    expect(next.draft?.normalCpi).toBe(1000);
+    expect(next.pending).toBeNull();
+    expect(next.dirty).toBe(true);
+    expect(next.error).toBe("再読み込みが必要です");
   });
 });

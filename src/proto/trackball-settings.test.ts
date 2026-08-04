@@ -49,6 +49,15 @@ describe("trackball settings protocol", () => {
     });
   });
 
+  it("uses the last known response field when a oneof payload contains multiple fields", () => {
+    expect(decodeResponse(bytes("0a0310a0061a06080012020801"))).toEqual({
+      apply: {
+        result: ApplyResult.OK,
+        config: { schemaVersion: 1, normalCpi: 0, precisionCpi: 0, enabled: false, selectedPosition: 0, originalBinding: null, revision: 0, precisionActive: false, currentCpi: 0 },
+      },
+    });
+  });
+
   it("preserves explicit false and zero-valued selected position", () => {
     const config = "20002800";
     expect(decodeResponse(bytes(`0a04${config}`))).toEqual({
