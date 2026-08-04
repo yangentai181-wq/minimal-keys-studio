@@ -87,6 +87,17 @@ describe("precision state", () => {
     expect(next.error).toBe("再読み込みが必要です");
   });
 
+  it("accepts same-revision stale readback live state without replacing the draft", () => {
+    const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 }));
+    const readback = { ...config(), precisionActive: true, currentCpi: 200 };
+    const next = handleApplyResponse(state, { result: ApplyResult.STALE_REVISION, config: readback });
+    expect(next.confirmed).toEqual(readback);
+    expect(next.draft?.normalCpi).toBe(1000);
+    expect(next.pending).toBeNull();
+    expect(next.dirty).toBe(true);
+    expect(next.error).toBe("再読み込みが必要です");
+  });
+
   it("keeps confirmed state when a stale apply response carries an older config", () => {
     const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config(3)), { normalCpi: 1000 }));
     const next = handleApplyResponse(state, { result: ApplyResult.STALE_REVISION, config: config(2) });
