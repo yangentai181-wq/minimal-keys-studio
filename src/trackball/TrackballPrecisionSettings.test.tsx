@@ -79,6 +79,7 @@ describe("TrackballPrecisionSettings", () => {
     render(<TrackballPrecisionSettings />);
 
     expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+    expect(useConnectedPrecisionSelection).not.toHaveBeenCalled();
   });
 
   it("blocks re-enabled saves until the same selected position has current supported analysis", () => {

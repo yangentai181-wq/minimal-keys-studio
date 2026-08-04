@@ -46,6 +46,8 @@ import {
   openFilePicker,
 } from "./keymap-io";
 import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer } from "./minimal-keys-layers";
+import { publishKeymapChanged } from "./keymap-events";
+import { runGuardedKeymapWrite } from "./keymap-operation-guards";
 
 // Keeps loading state visible for at least minMs so users always see feedback.
 function useMinLoadingTime(isLoading: boolean, minMs = 500): boolean {
@@ -274,6 +276,7 @@ export default function Keyboard() {
       const new_keymap = resp?.keymap?.setActivePhysicalLayout?.ok;
       if (new_keymap) {
         setKeymap(new_keymap);
+        publishKeymapChanged();
       } else {
         console.error(
           "Failed to set the active physical layout err:",
@@ -330,6 +333,7 @@ export default function Keyboard() {
               draft.layers[layer].bindings[keyPosition] = binding;
             }) as (base: Keymap | undefined) => Keymap
           );
+          publishKeymapChanged();
         } else {
           console.error("Failed to set binding", resp.keymap?.setLayerBinding);
           toast("Failed to set key binding", "error");
@@ -354,6 +358,7 @@ export default function Keyboard() {
                 draft.layers[layer].bindings[keyPosition] = oldBinding;
               }) as (base: Keymap | undefined) => Keymap
             );
+            publishKeymapChanged();
           } else {
             toast("Failed to undo key binding change", "error");
           }
@@ -384,12 +389,13 @@ export default function Keyboard() {
           return;
         }
 
-        const resp = await call_rpc(conn.conn, {
+        const resp = await runGuardedKeymapWrite(canMoveUserLayer(startIndex, destIndex), () => call_rpc(conn.conn!, {
           keymap: { moveLayer: { startIndex, destIndex } },
-        });
+        }));
 
-        if (resp.keymap?.moveLayer?.ok) {
+        if (resp?.keymap?.moveLayer?.ok) {
           setKeymap(resp.keymap?.moveLayer?.ok);
+          publishKeymapChanged();
           setSelectedLayerIndex(destIndex);
         } else {
           console.error("Error moving", resp);
@@ -411,9 +417,9 @@ export default function Keyboard() {
         throw new Error("Not connected");
       }
 
-      const resp = await call_rpc(conn.conn, { keymap: { addLayer: {} } });
+        const resp = await runGuardedKeymapWrite(canChangeUserLayerStructure(keymap.layers), () => call_rpc(conn.conn!, { keymap: { addLayer: {} } }));
 
-      if (resp.keymap?.addLayer?.ok) {
+      if (resp?.keymap?.addLayer?.ok) {
         const newSelection = keymap.layers.length;
         setKeymap(
           produce((draft: Keymap) => {
@@ -421,13 +427,14 @@ export default function Keyboard() {
             draft.availableLayers--;
           }) as (base: Keymap | undefined) => Keymap
         );
+        publishKeymapChanged();
 
         setSelectedLayerIndex(newSelection);
 
         return resp.keymap.addLayer.ok.index;
       } else {
-        console.error("Add error", resp.keymap?.addLayer?.err);
-        throw new Error("Failed to add layer:" + resp.keymap?.addLayer?.err);
+        console.error("Add error", resp?.keymap?.addLayer?.err);
+        throw new Error("Failed to add layer:" + resp?.keymap?.addLayer?.err);
       }
     }
 
@@ -436,21 +443,22 @@ export default function Keyboard() {
         throw new Error("Not connected");
       }
 
-      const resp = await call_rpc(conn.conn, {
+      const resp = await runGuardedKeymapWrite(canChangeUserLayerStructure(keymap?.layers ?? []), () => call_rpc(conn.conn!, {
         keymap: { removeLayer: { layerIndex } },
-      });
+      }));
 
-      if (resp.keymap?.removeLayer?.ok) {
+      if (resp?.keymap?.removeLayer?.ok) {
         setKeymap(
           produce((draft: Keymap) => {
             draft.layers.splice(layerIndex, 1);
             draft.availableLayers++;
           }) as (base: Keymap | undefined) => Keymap
         );
+        publishKeymapChanged();
       } else {
-        console.error("Remove error", resp.keymap?.removeLayer?.err);
+        console.error("Remove error", resp?.keymap?.removeLayer?.err);
         throw new Error(
-          "Failed to remove layer:" + resp.keymap?.removeLayer?.err
+          "Failed to remove layer:" + resp?.keymap?.removeLayer?.err
         );
       }
     }
@@ -467,11 +475,11 @@ export default function Keyboard() {
         throw new Error("Not connected");
       }
 
-      const resp = await call_rpc(conn.conn, {
+      const resp = await runGuardedKeymapWrite(canEditUserLayer(layerIndex) && canChangeUserLayerStructure(keymap.layers), () => call_rpc(conn.conn!, {
         keymap: { removeLayer: { layerIndex } },
-      });
+      }));
 
-      if (resp.keymap?.removeLayer?.ok) {
+      if (resp?.keymap?.removeLayer?.ok) {
         if (layerIndex == keymap.layers.length - 1) {
           setSelectedLayerIndex(layerIndex - 1);
         }
@@ -481,10 +489,11 @@ export default function Keyboard() {
             draft.availableLayers++;
           }) as (base: Keymap | undefined) => Keymap
         );
+        publishKeymapChanged();
       } else {
-        console.error("Remove error", resp.keymap?.removeLayer?.err);
+        console.error("Remove error", resp?.keymap?.removeLayer?.err);
         throw new Error(
-          "Failed to remove layer:" + resp.keymap?.removeLayer?.err
+          "Failed to remove layer:" + resp?.keymap?.removeLayer?.err
         );
       }
     }
@@ -494,22 +503,23 @@ export default function Keyboard() {
         throw new Error("Not connected");
       }
 
-      const resp = await call_rpc(conn.conn, {
+      const resp = await runGuardedKeymapWrite(canEditUserLayer(atIndex) && canChangeUserLayerStructure(keymap?.layers ?? []), () => call_rpc(conn.conn!, {
         keymap: { restoreLayer: { layerId, atIndex } },
-      });
+      }));
 
-      if (resp.keymap?.restoreLayer?.ok) {
+      if (resp?.keymap?.restoreLayer?.ok) {
         setKeymap(
           produce((draft: Keymap) => {
             draft.layers.splice(atIndex, 0, resp!.keymap!.restoreLayer!.ok!);
             draft.availableLayers--;
           }) as (base: Keymap | undefined) => Keymap
         );
+        publishKeymapChanged();
         setSelectedLayerIndex(atIndex);
       } else {
-        console.error("Remove error", resp.keymap?.restoreLayer?.err);
+        console.error("Remove error", resp?.keymap?.restoreLayer?.err);
         throw new Error(
-          "Failed to restore layer:" + resp.keymap?.restoreLayer?.err
+          "Failed to restore layer:" + resp?.keymap?.restoreLayer?.err
         );
       }
     }
@@ -535,12 +545,13 @@ export default function Keyboard() {
           throw new Error("Not connected");
         }
 
-        const resp = await call_rpc(conn.conn, {
+        const layerIndex = keymap?.layers.findIndex((layer) => layer.id === layerId) ?? -1;
+        const resp = await runGuardedKeymapWrite(canEditUserLayer(layerIndex), () => call_rpc(conn.conn!, {
           keymap: { setLayerProps: { layerId, name } },
-        });
+        }));
 
         if (
-          resp.keymap?.setLayerProps ==
+          resp?.keymap?.setLayerProps ==
           SetLayerPropsResponse.SET_LAYER_PROPS_RESP_OK
         ) {
           setKeymap(
@@ -551,9 +562,10 @@ export default function Keyboard() {
               draft.layers[layer_index].name = name;
             }) as (base: Keymap | undefined) => Keymap
           );
+          publishKeymapChanged();
         } else {
           throw new Error(
-            "Failed to change layer name:" + resp.keymap?.setLayerProps
+            "Failed to change layer name:" + resp?.keymap?.setLayerProps
           );
         }
       }
@@ -655,6 +667,7 @@ export default function Keyboard() {
       const refreshed = resp?.keymap?.getKeymap;
       if (refreshed) {
         setKeymap(() => refreshed);
+        publishKeymapChanged();
       }
 
       toast("キーマップをインポートしました", "success");

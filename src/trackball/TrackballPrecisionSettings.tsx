@@ -10,13 +10,9 @@ const CPI_STEP = 200;
 
 export function TrackballPrecisionSettings() {
   const { availability, confirmed, draft, dirty, saving, error, updateDraft, save } = useTrackballPrecision();
-  const selection = useConnectedPrecisionSelection();
   const validationError = draft ? validateDraft(draft) : null;
   const unavailable = availability !== "available";
-  const selectionError = draft?.enabled && (!selection.analysis || !selection.analysis.supported)
-    ? selection.analysis && !selection.analysis.supported ? selection.analysis.reason : "選んだキーを確認しています"
-    : null;
-  const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null || selectionError !== null;
+  const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null;
 
   return (
     <section aria-labelledby="trackball-precision-title" className="rounded-xl border border-primary/20 bg-white p-4 shadow-sm space-y-4">
@@ -38,20 +34,45 @@ export function TrackballPrecisionSettings() {
             />
             精密モードを使う
           </label>
-          {draft.enabled && <ConnectedPrecisionKeyPicker selection={selection} confirmed={confirmed} draftPosition={draft.selectedPosition} updateDraft={updateDraft} />}
+          {draft.enabled && <EnabledPrecisionControls confirmed={confirmed} draftPosition={draft.selectedPosition} updateDraft={updateDraft} dirty={dirty} saving={saving} unavailable={unavailable} validationError={validationError} save={save} />}
         </>
       ) : (
         <p role="status" className="text-sm text-base-content/70">設定を読み込んでいます…</p>
       )}
-      {(validationError ?? selectionError ?? error) && <p role="alert" className="text-sm text-error">{validationError ?? selectionError ?? error}</p>}
+      {(validationError ?? error) && <p role="alert" className="text-sm text-error">{validationError ?? error}</p>}
       {confirmed && <p className="text-xs text-base-content/50">確認済み: 通常 {confirmed.normalCpi} CPI / 精密 {confirmed.precisionCpi} CPI</p>}
-      <div className="flex justify-end">
-        <Button onPress={() => void save()} isDisabled={saveDisabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">
-          {saving ? "保存中…" : "保存"}
-        </Button>
-      </div>
+      {!draft?.enabled && <SaveButton save={save} disabled={saveDisabled} saving={saving} />}
     </section>
   );
+}
+
+function EnabledPrecisionControls({ confirmed, draftPosition, updateDraft, dirty, saving, unavailable, validationError, save }: {
+  confirmed: ReturnType<typeof useTrackballPrecision>["confirmed"];
+  draftPosition: number;
+  updateDraft: ReturnType<typeof useTrackballPrecision>["updateDraft"];
+  dirty: boolean;
+  saving: boolean;
+  unavailable: boolean;
+  validationError: string | null;
+  save: ReturnType<typeof useTrackballPrecision>["save"];
+}) {
+  const selection = useConnectedPrecisionSelection();
+  const selectionError = !selection.analysis || !selection.analysis.supported
+    ? selection.analysis && !selection.analysis.supported ? selection.analysis.reason : "選んだキーを確認しています"
+    : null;
+  return <>
+    <ConnectedPrecisionKeyPicker selection={selection} confirmed={confirmed} draftPosition={draftPosition} updateDraft={updateDraft} />
+    {selectionError && <p role="alert" className="text-sm text-error">{selectionError}</p>}
+    <SaveButton save={save} disabled={unavailable || !dirty || saving || validationError !== null || selectionError !== null} saving={saving} />
+  </>;
+}
+
+function SaveButton({ save, disabled, saving }: { save: () => Promise<void>; disabled: boolean; saving: boolean }) {
+  return <div className="flex justify-end">
+    <Button onPress={() => void save()} isDisabled={disabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">
+      {saving ? "保存中…" : "保存"}
+    </Button>
+  </div>;
 }
 
 function CpiControl({ label, value, onChange }: { label: string; value: number; onChange(value: number): void }) {
