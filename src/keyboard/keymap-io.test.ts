@@ -78,6 +78,22 @@ describe("serializeKeymap", () => {
     expect(result.minimalKeys).toBeUndefined();
   });
 
+  it("omits the device-only precision layer from exported user data", () => {
+    const keymapWithPrecisionLayer = {
+      ...sampleKeymap,
+      layers: Array.from({ length: 9 }, (_, index) => ({
+        id: index,
+        name: index === 8 ? "Precision" : `Layer ${index}`,
+        bindings: sampleKeymap.layers[0].bindings,
+      })),
+    };
+
+    const result = serializeKeymap(keymapWithPrecisionLayer, mockBehaviors, "1.0.0");
+
+    expect(result.keymap.layers).toHaveLength(8);
+    expect(result.keymap.layers.map((layer) => layer.name)).not.toContain("Precision");
+  });
+
 
   it("handles unknown behaviorId gracefully", () => {
     const km = {
@@ -150,6 +166,27 @@ describe("deserializeKeymap", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.type).toBe("layerCount");
+  });
+
+  it("rejects a legacy nine-layer payload so the device precision layer stays untouched", () => {
+    const legacyPayload = JSON.stringify({
+      format: "minimal-keys-studio-keymap",
+      version: 1,
+      keymap: {
+        layers: Array.from({ length: 9 }, (_, index) => ({
+          name: `Layer ${index}`,
+          bindings: sampleKeymap.layers[0].bindings.map((binding) => ({
+            behaviorName: binding.behaviorId === 1 ? "Key Press" : "Layer-Tap",
+            param1: binding.param1,
+            param2: binding.param2,
+          })),
+        })),
+      },
+    });
+
+    const result = deserializeKeymap(legacyPayload, mockBehaviors, 2, 9);
+
+    expect(result).toEqual({ ok: false, error: { type: "layerCount", requested: 9, max: 8 } });
   });
 
   it("rejects binding count mismatch", () => {

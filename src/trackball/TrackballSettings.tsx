@@ -11,6 +11,7 @@ import {
   AUTO_MOUSE_LAYER_INDEX,
   SCROLL_LAYER_INDEX,
 } from "../keyboard/minimal-keys-layers";
+import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 
 const AUTO_MOUSE_TIMEOUT_MS = 700;
 
@@ -197,11 +198,14 @@ export function TrackballSettings() {
 
   if (!subsystem) {
     return (
-      <SubsystemUnavailable
-        featureName="トラックボール設定"
-        explanation="キーボードのファームウェアがこの機能に対応していないか、接続方法を確認してください。"
-        technicalDetails="CONFIG_ZMK_RUNTIME_INPUT_PROCESSOR_STUDIO_RPC=y"
-      />
+      <div className="p-4 flex flex-col gap-4 overflow-y-auto max-h-full">
+        <TrackballPrecisionSettings />
+        <SubsystemUnavailable
+          featureName="トラックボール設定"
+          explanation="キーボードのファームウェアがこの機能に対応していないか、接続方法を確認してください。"
+          technicalDetails="CONFIG_ZMK_RUNTIME_INPUT_PROCESSOR_STUDIO_RPC=y"
+        />
+      </div>
     );
   }
 
@@ -215,6 +219,8 @@ export function TrackballSettings() {
           </span>
         )}
       </h2>
+
+      <TrackballPrecisionSettings />
 
       <section className="rounded-xl border border-orange-200 bg-white p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">

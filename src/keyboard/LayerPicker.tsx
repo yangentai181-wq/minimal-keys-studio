@@ -10,7 +10,7 @@ import {
 } from "react-aria-components";
 import { useModalRef } from "../misc/useModalRef";
 import { GenericModal } from "../GenericModal";
-import { getMinimalKeysLayerRole } from "./minimal-keys-layers";
+import { getMinimalKeysLayerRole, PRECISION_LAYER_INDEX } from "./minimal-keys-layers";
 
 interface Layer {
   id: number;
@@ -149,6 +149,7 @@ export const LayerPicker = ({
         selected: i === selectedLayerIndex,
       }))
       .filter((item) => {
+        if (item.id === PRECISION_LAYER_INDEX) return false;
         const role = getMinimalKeysLayerRole(item.index);
         return (
           showInactiveAutoMouseLayer ||

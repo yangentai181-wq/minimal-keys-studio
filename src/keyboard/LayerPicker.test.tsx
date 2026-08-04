@@ -97,4 +97,16 @@ describe("LayerPicker minimal-keys layer badges", () => {
       "true",
     );
   });
+
+  it("does not expose the internal precision layer for selection or editing", () => {
+    const layers = Array.from({ length: 9 }, (_, index) => ({
+      id: index,
+      name: index === 8 ? "Precision" : `Layer ${index}`,
+    }));
+
+    render(<LayerPicker layers={layers} selectedLayerIndex={0} onLayerClicked={vi.fn()} />);
+
+    expect(screen.queryByText("Precision")).toBeNull();
+    expect(screen.queryByText("精密モード")).toBeNull();
+  });
 });
