@@ -63,7 +63,11 @@ export function PrecisionKeyPicker({ keymap, behaviors, confirmed, draftPosition
       <div className="overflow-x-auto" aria-label="精密モードに使うキー">
         <PhysicalLayout
           positions={positions}
-          selectedPosition={draftPosition}
+          positionStates={Object.fromEntries(analyses.map((analysis, position) => [position, {
+            selected: position === draftPosition,
+            disabled: !analysis.supported,
+            describedBy: analysis.supported ? undefined : `precision-key-reason-${position}`,
+          }]))}
           onPositionClicked={(position) => {
             if (analyses[position]?.supported) updateDraft({ selectedPosition: position });
           }}

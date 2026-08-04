@@ -64,7 +64,7 @@ describe("PrecisionKeyPicker", () => {
     expect(screen.getByText("タップ動作は残り、長押し動作は精密モードに置き換わります")).toBeVisible();
     expect(screen.getByText("タップ: B")).toBeVisible();
     expect(screen.getByText("長押し: 左Shift")).toBeVisible();
-    expect(screen.getByRole("button", { name: /選択可.*キー 1/ })).toHaveClass("bg-primary");
+    expect(screen.getByRole("button", { name: /選択可.*キー 1/ })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: /選択可.*キー 2/ }));
 
@@ -88,6 +88,8 @@ describe("PrecisionKeyPicker", () => {
     );
 
     const unavailable = screen.getByRole("button", { name: /使用不可.*キー 3.*透明キーは選択できません/ });
+    expect(unavailable).toBeDisabled();
+    expect(unavailable).toHaveAccessibleDescription("キー 3: 透明キーは選択できません");
     fireEvent.click(unavailable);
     expect(updateDraft).not.toHaveBeenCalled();
     expect(screen.getByText("透明キーは選択できません")).toBeVisible();
@@ -96,10 +98,14 @@ describe("PrecisionKeyPicker", () => {
 
   it("uses layer ID 0 rather than its array position and reports unavailable when it is missing", () => {
     const layerZeroSecond = { ...keymap, layers: [{ ...keymap.layers[0], id: 4 }, keymap.layers[0]] };
+    const updateDraft = vi.fn();
     const { rerender } = render(
-      <PrecisionKeyPicker keymap={layerZeroSecond} behaviors={behaviors} confirmed={null} draftPosition={0} updateDraft={vi.fn()} />,
+      <PrecisionKeyPicker keymap={layerZeroSecond} behaviors={behaviors} confirmed={null} draftPosition={0} updateDraft={updateDraft} />,
     );
-    expect(screen.getByRole("button", { name: /選択可.*キー 0/ })).toBeInTheDocument();
+    const positionZero = screen.getByRole("button", { name: /選択可.*キー 0/ });
+    expect(positionZero).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(positionZero);
+    expect(updateDraft).toHaveBeenCalledWith({ selectedPosition: 0 });
 
     rerender(
       <PrecisionKeyPicker keymap={{ ...keymap, layers: [{ ...keymap.layers[0], id: 4 }] }} behaviors={behaviors} confirmed={null} draftPosition={0} updateDraft={vi.fn()} />,

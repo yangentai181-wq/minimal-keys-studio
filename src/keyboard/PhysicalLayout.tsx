@@ -20,6 +20,12 @@ export type KeyPosition = PropsWithChildren<{
 
 export type LayoutZoom = number | "auto";
 
+export interface PhysicalLayoutPositionState {
+  selected?: boolean;
+  disabled?: boolean;
+  describedBy?: string;
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function deserializeLayoutZoom(value: string): LayoutZoom {
   if (value === "auto") {
@@ -35,6 +41,7 @@ interface PhysicalLayoutProps {
   onPositionClicked?: (position: number) => void;
   onRecommendationClick?: (rec: import("./key-roles").KeyRecommendation) => void;
   encoderRotationLabel?: string;
+  positionStates?: Record<number, PhysicalLayoutPositionState>;
 }
 
 interface PhysicalLayoutPositionLocation {
@@ -78,6 +85,7 @@ export const PhysicalLayout = ({
   onPositionClicked,
   onRecommendationClick,
   encoderRotationLabel,
+  positionStates,
 }: PhysicalLayoutProps) => {
   const rightMost = positions
     .map((k) => k.x + k.width)
@@ -86,15 +94,21 @@ export const PhysicalLayout = ({
     .map((k) => k.y + k.height)
     .reduce((a, b) => Math.max(a, b), 0);
 
-  const positionItems = positions.map((p, idx) => (
+  const positionItems = positions.map((p, idx) => {
+    const state = positionStates?.[idx];
+    const selected = state?.selected ?? idx === selectedPosition;
+    const disabled = state?.disabled ?? false;
+    return (
     <div className="absolute" key={p.id} style={scalePosition(p, oneU)}>
       <div
-        onClick={() => onPositionClicked?.(idx)}
+        onClick={() => !disabled && onPositionClicked?.(idx)}
         className="hover:[transform:translateZ(100px)] transition-transform duration-200"
       >
         <Key
           oneU={oneU}
-          selected={idx === selectedPosition}
+          selected={selected}
+          disabled={disabled}
+          describedBy={state?.describedBy}
           tooltipData={p.tooltipData}
           encoderRotationLabel={idx === ENCODER_POSITION ? encoderRotationLabel : undefined}
           onRecommendationClick={onRecommendationClick}
@@ -103,7 +117,8 @@ export const PhysicalLayout = ({
         />
       </div>
     </div>
-  ));
+    );
+  });
 
   return (
     <div
