@@ -13,6 +13,7 @@ import type { MonitorSnapshot } from "./monitorStore";
 import { MinimalKeysMonitorLayout } from "./MinimalKeysMonitorLayout";
 import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import { MONITOR_LAYER_NAMES } from "./layerNames";
+import { TrackballPrecisionStatus } from "./TrackballPrecisionStatus";
 
 export interface MonitorPanelProps {
   snapshot: MonitorSnapshot;
@@ -120,6 +121,8 @@ export function MonitorPanel({
         </section>
 
         <div className="flex flex-col gap-4">
+          <TrackballPrecisionStatus />
+
           <MinimalKeysMonitorLayout
             activeLayerIndex={snapshot.activeLayerIndex}
             pressed={snapshot.pressed}
