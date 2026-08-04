@@ -82,7 +82,7 @@ describe("serializeKeymap", () => {
     const keymapWithPrecisionLayer = {
       ...sampleKeymap,
       layers: Array.from({ length: 9 }, (_, index) => ({
-        id: index,
+        id: index === 8 ? 91 : index + 20,
         name: index === 8 ? "Precision" : `Layer ${index}`,
         bindings: sampleKeymap.layers[0].bindings,
       })),

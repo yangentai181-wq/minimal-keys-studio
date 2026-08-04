@@ -100,7 +100,7 @@ describe("LayerPicker minimal-keys layer badges", () => {
 
   it("does not expose the internal precision layer for selection or editing", () => {
     const layers = Array.from({ length: 9 }, (_, index) => ({
-      id: index,
+      id: index === 8 ? 91 : index + 20,
       name: index === 8 ? "Precision" : `Layer ${index}`,
     }));
 

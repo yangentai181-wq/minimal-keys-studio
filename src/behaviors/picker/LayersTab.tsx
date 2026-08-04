@@ -4,7 +4,7 @@ import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_from_page_and_id } from "../../hid-usages";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
-import { getMinimalKeysLayerRole } from "../../keyboard/minimal-keys-layers";
+import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "../../keyboard/minimal-keys-layers";
 
 const KB = 7;
 
@@ -41,6 +41,10 @@ export function LayersTab({
     () => behaviors.filter((b) => layerBehaviorNames.includes(b.displayName)),
     [behaviors],
   );
+  const selectableLayers = useMemo(
+    () => layers.filter((_layer, index) => !isPrecisionLayerIndex(index)),
+    [layers],
+  );
 
   const behaviorIdMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -65,7 +69,7 @@ export function LayersTab({
     setSelectedLayer(layerId);
     if (!is2Param && selectedBehavior) {
       const behaviorId = behaviorIdMap[selectedBehavior];
-      const layerIndex = layers.find((l) => l.id === layerId)?.index ?? 0;
+      const layerIndex = selectableLayers.find((l) => l.id === layerId)?.index ?? 0;
       if (behaviorId !== undefined) {
         onApplyBinding({ behaviorId, param1: layerIndex, param2: 0 });
       }
@@ -104,7 +108,7 @@ export function LayersTab({
     if (needsMouseButton && selectedMouseButton) {
       param2 = selectedMouseButton.param1;
     }
-    const layerIndex = layers.find((l) => l.id === selectedLayer)?.index ?? 0;
+    const layerIndex = selectableLayers.find((l) => l.id === selectedLayer)?.index ?? 0;
     onApplyBinding({
       behaviorId,
       param1: layerIndex,
@@ -146,7 +150,7 @@ export function LayersTab({
             レイヤーを選択
           </div>
           <div className="flex flex-wrap gap-1">
-            {layers.map((layer) => (
+            {selectableLayers.map((layer) => (
               <button
                 key={layer.id}
                 className={`px-3 py-1.5 text-sm rounded-md border ${

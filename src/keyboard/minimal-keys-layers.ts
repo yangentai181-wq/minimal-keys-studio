@@ -16,6 +16,18 @@ export function getMinimalKeysLayerRole(index: number): MinimalKeysLayerRole | n
   return null;
 }
 
+export function isPrecisionLayerIndex(index: number): boolean {
+  return index === PRECISION_LAYER_INDEX;
+}
+
+export function hasPrecisionLayer(layers: unknown[]): boolean {
+  return layers.length > PRECISION_LAYER_INDEX;
+}
+
+export function canEditUserLayer(index: number): boolean {
+  return index >= 0 && index < PRECISION_LAYER_INDEX;
+}
+
 export function getMinimalKeysLayerMetadata(layers: unknown[]): MinimalKeysLayerMetadata {
   return {
     autoMouseLayerIndex: layers.length > AUTO_MOUSE_LAYER_INDEX ? AUTO_MOUSE_LAYER_INDEX : null,

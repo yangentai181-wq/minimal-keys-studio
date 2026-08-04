@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { PhysicalLayout, type KeyPosition } from "../keyboard/PhysicalLayout";
@@ -14,6 +15,7 @@ interface PrecisionKeyPickerProps {
   confirmed: TrackballConfig | null;
   draftPosition: number;
   updateDraft(patch: { selectedPosition: number }): void;
+  onAnalysis?(analysis: PrecisionBindingAnalysis): void;
 }
 
 function analysisForConfirmed(
@@ -82,7 +84,22 @@ export function PrecisionKeyPicker({ keymap, behaviors, confirmed, draftPosition
   );
 }
 
-export function ConnectedPrecisionKeyPicker() {
+function getPrecisionSelectionAnalysis(
+  keymap: Keymap,
+  behaviors: GetBehaviorDetailsResponse[],
+  confirmed: TrackballConfig | null,
+  draftPosition: number,
+): PrecisionBindingAnalysis {
+  const baseLayer = keymap.layers.find((layer) => layer.id === 0);
+  if (!baseLayer) return { supported: false, reason: "ベースレイヤーを読み込めません" };
+  const binding = confirmed?.enabled && confirmed.selectedPosition === draftPosition && confirmed.originalBinding
+    ? confirmed.originalBinding
+    : baseLayer.bindings[draftPosition];
+  if (!binding) return { supported: false, reason: "このキーは選べません" };
+  return analyzePrecisionBinding(binding, behaviors, draftPosition);
+}
+
+export function ConnectedPrecisionKeyPicker({ onAnalysis }: { onAnalysis?(analysis: PrecisionBindingAnalysis, position: number | null): void }) {
   const [keymap] = useConnectedDeviceData<Keymap>(
     { keymap: { getKeymap: true } },
     (response) => response.keymap?.getKeymap,
@@ -90,6 +107,15 @@ export function ConnectedPrecisionKeyPicker() {
   );
   const behaviors = useBehaviorList();
   const { confirmed, draft, updateDraft } = useTrackballPrecision();
+  const analysis = useMemo<PrecisionBindingAnalysis>(() => (
+    keymap && draft && behaviors.length > 0
+      ? getPrecisionSelectionAnalysis(keymap, behaviors, confirmed, draft.selectedPosition)
+      : { supported: false, reason: "キー情報を読み込んでいます" }
+  ), [behaviors, confirmed, draft, keymap]);
+
+  useEffect(() => {
+    onAnalysis?.(analysis, draft?.selectedPosition ?? null);
+  }, [analysis, draft?.selectedPosition, onAnalysis]);
 
   if (!keymap || !draft || behaviors.length === 0) return null;
   return (

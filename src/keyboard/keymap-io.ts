@@ -84,7 +84,7 @@ export function serializeKeymap(
       ? { minimalKeys }
       : {}),
     keymap: {
-      layers: keymap.layers.filter((layer) => layer.id !== PRECISION_LAYER_INDEX).map((layer) => ({
+      layers: keymap.layers.filter((_layer, index) => index !== PRECISION_LAYER_INDEX).map((layer) => ({
         name: layer.name,
         bindings: layer.bindings.map((b) => ({
           behaviorName: behaviorIdToName.get(b.behaviorId) ?? `Unknown(${b.behaviorId})`,

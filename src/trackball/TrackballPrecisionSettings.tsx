@@ -1,5 +1,7 @@
+import { useCallback, useState } from "react";
 import { Button } from "react-aria-components";
 import { ConnectedPrecisionKeyPicker } from "./PrecisionKeyPicker";
+import type { PrecisionBindingAnalysis } from "./precision-binding";
 import { useTrackballPrecision } from "./TrackballPrecisionContext";
 import { validateDraft } from "./precision-state";
 
@@ -9,9 +11,14 @@ const CPI_STEP = 200;
 
 export function TrackballPrecisionSettings() {
   const { availability, confirmed, draft, dirty, saving, error, updateDraft, save } = useTrackballPrecision();
+  const [selectionAnalysis, setSelectionAnalysis] = useState<{ analysis: PrecisionBindingAnalysis; position: number | null } | null>(null);
   const validationError = draft ? validateDraft(draft) : null;
   const unavailable = availability !== "available";
-  const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null;
+  const selectionError = draft?.enabled && (!selectionAnalysis || selectionAnalysis.position !== draft.selectedPosition || !selectionAnalysis.analysis.supported)
+    ? selectionAnalysis && selectionAnalysis.position === draft.selectedPosition && !selectionAnalysis.analysis.supported ? selectionAnalysis.analysis.reason : "選んだキーを確認しています"
+    : null;
+  const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null || selectionError !== null;
+  const handleAnalysis = useCallback((analysis: PrecisionBindingAnalysis, position: number | null) => setSelectionAnalysis({ analysis, position }), []);
 
   return (
     <section aria-labelledby="trackball-precision-title" className="rounded-xl border border-primary/20 bg-white p-4 shadow-sm space-y-4">
@@ -33,12 +40,12 @@ export function TrackballPrecisionSettings() {
             />
             精密モードを使う
           </label>
-          {draft.enabled && <ConnectedPrecisionKeyPicker />}
+          {draft.enabled && <ConnectedPrecisionKeyPicker onAnalysis={handleAnalysis} />}
         </>
       ) : (
         <p role="status" className="text-sm text-base-content/70">設定を読み込んでいます…</p>
       )}
-      {(validationError ?? error) && <p role="alert" className="text-sm text-error">{validationError ?? error}</p>}
+      {(validationError ?? selectionError ?? error) && <p role="alert" className="text-sm text-error">{validationError ?? selectionError ?? error}</p>}
       {confirmed && <p className="text-xs text-base-content/50">確認済み: 通常 {confirmed.normalCpi} CPI / 精密 {confirmed.precisionCpi} CPI</p>}
       <div className="flex justify-end">
         <Button onPress={() => void save()} isDisabled={saveDisabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">

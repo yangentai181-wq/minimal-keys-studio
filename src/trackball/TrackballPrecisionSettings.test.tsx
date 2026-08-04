@@ -25,7 +25,12 @@ vi.mock("./TrackballPrecisionContext", () => ({
 }));
 
 vi.mock("./PrecisionKeyPicker", () => ({
-  ConnectedPrecisionKeyPicker: () => <div data-testid="precision-key-picker" />,
+  ConnectedPrecisionKeyPicker: ({ onAnalysis }: { onAnalysis?(analysis: { supported: boolean; reason?: string }, position: number): void }) => (
+    <div data-testid="precision-key-picker">
+      <button onClick={() => onAnalysis?.({ supported: true }, 0)}>対応キー</button>
+      <button onClick={() => onAnalysis?.({ supported: false, reason: "このキーは選べません" }, 0)}>非対応キー</button>
+    </div>
+  ),
 }));
 
 describe("TrackballPrecisionSettings", () => {
@@ -63,7 +68,7 @@ describe("TrackballPrecisionSettings", () => {
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   });
 
-  it("saves a valid dirty draft without sending key selection changes immediately", () => {
+  it("blocks enabled saves until the selected physical key is confirmed supported", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue({
       availability: "available",
       confirmed: null,
@@ -77,10 +82,26 @@ describe("TrackballPrecisionSettings", () => {
     });
     render(<TrackballPrecisionSettings />);
 
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "対応キー" }));
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     expect(save).toHaveBeenCalledOnce();
     expect(screen.getByTestId("precision-key-picker")).toBeInTheDocument();
+  });
+
+  it("shows the unsupported key reason and blocks enabled saves", () => {
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 800, precisionCpi: 200, enabled: true, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save, reload: vi.fn(),
+    });
+    render(<TrackballPrecisionSettings />);
+
+    fireEvent.click(screen.getByRole("button", { name: "非対応キー" }));
+
+    expect(screen.getByText("このキーは選べません")).toBeVisible();
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   });
 
   it("explains that a firmware update is required when unavailable", () => {

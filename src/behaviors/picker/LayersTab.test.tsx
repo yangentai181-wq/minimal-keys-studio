@@ -182,4 +182,20 @@ describe("LayersTab", () => {
       expect(screen.getByText("Base")).toBeTruthy();
     });
   });
+
+  it("omits the internal precision layer by array index for every layer behavior", () => {
+    const onApply = vi.fn();
+    const layersWithInternal = Array.from({ length: 9 }, (_, index) => ({
+      id: index === 8 ? 91 : index + 20,
+      index,
+      name: index === 8 ? "Precision" : `Layer ${index}`,
+    }));
+    render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} onApplyBinding={onApply} />);
+
+    fireEvent.click(screen.getByText("レイヤー切替"));
+
+    expect(screen.queryByText("Precision")).toBeNull();
+    fireEvent.click(screen.getByText("Layer 7（スクロール）"));
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 7, param2: 0 });
+  });
 });

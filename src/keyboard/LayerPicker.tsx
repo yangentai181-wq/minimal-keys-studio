@@ -10,7 +10,7 @@ import {
 } from "react-aria-components";
 import { useModalRef } from "../misc/useModalRef";
 import { GenericModal } from "../GenericModal";
-import { getMinimalKeysLayerRole, PRECISION_LAYER_INDEX } from "./minimal-keys-layers";
+import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "./minimal-keys-layers";
 
 interface Layer {
   id: number;
@@ -27,6 +27,7 @@ interface LayerPickerProps {
   canRemove?: boolean;
   selectionLocked?: boolean;
   showInactiveAutoMouseLayer?: boolean;
+  layerOperationsLockedMessage?: string;
 
   onLayerClicked?: LayerClickCallback;
   onLayerMoved?: LayerMovedCallback;
@@ -129,6 +130,7 @@ export const LayerPicker = ({
   canRemove,
   selectionLocked = false,
   showInactiveAutoMouseLayer = true,
+  layerOperationsLockedMessage,
   onLayerClicked,
   onLayerMoved,
   onAddClicked,
@@ -149,7 +151,7 @@ export const LayerPicker = ({
         selected: i === selectedLayerIndex,
       }))
       .filter((item) => {
-        if (item.id === PRECISION_LAYER_INDEX) return false;
+        if (isPrecisionLayerIndex(item.index)) return false;
         const role = getMinimalKeysLayerRole(item.index);
         return (
           showInactiveAutoMouseLayer ||
@@ -216,6 +218,7 @@ export const LayerPicker = ({
             type="button"
             className="hover:text-primary-content hover:bg-primary rounded-sm"
             disabled={!canRemove}
+            title={layerOperationsLockedMessage}
             onClick={onRemoveClicked}
           >
             <Minus className="size-4" />
@@ -225,6 +228,7 @@ export const LayerPicker = ({
           <button
             type="button"
             disabled={!canAdd}
+            title={layerOperationsLockedMessage}
             className="hover:text-primary-content ml-1 hover:bg-primary rounded-sm disabled:text-gray-500 disabled:hover:bg-base-300 disabled:cursor-not-allowed"
             onClick={onAddClicked}
           >
