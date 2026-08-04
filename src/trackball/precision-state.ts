@@ -79,16 +79,26 @@ function matchesDraft(config: TrackballConfig, draft: PrecisionDraft): boolean {
 }
 
 export function handleApplyResponse(state: PrecisionState, response: ApplyResponse): PrecisionState {
-  if (response.result === ApplyResult.STALE_REVISION) {
-    if (response.config === null) return { ...state, pending: null, error: "再読み込みが必要です" };
-    return updateConfirmedKeepingDraft(state, response.config, "再読み込みが必要です", null);
-  }
-  if (response.result !== ApplyResult.OK || response.config === null) return state;
+  if (response.result !== ApplyResult.OK) return { ...state, pending: null, error: applyErrorMessage(response.result) };
+  if (response.config === null) return state;
   if (state.pending !== null && matchesDraft(response.config, state.pending)) {
     return acceptConfig(state, response.config);
   }
   if (state.dirty) return updateConfirmedKeepingDraft(state, response.config, state.error, state.pending);
   return acceptConfig(state, response.config);
+}
+
+function applyErrorMessage(result: ApplyResult): string {
+  switch (result) {
+    case ApplyResult.INVALID_CPI: return "CPI の設定値が正しくありません";
+    case ApplyResult.INVALID_POSITION: return "選択したキーは使用できません";
+    case ApplyResult.UNSUPPORTED_BINDING: return "このキーの動作は精密モードに対応していません";
+    case ApplyResult.STALE_REVISION: return "再読み込みが必要です";
+    case ApplyResult.KEYMAP_WRITE_FAILED: return "キーマップの保存に失敗しました";
+    case ApplyResult.SETTINGS_WRITE_FAILED: return "設定の保存に失敗しました";
+    case ApplyResult.SENSOR_WRITE_FAILED: return "トラックボール設定の反映に失敗しました";
+    default: return "不明なエラーが発生しました";
+  }
 }
 
 export function transportError(state: PrecisionState, error: string): PrecisionState {

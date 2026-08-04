@@ -80,10 +80,29 @@ describe("precision state", () => {
     const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 }));
     const response: ApplyResponse = { result: ApplyResult.STALE_REVISION, config: { ...config(2), normalCpi: 1200 } };
     const next = handleApplyResponse(state, response);
-    expect(next.confirmed).toEqual(response.config);
+    expect(next.confirmed).toEqual(config());
     expect(next.draft?.normalCpi).toBe(1000);
     expect(next.pending).toBeNull();
     expect(next.dirty).toBe(true);
     expect(next.error).toBe("再読み込みが必要です");
+  });
+
+  it.each([
+    [ApplyResult.INVALID_CPI, "CPI の設定値が正しくありません"],
+    [ApplyResult.INVALID_POSITION, "選択したキーは使用できません"],
+    [ApplyResult.UNSUPPORTED_BINDING, "このキーの動作は精密モードに対応していません"],
+    [ApplyResult.STALE_REVISION, "再読み込みが必要です"],
+    [ApplyResult.KEYMAP_WRITE_FAILED, "キーマップの保存に失敗しました"],
+    [ApplyResult.SETTINGS_WRITE_FAILED, "設定の保存に失敗しました"],
+    [ApplyResult.SENSOR_WRITE_FAILED, "トラックボール設定の反映に失敗しました"],
+    [99 as ApplyResult, "不明なエラーが発生しました"],
+  ])("clears pending and preserves state for apply failure %i", (result, error) => {
+    const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 }));
+    const next = handleApplyResponse(state, { result, config: { ...config(2), normalCpi: 1200 } });
+    expect(next.confirmed).toEqual(config());
+    expect(next.draft?.normalCpi).toBe(1000);
+    expect(next.pending).toBeNull();
+    expect(next.dirty).toBe(true);
+    expect(next.error).toBe(error);
   });
 });
