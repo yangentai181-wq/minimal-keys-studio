@@ -1,6 +1,6 @@
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
-import { PhysicalLayout } from "../keyboard/PhysicalLayout";
+import { PhysicalLayout, type KeyPosition } from "../keyboard/PhysicalLayout";
 import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
 import type { TrackballConfig } from "../proto/trackball-settings";
 import { useBehaviorList } from "../behaviors/BehaviorsContext";
@@ -27,19 +27,27 @@ function analysisForConfirmed(
 }
 
 export function PrecisionKeyPicker({ keymap, behaviors, confirmed, draftPosition, updateDraft }: PrecisionKeyPickerProps) {
-  const baseLayer = keymap.layers.find((layer) => layer.id === 0) ?? keymap.layers[0];
-  if (!baseLayer) return null;
+  const baseLayer = keymap.layers.find((layer) => layer.id === 0);
+  if (!baseLayer) {
+    return <p role="status">ベースレイヤーを読み込めません</p>;
+  }
 
-  const analyses = baseLayer.bindings.map((binding, position) => analyzePrecisionBinding(binding, behaviors, position));
-  const current = analysisForConfirmed(confirmed, baseLayer.bindings, behaviors) ?? analyses[draftPosition] ?? null;
-  const positions = MINIMAL_KEYS_POSITIONS.slice(0, baseLayer.bindings.length).map((position, index) => ({
+  const physicalBindings = baseLayer.bindings.slice(0, MINIMAL_KEYS_POSITIONS.length);
+  const displayBindings = physicalBindings.map((binding, position) =>
+    confirmed?.enabled && confirmed.selectedPosition === position && confirmed.originalBinding
+      ? confirmed.originalBinding
+      : binding,
+  );
+  const analyses = displayBindings.map((binding, position) => analyzePrecisionBinding(binding, behaviors, position));
+  const current = analysisForConfirmed(confirmed, displayBindings, behaviors) ?? analyses[draftPosition] ?? null;
+  const positions: KeyPosition[] = MINIMAL_KEYS_POSITIONS.slice(0, physicalBindings.length).map((position, index) => ({
     ...position,
     x: position.x / 100,
     y: position.y / 100,
     width: position.width / 100,
     height: position.height / 100,
     header: analyses[index]?.supported ? "選択可" : "使用不可",
-    children: <span>{index}</span>,
+    children: <span>キー {index}{analyses[index]?.supported ? "" : `（${analyses[index]?.reason}）`}</span>,
   }));
 
   return (
@@ -52,22 +60,14 @@ export function PrecisionKeyPicker({ keymap, behaviors, confirmed, draftPosition
           <div><dt className="sr-only">長押し動作</dt><dd>長押し: {current.holdLabel}</dd></div>
         </dl>
       )}
-      <div aria-hidden="true" className="overflow-x-auto">
-        <PhysicalLayout positions={positions} selectedPosition={draftPosition} />
-      </div>
-      <div role="group" aria-label="精密モードに使うキー" className="sr-only">
-        {analyses.map((analysis, position) => (
-          <button
-            key={position}
-            type="button"
-            aria-pressed={position === draftPosition}
-            aria-describedby={analysis.supported ? undefined : `precision-key-reason-${position}`}
-            disabled={!analysis.supported}
-            onClick={() => updateDraft({ selectedPosition: position })}
-          >
-            キー {position}
-          </button>
-        ))}
+      <div className="overflow-x-auto" aria-label="精密モードに使うキー">
+        <PhysicalLayout
+          positions={positions}
+          selectedPosition={draftPosition}
+          onPositionClicked={(position) => {
+            if (analyses[position]?.supported) updateDraft({ selectedPosition: position });
+          }}
+        />
       </div>
       <ul className="text-sm" aria-live="polite">
         {analyses.map((analysis, position) => !analysis.supported && (

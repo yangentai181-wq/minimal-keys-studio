@@ -17,6 +17,7 @@ const behaviors = [
   behavior(1, "Key Press"),
   behavior(2, "Layer-Tap"),
   behavior(3, "Transparent"),
+  behavior(4, "Mod-Tap"),
 ];
 const key = (id: number) => (7 << 16) + id;
 
@@ -36,15 +37,24 @@ const keymap = {
 };
 
 describe("PrecisionKeyPicker", () => {
-  it("shows the confirmed key action and updates only the draft when a supported key is selected", () => {
+  it("shows the original confirmed action and updates the draft from the visible physical key", () => {
     const updateDraft = vi.fn();
+    const wrappedKeymap = {
+      ...keymap,
+      layers: [{
+        ...keymap.layers[0],
+        bindings: keymap.layers[0].bindings.map((binding, position) => position === 1
+          ? { behaviorId: 2, param1: 8, param2: key(8) }
+          : binding),
+      }],
+    };
     render(
       <PrecisionKeyPicker
-        keymap={keymap}
+        keymap={wrappedKeymap}
         behaviors={behaviors}
         confirmed={{
           schemaVersion: 1, normalCpi: 800, precisionCpi: 200, enabled: true, selectedPosition: 1,
-          originalBinding: { behaviorId: 2, param1: 2, param2: key(5) }, revision: 1, precisionActive: false, currentCpi: 800,
+          originalBinding: { behaviorId: 4, param1: 2, param2: key(5) }, revision: 1, precisionActive: false, currentCpi: 800,
         }}
         draftPosition={1}
         updateDraft={updateDraft}
@@ -53,26 +63,47 @@ describe("PrecisionKeyPicker", () => {
 
     expect(screen.getByText("タップ動作は残り、長押し動作は精密モードに置き換わります")).toBeVisible();
     expect(screen.getByText("タップ: B")).toBeVisible();
-    expect(screen.getByText("長押し: レイヤー 2")).toBeVisible();
-    expect(screen.getByRole("button", { name: "キー 1" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("長押し: 左Shift")).toBeVisible();
+    expect(screen.getByRole("button", { name: /選択可.*キー 1/ })).toHaveClass("bg-primary");
 
-    fireEvent.click(screen.getByRole("button", { name: "キー 2" }));
+    fireEvent.click(screen.getByRole("button", { name: /選択可.*キー 2/ }));
 
     expect(updateDraft).toHaveBeenCalledWith({ selectedPosition: 2 });
   });
 
-  it("marks unsupported keys disabled with their reason", () => {
+  it("shows unsupported physical keys as unavailable and does not select non-key bindings", () => {
+    const updateDraft = vi.fn();
+    const keymapWithExtraBinding = {
+      ...keymap,
+      layers: [{ ...keymap.layers[0], bindings: [...keymap.layers[0].bindings, { behaviorId: 1, param1: key(7), param2: 0 }] }],
+    };
     render(
       <PrecisionKeyPicker
-        keymap={keymap}
+        keymap={keymapWithExtraBinding}
         behaviors={behaviors}
         confirmed={null}
         draftPosition={1}
-        updateDraft={vi.fn()}
+        updateDraft={updateDraft}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "キー 3" })).toBeDisabled();
+    const unavailable = screen.getByRole("button", { name: /使用不可.*キー 3.*透明キーは選択できません/ });
+    fireEvent.click(unavailable);
+    expect(updateDraft).not.toHaveBeenCalled();
     expect(screen.getByText("透明キーは選択できません")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /キー 43/ })).not.toBeInTheDocument();
+  });
+
+  it("uses layer ID 0 rather than its array position and reports unavailable when it is missing", () => {
+    const layerZeroSecond = { ...keymap, layers: [{ ...keymap.layers[0], id: 4 }, keymap.layers[0]] };
+    const { rerender } = render(
+      <PrecisionKeyPicker keymap={layerZeroSecond} behaviors={behaviors} confirmed={null} draftPosition={0} updateDraft={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: /選択可.*キー 0/ })).toBeInTheDocument();
+
+    rerender(
+      <PrecisionKeyPicker keymap={{ ...keymap, layers: [{ ...keymap.layers[0], id: 4 }] }} behaviors={behaviors} confirmed={null} draftPosition={0} updateDraft={vi.fn()} />,
+    );
+    expect(screen.getByText("ベースレイヤーを読み込めません")).toBeVisible();
   });
 });
