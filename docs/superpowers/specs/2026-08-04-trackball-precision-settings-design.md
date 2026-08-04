@@ -47,7 +47,7 @@ The default movement path uses 100-percent X/Y scaling. This avoids the fraction
 
 ### Precision key wrapping
 
-The firmware keymap adds one reserved transparent precision layer. Studio converts the selected base-layer binding into the matching precision hold-tap wrapper:
+The firmware keymap adds one reserved transparent precision layer. Studio analyzes the selected base-layer binding and previews the resulting tap/hold behavior. The firmware transaction converts it into the matching precision hold-tap wrapper:
 
 - Plain key, layer-tap, and mod-tap bindings preserve their tap key and replace the hold side with the precision layer.
 - Mouse-button layer-tap bindings preserve their mouse-button tap through the existing mouse hold-tap behavior and replace the hold layer.
@@ -108,7 +108,7 @@ Changing the selected key includes restoration of the previous original binding 
 
 - Protocol tests cover get/apply messages, explicit zero/false fields, invalid payloads, and notifications.
 - Pure state tests cover normal/precision validation, pending/confirmed rollback, stale revisions, and unsupported bindings.
-- Binding-conversion tests cover plain key, layer-tap, mod-tap, and mouse-button layer-tap inputs and exact restoration of the original binding.
+- Studio support-analysis tests and firmware binding-conversion tests cover plain key, layer-tap, mod-tap, and mouse-button layer-tap inputs and exact restoration of the original binding.
 - Component tests cover sliders, 200-CPI steps, key selection, hold-action warning, unsaved state, save success, failure rollback, and unavailable firmware.
 - Monitor tests cover device-confirmed normal/precision mode and current CPI display.
 
@@ -135,4 +135,3 @@ Changing the selected key includes restoration of the previous original binding 
 - Bluetooth pairing repair and broader connection diagnostics.
 - General application navigation or visual redesign.
 - More than one precision key or more than two CPI profiles.
-
