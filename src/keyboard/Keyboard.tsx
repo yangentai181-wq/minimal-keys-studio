@@ -101,10 +101,10 @@ function KeyboardArea({
       ref={containerRef}
       className="p-4 col-start-2 row-start-1 flex items-center justify-center min-w-0 overflow-hidden bg-gray-200/50 rounded-lg"
     >
-      {!showLoading && layouts && keymap && behaviors ? (
+      {!showLoading && layout && keymap && behaviors ? (
         <KeymapComp
           keymap={keymap}
-          layout={layouts[selectedPhysicalLayoutIndex]}
+          layout={layout}
           behaviors={behaviors}
           oneU={oneU}
           selectedLayerIndex={selectedLayerIndex}
@@ -156,10 +156,15 @@ function useLayouts(): [
       });
 
       if (!ignore) {
-        setLayouts(response?.keymap?.getPhysicalLayouts?.layouts);
-        setSelectedPhysicalLayoutIndex(
-          response?.keymap?.getPhysicalLayouts?.activeLayoutIndex || 0
-        );
+        const responseLayouts = response?.keymap?.getPhysicalLayouts?.layouts;
+        const activeLayoutIndex = response?.keymap?.getPhysicalLayouts?.activeLayoutIndex ?? 0;
+        if (responseLayouts?.[activeLayoutIndex]) {
+          setLayouts(responseLayouts);
+          setSelectedPhysicalLayoutIndex(activeLayoutIndex);
+        } else {
+          setLayouts(undefined);
+          setSelectedPhysicalLayoutIndex(0);
+        }
       }
     }
 
@@ -199,7 +204,7 @@ export default function Keyboard() {
   const [modifierFlags, setModifierFlags] = useState(0);
   const behaviors = useBehaviorMap();
   const behaviorsLoading = useBehaviorsLoading();
-  const isDataLoading = !layouts || !keymap || behaviorsLoading;
+  const isDataLoading = !layouts || !layouts[selectedPhysicalLayoutIndex] || !keymap || behaviorsLoading;
   const showLoading = isDataLoading;
 
   const conn = useContext(ConnectionContext);

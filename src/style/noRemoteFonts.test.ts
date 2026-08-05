@@ -1,32 +1,38 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 const forbiddenRemoteFonts = /fonts\.(?:googleapis|gstatic)\.com/i;
 
-function productionSources(directory: string): string[] {
+function filesRecursively(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return productionSources(path);
-    if (/\.(?:test|stories)\.[jt]sx?$/.test(entry.name)) return [];
+    if (entry.isDirectory()) return filesRecursively(path);
     return [path];
   });
 }
 
+function filesWithGoogleFontReferences(files: string[]): string[] {
+  return files.filter((file) => forbiddenRemoteFonts.test(readFileSync(file, "utf8")));
+}
+
 describe("local typography", () => {
   it("does not request fonts from Google in production sources or Tailwind configuration", () => {
-    const files = [
+    const sourceFiles = [
       join(projectRoot, "src/index.css"),
       join(projectRoot, "tailwind.config.js"),
       join(projectRoot, "index.html"),
-      ...productionSources(join(projectRoot, "src")),
+      ...filesRecursively(join(projectRoot, "src")).filter((file) => !/\.(?:test|stories)\.[jt]sx?$/.test(file)),
     ];
 
-    const remoteFontReferences = files.filter((file) =>
-      forbiddenRemoteFonts.test(readFileSync(file, "utf8")),
-    );
+    expect(filesWithGoogleFontReferences(sourceFiles)).toEqual([]);
+  });
 
-    expect(remoteFontReferences).toEqual([]);
+  const distDirectory = join(projectRoot, "dist");
+  const builtTest = existsSync(distDirectory) ? it : it.skip;
+
+  builtTest("does not include Google font requests in the current production bundle", () => {
+    expect(filesWithGoogleFontReferences(filesRecursively(distDirectory))).toEqual([]);
   });
 });
