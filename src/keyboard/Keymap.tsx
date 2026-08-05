@@ -12,7 +12,7 @@ import {
 } from "./PhysicalLayout";
 import { useOsMode } from "../OsModeContext";
 import { useMemo } from "react";
-import { buildKeyPresentation } from "./key-presentation";
+import { useKeyPresentation } from "./useKeyPresentation";
 
 type BehaviorMap = Record<number, GetBehaviorDetailsResponse>;
 
@@ -52,7 +52,7 @@ export const Keymap = ({
     }
   };
 
-  const positions = useMemo(() => buildKeyPresentation({ layout, keymap, behaviors, selectedLayerIndex, os }), [layout, keymap, behaviors, selectedLayerIndex, os]);
+  const positions = useKeyPresentation({ layout, keymap, behaviors, selectedLayerIndex, os });
 
   if (!keymap.layers[selectedLayerIndex]) {
     return <></>;
