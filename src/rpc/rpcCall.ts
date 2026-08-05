@@ -7,7 +7,7 @@ export async function safeRpcCall<T>(
     return await fn();
   } catch (e) {
     console.error(`${label} failed:`, e);
-    toast(`${label} failed`, "error");
+    toast("操作を完了できませんでした。接続を確認して、もう一度お試しください。", "error");
     return null;
   }
 }

@@ -7,6 +7,7 @@ import { SettingsCard } from "../misc/SettingsCard";
 import { LoadingSkeleton } from "../misc/LoadingSkeleton";
 import * as HT from "../proto/holdtap";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 // -1 as uint32 in protobuf = "not configured in device tree" = effectively 0ms
 const SENTINEL = 0xFFFFFFFF;
@@ -117,7 +118,7 @@ export function HoldTapSettings() {
       } catch (e) {
         if (version === discoveryVersionRef.current) {
           console.error("[HoldTap] Discovery failed:", e);
-          toast("Failed to discover hold-tap settings", "error");
+          toast(ERROR_MESSAGES["holdTap.discover"], "error");
         }
       } finally {
         if (version === discoveryVersionRef.current) setLoading(false);
@@ -184,7 +185,7 @@ export function HoldTapSettings() {
       }
     } catch (e) {
       console.error("[HoldTap] Failed to save:", e);
-      toast("Failed to save hold-tap settings", "error");
+      toast(ERROR_MESSAGES["holdTap.save"], "error");
       throw e;
     } finally {
       setSaving(false);
@@ -240,7 +241,7 @@ export function HoldTapSettings() {
       }
     } catch (e) {
       console.error("[HoldTap] Failed to reset:", e);
-      toast("Failed to reset hold-tap settings", "error");
+      toast(ERROR_MESSAGES["holdTap.reset"], "error");
     } finally {
       setSaving(false);
     }

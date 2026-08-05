@@ -12,6 +12,7 @@ import {
   SCROLL_LAYER_INDEX,
 } from "../keyboard/minimal-keys-layers";
 import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 const AUTO_MOUSE_TIMEOUT_MS = 700;
 
@@ -59,7 +60,7 @@ export function TrackballSettings() {
         // Response is empty; processor info arrives via notifications
       } catch (e) {
         console.error("Failed to discover processors:", e);
-        toast("Failed to discover trackball", "error");
+        toast(ERROR_MESSAGES["trackball.discover"], "error");
       }
     }
 
@@ -160,7 +161,7 @@ export function TrackballSettings() {
       formDirty.current = false;
     } catch (e) {
       console.error("Failed to apply trackball config:", e);
-      toast("Failed to apply trackball settings", "error");
+      toast(ERROR_MESSAGES["trackball.apply"], "error");
     } finally {
       setSaving(false);
     }
@@ -190,7 +191,7 @@ export function TrackballSettings() {
       formDirty.current = false;
     } catch (e) {
       console.error("Failed to reset trackball config:", e);
-      toast("Failed to reset trackball settings", "error");
+      toast(ERROR_MESSAGES["trackball.reset"], "error");
     } finally {
       setSaving(false);
     }

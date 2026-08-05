@@ -4,6 +4,7 @@ import { SubsystemUnavailable } from "../misc/SubsystemUnavailable";
 import { useCustomSubsystem } from "../rpc/useCustomSubsystem";
 import { useToast } from "../misc/Toast";
 import * as BLE from "../proto/ble";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 function rpcWithTimeout(label: string, promise: Promise<Uint8Array>, timeoutMs = 5000): Promise<Uint8Array> {
   const timeout = new Promise<never>((_, reject) =>
@@ -52,7 +53,7 @@ export function BleManagement() {
           setOutputPriority(od.getOutputPriority);
       } catch (e) {
         console.error("[BLE] Failed to load BLE info:", e);
-        toast("Failed to load Bluetooth info", "error");
+        toast(ERROR_MESSAGES["bluetooth.loadInfo"], "error");
       }
     }
 
@@ -71,7 +72,7 @@ export function BleManagement() {
       if (resp.getProfiles) setProfiles(resp.getProfiles.profiles);
     } catch (e) {
       console.error("[BLE] Failed to refresh profiles:", e);
-      toast("Failed to refresh profiles", "error");
+      toast(ERROR_MESSAGES["bluetooth.refreshProfiles"], "error");
     }
   }, [subsystem, toast]);
 
@@ -84,7 +85,7 @@ export function BleManagement() {
         await refreshProfiles();
       } catch (e) {
         console.error("[BLE] Failed to switch profile:", e);
-        toast("Failed to switch profile", "error");
+        toast(ERROR_MESSAGES["bluetooth.switchProfile"], "error");
       } finally {
         setLoading(false);
       }
@@ -102,7 +103,7 @@ export function BleManagement() {
         await refreshProfiles();
       } catch (e) {
         console.error("[BLE] Failed to unpair profile:", e);
-        toast("Failed to unpair profile", "error");
+        toast(ERROR_MESSAGES["bluetooth.unpairProfile"], "error");
       } finally {
         setLoading(false);
       }
@@ -118,7 +119,7 @@ export function BleManagement() {
         await refreshProfiles();
       } catch (e) {
         console.error("[BLE] Failed to set profile name:", e);
-        toast("Failed to set profile name", "error");
+        toast(ERROR_MESSAGES["bluetooth.setProfileName"], "error");
       }
       setEditingName(null);
     },
@@ -133,7 +134,7 @@ export function BleManagement() {
         setOutputPriority(priority);
       } catch (e) {
         console.error("[BLE] Failed to set output priority:", e);
-        toast("Failed to set output priority", "error");
+        toast(ERROR_MESSAGES["bluetooth.setOutputPriority"], "error");
       }
     },
     [subsystem, toast]

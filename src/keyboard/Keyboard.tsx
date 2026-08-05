@@ -48,6 +48,7 @@ import {
 import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer } from "./minimal-keys-layers";
 import { publishKeymapChanged } from "./keymap-events";
 import { runGuardedKeymapWrite } from "./keymap-operation-guards";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 // Keeps loading state visible for at least minMs so users always see feedback.
 function useMinLoadingTime(isLoading: boolean, minMs = 500): boolean {
@@ -336,7 +337,7 @@ export default function Keyboard() {
           publishKeymapChanged();
         } else {
           console.error("Failed to set binding", resp.keymap?.setLayerBinding);
-          toast("Failed to set key binding", "error");
+          toast(ERROR_MESSAGES["keyboard.setBinding"], "error");
         }
 
         return async () => {
@@ -360,7 +361,7 @@ export default function Keyboard() {
             );
             publishKeymapChanged();
           } else {
-            toast("Failed to undo key binding change", "error");
+            toast(ERROR_MESSAGES["keyboard.undoBinding"], "error");
           }
         };
       });

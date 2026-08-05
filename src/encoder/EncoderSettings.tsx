@@ -14,6 +14,7 @@ import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { BehaviorBindingPicker } from "../behaviors/BehaviorBindingPicker";
 import { useBehaviorList } from "../behaviors/BehaviorsContext";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 interface LayerDisplay {
   id: number;
@@ -169,7 +170,7 @@ export function EncoderSettings() {
       } catch (e) {
         if (version === discoveryVersionRef.current) {
           console.error("[Encoder] Failed to discover sensors:", e);
-          toast("Failed to discover encoder", "error");
+          toast(ERROR_MESSAGES["encoder.discover"], "error");
         }
       } finally {
         if (version === discoveryVersionRef.current) setLoading(false);
@@ -199,7 +200,7 @@ export function EncoderSettings() {
       }
     } catch (e) {
       console.error("[Encoder] Failed to load bindings:", e);
-      toast("Failed to load encoder bindings", "error");
+      toast(ERROR_MESSAGES["encoder.loadBindings"], "error");
     } finally {
       setLoading(false);
     }
@@ -269,7 +270,7 @@ export function EncoderSettings() {
       }
     } catch (e) {
       console.error("[Encoder] Failed to save:", e);
-      toast("Failed to save encoder settings", "error");
+      toast(ERROR_MESSAGES["encoder.save"], "error");
       throw e;
     } finally {
       setSaving(false);

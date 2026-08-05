@@ -8,6 +8,7 @@ import {
 import { useToast } from "../misc/Toast";
 import * as SETTINGS from "../proto/settings";
 import { useTelemetry } from "../telemetry/TelemetryProvider";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 export function DeviceSettings() {
   const { toast } = useToast();
@@ -48,7 +49,7 @@ export function DeviceSettings() {
       .callRPC(SETTINGS.encodeGetAllActivitySettings())
       .catch((e: unknown) => {
         console.error("Failed to request all activity settings:", e);
-        toast("Failed to load device settings", "error");
+        toast(ERROR_MESSAGES["device.loadSettings"], "error");
       });
   }
   if (!subsystem) loadedRef.current = false;
@@ -82,7 +83,7 @@ export function DeviceSettings() {
       setFeedback("設定を適用しました");
     } catch (e) {
       console.error("Failed to apply settings:", e);
-      toast("Failed to apply device settings", "error");
+      toast(ERROR_MESSAGES["device.applySettings"], "error");
       setFeedback("設定の適用に失敗しました");
     } finally {
       setSaving(false);
@@ -108,7 +109,7 @@ export function DeviceSettings() {
       setFeedback("全デバイスに同期しました");
     } catch (e) {
       console.error("Failed to sync settings:", e);
-      toast("Failed to sync device settings", "error");
+      toast(ERROR_MESSAGES["device.syncSettings"], "error");
       setFeedback("同期に失敗しました");
     } finally {
       setSaving(false);
