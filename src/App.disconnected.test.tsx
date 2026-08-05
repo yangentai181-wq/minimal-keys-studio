@@ -1,10 +1,23 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import App from "./App";
 
+const mocks = vi.hoisted(() => ({
+  createRpcConnection: vi.fn(),
+  requestDeviceInfo: vi.fn(),
+}));
+
 vi.mock("@zmkfirmware/zmk-studio-ts-client", () => ({
-  create_rpc_connection: vi.fn(),
+  create_rpc_connection: mocks.createRpcConnection,
+}));
+
+vi.mock("./rpc/deviceInfo", () => ({
+  requestDeviceInfo: mocks.requestDeviceInfo,
+}));
+
+vi.mock("./rpc/transportLifecycle", () => ({
+  disposeTransport: vi.fn(),
 }));
 
 vi.mock("./transport/serial", () => ({
@@ -27,8 +40,23 @@ vi.mock("./AppFooter", () => ({
 }));
 
 vi.mock("./ConnectModal", () => ({
-  ConnectModal: ({ open }: { open?: boolean }) =>
-    open ? <div>CONNECT_MODAL_OPEN</div> : null,
+  ConnectModal: ({
+    open,
+    onTransportCreated,
+  }: {
+    open?: boolean;
+    onTransportCreated: (transport: object) => Promise<void>;
+  }) =>
+    open ? (
+      <button
+        type="button"
+        onClick={() => {
+          void onTransportCreated({}).catch(() => {});
+        }}
+      >
+        CONNECT_MODAL_OPEN
+      </button>
+    ) : null,
 }));
 
 vi.mock("./UnlockModal", () => ({
@@ -70,6 +98,11 @@ vi.mock("./keyboard/Keyboard", () => ({
 }));
 
 describe("App disconnected shell", () => {
+  beforeEach(() => {
+    mocks.createRpcConnection.mockReset();
+    mocks.requestDeviceInfo.mockReset();
+  });
+
   it("shows the connection modal without mounting the keymap editor behind it", () => {
     render(<App />);
 
@@ -77,5 +110,24 @@ describe("App disconnected shell", () => {
     expect(screen.queryByText("APP_HEADER")).not.toBeInTheDocument();
     expect(screen.queryByText("APP_FOOTER")).not.toBeInTheDocument();
     expect(screen.queryByText("KEYBOARD_MOUNTED")).not.toBeInTheDocument();
+  });
+
+  it("normalizes device-info failures before the App connection flow reaches a toast", async () => {
+    mocks.createRpcConnection.mockResolvedValue({});
+    mocks.requestDeviceInfo.mockRejectedValue(
+      new Error("RPC Failed: native Raw HID device-info request 0xff60"),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "CONNECT_MODAL_OPEN" }));
+
+    expect(
+      await screen.findByText(
+        "キーボードに接続できませんでした。接続を確認して、もう一度お試しください。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/RPC Failed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Raw HID/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/0xff60/)).not.toBeInTheDocument();
   });
 });

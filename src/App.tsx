@@ -53,6 +53,7 @@ import { DirtyStateProvider, useDirtyRegistration } from "./navigation/DirtyStat
 import { StudioTabView } from "./navigation/StudioTabView";
 import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
 import { handleNotificationEnd } from "./notificationEnd";
+import { normalizeConnectionError } from "./copy/connectionErrors";
 
 declare global {
   interface Window {
@@ -167,12 +168,14 @@ async function connect(
       transport: isWireless ? "ble" : "usb",
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "デバイスへの接続に失敗しました";
+    const message = normalizeConnectionError(error);
+    console.error("Failed to initialize Studio connection:", error);
     abortController.abort("Device info request failed");
     await disposeTransport(transport, "Device info request failed");
-    onError(message);
-    throw error instanceof Error ? error : new Error(message);
+    if (message) {
+      onError(message);
+    }
+    throw error;
   }
 
   const onNotificationEnd = () => handleNotificationEnd(signal.aborted, onUnexpectedDisconnect);

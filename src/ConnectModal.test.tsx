@@ -4,7 +4,7 @@ import {
   ConnectModal,
   type TransportFactory,
 } from "./ConnectModal";
-import { getConnectionErrorMessage } from "./copy/connectionErrors";
+import { normalizeConnectionError } from "./copy/connectionErrors";
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
 import { UserCancelledError } from "@zmkfirmware/zmk-studio-ts-client/transport/errors";
 
@@ -26,19 +26,19 @@ const RIGHT_USB_BUTTON_NAME =
 const CONNECTION_FAILURE_MESSAGE =
   "キーボードに接続できませんでした。接続を確認して、もう一度お試しください。";
 
-describe("getConnectionErrorMessage", () => {
+describe("normalizeConnectionError", () => {
   it("normalizes technical connection failures without exposing their text", () => {
-    expect(getConnectionErrorMessage(new Error("RPC Failed: raw HID 0xff60"))).toBe(
+    expect(normalizeConnectionError(new Error("RPC Failed: raw HID 0xff60"))).toBe(
       CONNECTION_FAILURE_MESSAGE,
     );
-    expect(getConnectionErrorMessage("Failed to open serial port")).toBe(
+    expect(normalizeConnectionError("Failed to open serial port")).toBe(
       CONNECTION_FAILURE_MESSAGE,
     );
   });
 
   it("keeps user cancellation silent", () => {
     expect(
-      getConnectionErrorMessage(
+      normalizeConnectionError(
         new UserCancelledError("User cancelled", { cause: undefined }),
       ),
     ).toBeUndefined();

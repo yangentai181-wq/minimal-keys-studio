@@ -5,7 +5,7 @@ import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/i
 import { useModalRef } from "./misc/useModalRef";
 import { GenericModal } from "./GenericModal";
 import type { AvailableDevice } from "./tauri";
-import { getConnectionErrorMessage } from "./copy/connectionErrors";
+import { normalizeConnectionError } from "./copy/connectionErrors";
 
 export type TransportFactory = {
   label: string;
@@ -107,7 +107,7 @@ function SimpleDevicePicker({
       await onConnectRightUsb();
     } catch (e) {
       console.error(e);
-      const message = getConnectionErrorMessage(e);
+      const message = normalizeConnectionError(e);
       if (message) {
         setErrorMessage(message);
       }
@@ -128,7 +128,7 @@ function SimpleDevicePicker({
         }
       } catch (e) {
         console.error(e);
-        const message = getConnectionErrorMessage(e);
+        const message = normalizeConnectionError(e);
         if (message) {
           setErrorMessage(message);
         }
@@ -309,7 +309,7 @@ function DeviceList({
       await onTransportCreated(rpcTransport, transport.isWireless);
     } catch (e) {
       console.error("Failed to connect:", e);
-      const message = getConnectionErrorMessage(e);
+      const message = normalizeConnectionError(e);
       if (message) {
         setErrorMessage(message);
       }

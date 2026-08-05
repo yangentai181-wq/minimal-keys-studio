@@ -11,6 +11,7 @@ const userFacingSources = [
   "src/holdtap/HoldTapSettings.tsx",
   "src/rpc/rpcCall.ts",
   "src/ConnectModal.tsx",
+  "src/App.tsx",
 ];
 
 describe("user-facing failure copy", () => {
