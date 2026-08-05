@@ -32,3 +32,10 @@
 - The original error remains available to `console.error`; raw RPC, device-info, native transport, and English error text cannot reach the App toast.
 - The integration test invokes the App transport callback and proves that a raw device-information failure reaches the fixed Japanese message instead.
 - Focused: 5 files / 24 tests passed. Full: 104 files / 666 tests passed. Lint, web build, and Tauri build passed.
+
+## Fix round 3
+
+- ErrorBoundary no longer renders `Error.message`; it keeps error and stack telemetry/developer logging while showing only safe Japanese recovery guidance.
+- The App device-info route now disposes and rethrows without producing a toast. ConnectModal is the single alert surface for a connection attempt, preventing duplicate feedback.
+- The user-facing source scan includes ErrorBoundary and rejects raw `this.state.error?.message` JSX rendering.
+- Focused: 7 files / 30 tests passed. Full: 104 files / 666 tests passed. Lint, web build, and Tauri build passed.

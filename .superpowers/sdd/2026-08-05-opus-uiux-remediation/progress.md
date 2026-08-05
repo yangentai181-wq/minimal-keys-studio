@@ -13,3 +13,4 @@ Task 3: complete (commits f707b94..c265f45, independent re-review clean — Crit
 Task 4: implementation ready for review (22 audited failure paths centralized in Japanese copy, toast regression scan added; focused 2 tests, full 660 tests, lint/build/Tauri build pass)
 Task 4: fix round 1/5 (3 addressed, 0 open — normalized connection errors, renderer regression protection, live CW/CCW encoder recovery messages; focused 27 tests, full 665 tests, lint/build/Tauri build pass)
 Task 4: fix round 2/5 (1 addressed, 0 open — App device-info failure normalizes before toast; focused 24 tests, full 666 tests, lint/build/Tauri build pass)
+Task 4: fix round 3/5 (2 addressed, 0 open — safe ErrorBoundary fallback and single modal connection-failure surface; focused 30 tests, full 666 tests, lint/build/Tauri build pass)

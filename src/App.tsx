@@ -53,7 +53,6 @@ import { DirtyStateProvider, useDirtyRegistration } from "./navigation/DirtyStat
 import { StudioTabView } from "./navigation/StudioTabView";
 import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
 import { handleNotificationEnd } from "./notificationEnd";
-import { normalizeConnectionError } from "./copy/connectionErrors";
 
 declare global {
   interface Window {
@@ -151,7 +150,6 @@ async function connect(
   setConn: Dispatch<ConnectionState>,
   setConnectedDeviceName: Dispatch<string | undefined>,
   abortController: AbortController,
-  onError: (msg: string) => void,
   onUnexpectedDisconnect: () => void | Promise<void>,
   isWireless?: boolean,
 ) {
@@ -168,13 +166,9 @@ async function connect(
       transport: isWireless ? "ble" : "usb",
     });
   } catch (error) {
-    const message = normalizeConnectionError(error);
     console.error("Failed to initialize Studio connection:", error);
     abortController.abort("Device info request failed");
     await disposeTransport(transport, "Device info request failed");
-    if (message) {
-      onError(message);
-    }
     throw error;
   }
 
@@ -332,7 +326,6 @@ function AppInner() {
         setConn,
         setConnectedDeviceName,
         ac,
-        (msg) => toast(msg, "error"),
         () => session.handleUnexpectedDisconnect(() => {
           setConnectedDeviceName(undefined);
           setConn({ conn: null });
@@ -340,7 +333,7 @@ function AppInner() {
         isWireless,
       );
     },
-    [setConn, setConnectedDeviceName, toast, session],
+    [setConn, setConnectedDeviceName, session],
   );
 
   // Studio RPC probe for the right-USB flow: only a successful

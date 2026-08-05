@@ -21,15 +21,18 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("正常なコンテンツ")).toBeTruthy();
   });
 
-  it("shows fallback UI when child throws", () => {
+  it("shows safe recovery guidance without exposing the caught error", () => {
     render(
       <ErrorBoundary>
-        <ThrowingComponent message="テストエラー" />
+        <ThrowingComponent message="RPC Failed: native stack at 0xff60" />
       </ErrorBoundary>
     );
     expect(screen.getByText("問題が発生しました")).toBeTruthy();
-    expect(screen.getByText("テストエラー")).toBeTruthy();
     expect(screen.getByText("再読み込み")).toBeTruthy();
+    expect(screen.getByText(/キーボードの設定は影響を受けていません/)).toBeTruthy();
+    expect(screen.queryByText(/RPC Failed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/native stack/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/0xff60/)).not.toBeInTheDocument();
     expect(screen.getByText(/設定を初期化/)).toBeTruthy();
   });
 

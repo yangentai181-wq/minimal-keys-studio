@@ -39,25 +39,37 @@ vi.mock("./AppFooter", () => ({
   AppFooter: () => <footer>APP_FOOTER</footer>,
 }));
 
-vi.mock("./ConnectModal", () => ({
+vi.mock("./ConnectModal", async () => {
+  const { useState } = await import("react");
+  const { normalizeConnectionError } = await import("./copy/connectionErrors");
+  return {
   ConnectModal: ({
     open,
     onTransportCreated,
   }: {
     open?: boolean;
     onTransportCreated: (transport: object) => Promise<void>;
-  }) =>
-    open ? (
-      <button
-        type="button"
-        onClick={() => {
-          void onTransportCreated({}).catch(() => {});
-        }}
-      >
-        CONNECT_MODAL_OPEN
-      </button>
-    ) : null,
-}));
+  }) => {
+    const [errorMessage, setErrorMessage] = useState<string | undefined>();
+    if (!open) return null;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            void onTransportCreated({}).catch((error: unknown) => {
+              setErrorMessage(normalizeConnectionError(error));
+            });
+          }}
+        >
+          CONNECT_MODAL_OPEN
+        </button>
+        {errorMessage && <p role="alert">{errorMessage}</p>}
+      </>
+    );
+  },
+  };
+});
 
 vi.mock("./UnlockModal", () => ({
   UnlockModal: () => null,
@@ -112,7 +124,7 @@ describe("App disconnected shell", () => {
     expect(screen.queryByText("KEYBOARD_MOUNTED")).not.toBeInTheDocument();
   });
 
-  it("normalizes device-info failures before the App connection flow reaches a toast", async () => {
+  it("uses the modal alert as the only failure surface after an App device-info failure", async () => {
     mocks.createRpcConnection.mockResolvedValue({});
     mocks.requestDeviceInfo.mockRejectedValue(
       new Error("RPC Failed: native Raw HID device-info request 0xff60"),
@@ -125,7 +137,12 @@ describe("App disconnected shell", () => {
       await screen.findByText(
         "キーボードに接続できませんでした。接続を確認して、もう一度お試しください。",
       ),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("role", "alert");
+    expect(
+      screen.getAllByText(
+        "キーボードに接続できませんでした。接続を確認して、もう一度お試しください。",
+      ),
+    ).toHaveLength(1);
     expect(screen.queryByText(/RPC Failed/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Raw HID/)).not.toBeInTheDocument();
     expect(screen.queryByText(/0xff60/)).not.toBeInTheDocument();

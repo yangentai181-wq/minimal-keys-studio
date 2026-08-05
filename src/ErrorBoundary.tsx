@@ -7,17 +7,16 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
@@ -52,9 +51,6 @@ export class ErrorBoundary extends Component<Props, State> {
             </h1>
             <p className="text-sm text-gray-600 mb-2">
               キーボードの設定は影響を受けていません。安心してください。
-            </p>
-            <p className="text-xs text-gray-400 mb-6">
-              {this.state.error?.message}
             </p>
             <button
               onClick={this.handleReload}

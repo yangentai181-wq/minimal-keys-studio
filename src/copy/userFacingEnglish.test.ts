@@ -12,6 +12,7 @@ const userFacingSources = [
   "src/rpc/rpcCall.ts",
   "src/ConnectModal.tsx",
   "src/App.tsx",
+  "src/ErrorBoundary.tsx",
 ];
 
 describe("user-facing failure copy", () => {
@@ -21,6 +22,7 @@ describe("user-facing failure copy", () => {
       expect(contents).not.toMatch(/toast\(\s*[`'"][^`'"]*\bfailed\b/i);
       expect(contents).not.toMatch(/toast\(\s*(?:e|error|message)\b/);
       expect(contents).not.toMatch(/return error\.message/);
+      expect(contents).not.toMatch(/\{\s*this\.state\.error\?\.message\s*\}/);
     }
   });
 });
