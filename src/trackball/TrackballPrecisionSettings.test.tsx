@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 import { useTrackballPrecision } from "./TrackballPrecisionContext";
 import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 
 const updateDraft = vi.fn();
 const save = vi.fn();
@@ -33,6 +34,10 @@ vi.mock("./PrecisionKeyPicker", () => ({
 
 vi.mock("./useConnectedPrecisionSelection", () => ({
   useConnectedPrecisionSelection: vi.fn(() => selection({ supported: true, tapLabel: "A", holdLabel: "なし" })),
+}));
+
+vi.mock("../navigation/DirtyStateContext", () => ({
+  useDirtyRegistration: vi.fn(),
 }));
 
 describe("TrackballPrecisionSettings", () => {
@@ -162,5 +167,20 @@ describe("TrackballPrecisionSettings", () => {
 
     expect(screen.getByRole("button", { name: "もう一度読み込む" })).toBeEnabled();
     expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("keeps navigation on the editor when reloading a precision draft fails", async () => {
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 1000, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save, reload: vi.fn().mockResolvedValue(false),
+    });
+    render(<TrackballPrecisionSettings />);
+
+    const registrations = vi.mocked(useDirtyRegistration).mock.calls
+      .filter(([id]) => id === "trackball-precision");
+    const registration = registrations[registrations.length - 1]?.[1];
+
+    await expect(registration?.discard()).resolves.toBe(false);
   });
 });

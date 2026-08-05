@@ -33,7 +33,7 @@ export interface TrackballPrecisionContextValue {
   error: string | null;
   updateDraft(patch: Partial<PrecisionDraft>): void;
   save(): Promise<boolean>;
-  reload(): Promise<void>;
+  reload(): Promise<boolean>;
 }
 
 const TrackballPrecisionContext = createContext<TrackballPrecisionContextValue | null>(null);
@@ -76,8 +76,8 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     setSaving((current) => generation !== undefined && generation !== generationRef.current ? current : false);
   }, []);
 
-  const reloadFrom = useCallback(async (activeSubsystem: NonNullable<typeof subsystem>, generation: number) => {
-    if (generation !== generationRef.current) return;
+  const reloadFrom = useCallback(async (activeSubsystem: NonNullable<typeof subsystem>, generation: number): Promise<boolean> => {
+    if (generation !== generationRef.current) return false;
     try {
       const response = decodeResponse(await activeSubsystem.callRPC(encodeGet()));
       if (generation !== generationRef.current) return false;
@@ -85,30 +85,32 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
 
       const expectedRevision = expectedRevisionRef.current;
       if (pendingDraftRef.current && expectedRevision !== null) {
-        if (!matchesPending(response.get, pendingDraftRef.current, expectedRevision)) return;
+        if (!matchesPending(response.get, pendingDraftRef.current, expectedRevision)) return false;
         setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
         setAvailability("available");
         finishSaving(generation);
-        return;
+        return true;
       }
       setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
       setAvailability("available");
+      return true;
     } catch (error) {
       if (generation !== generationRef.current) return false;
       setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
       setAvailability("error");
       finishSaving(generation);
+      return false;
     }
   }, [finishSaving]);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (): Promise<boolean> => {
     if (customSubsystems.status === "error") {
       customSubsystems.retry();
-      return;
+      return false;
     }
-    if (!subsystem) return;
+    if (!subsystem) return false;
     setAvailability("loading");
-    await reloadFrom(subsystem, generationRef.current);
+    return reloadFrom(subsystem, generationRef.current);
   }, [customSubsystems, reloadFrom, subsystem]);
 
   useEffect(() => {
@@ -232,8 +234,7 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
         return true;
       }
 
-      await reloadFrom(activeSubsystem, generation);
-      return !stateRef.current.dirty;
+      return reloadFrom(activeSubsystem, generation);
     } catch (error) {
       if (generation !== generationRef.current) return false;
       setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);

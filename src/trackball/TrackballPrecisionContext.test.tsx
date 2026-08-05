@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { Writer } from "protobufjs/minimal";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApplyResult, encodeApply, encodeGet, type TrackballConfig } from "../proto/trackball-settings";
 
@@ -68,6 +69,8 @@ function notification(config: TrackballConfig): Uint8Array {
 
 function Consumer() {
   const value = useTrackballPrecision();
+  const [saveResult, setSaveResult] = useState<string>("none");
+  const [reloadResult, setReloadResult] = useState<string>("none");
   return (
     <>
       <output data-testid="availability">{value.availability}</output>
@@ -77,8 +80,10 @@ function Consumer() {
       <output data-testid="saving">{String(value.saving)}</output>
       <output data-testid="error">{value.error ?? "none"}</output>
       <button onClick={() => value.updateDraft({ normalCpi: 1000 })}>edit</button>
-      <button onClick={() => void value.save()}>save</button>
-      <button onClick={() => void value.reload()}>reload</button>
+      <output data-testid="save-result">{saveResult}</output>
+      <output data-testid="reload-result">{reloadResult}</output>
+      <button onClick={() => void value.save().then((result) => setSaveResult(String(result)))}>save</button>
+      <button onClick={() => void value.reload().then((result) => setReloadResult(String(result)))}>reload</button>
     </>
   );
 }
@@ -142,6 +147,55 @@ describe("TrackballPrecisionProvider", () => {
     expect(screen.getByTestId("saving")).toHaveTextContent("false");
     expect(screen.getByTestId("confirmed")).toHaveTextContent("1000");
     expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+  });
+
+  it("returns success after an OK apply without config is confirmed by a fresh GET", async () => {
+    await discover();
+    subsystem?.callRPC.mockResolvedValueOnce(applyResponse(ApplyResult.OK, null));
+    subsystem?.callRPC.mockResolvedValueOnce(getResponse({ ...initialConfig, revision: 8, normalCpi: 1000 }));
+    await act(async () => screen.getByText("edit").click());
+
+    await act(async () => screen.getByText("save").click());
+
+    await waitFor(() => expect(screen.getByTestId("save-result")).toHaveTextContent("true"));
+    expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+  });
+
+  it("returns false when a reload cannot run because the precision subsystem is unavailable", async () => {
+    renderProvider();
+
+    await act(async () => screen.getByText("reload").click());
+
+    await waitFor(() => expect(screen.getByTestId("reload-result")).toHaveTextContent("false"));
+  });
+
+  it("returns false when reloading precision settings fails over the transport", async () => {
+    await discover();
+    subsystem?.callRPC.mockRejectedValueOnce(new Error("transport lost"));
+
+    await act(async () => screen.getByText("reload").click());
+
+    await waitFor(() => expect(screen.getByTestId("reload-result")).toHaveTextContent("false"));
+  });
+
+  it("returns false when a reload response belongs to a stale connection generation", async () => {
+    let resolveReload: ((value: Uint8Array) => void) | undefined;
+    subsystem = {
+      subsystemIndex: 4,
+      callRPC: vi.fn()
+        .mockResolvedValueOnce(getResponse(initialConfig))
+        .mockImplementationOnce(() => new Promise<Uint8Array>((resolve) => { resolveReload = resolve; })),
+    };
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByTestId("availability")).toHaveTextContent("available"));
+    await act(async () => screen.getByText("reload").click());
+
+    subsystem = null;
+    discovery = { status: "disconnected", retry: retryDiscovery };
+    view.rerender(<TrackballPrecisionProvider><Consumer /></TrackballPrecisionProvider>);
+    await act(async () => resolveReload?.(getResponse(initialConfig)));
+
+    await waitFor(() => expect(screen.getByTestId("reload-result")).toHaveTextContent("false"));
   });
 
   it("restores the confirmed UI and records an unsaved error after a five-second timeout", async () => {

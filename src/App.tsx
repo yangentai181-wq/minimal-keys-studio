@@ -52,6 +52,7 @@ import { StudioConnectionOverview } from "./StudioConnectionOverview";
 import { DirtyStateProvider, useDirtyRegistration } from "./navigation/DirtyStateContext";
 import { StudioTabView } from "./navigation/StudioTabView";
 import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
+import { handleNotificationEnd } from "./notificationEnd";
 
 declare global {
   interface Window {
@@ -174,13 +175,10 @@ async function connect(
     throw error instanceof Error ? error : new Error(message);
   }
 
-  const handleNotificationEnd = () => {
-    if (signal.aborted) return;
-    void onUnexpectedDisconnect();
-  };
+  const onNotificationEnd = () => handleNotificationEnd(signal.aborted, onUnexpectedDisconnect);
   void listen_for_notifications(conn.notification_readable, signal).then(
-    handleNotificationEnd,
-    handleNotificationEnd,
+    onNotificationEnd,
+    onNotificationEnd,
   );
 
   setConnectedDeviceName(details.name);

@@ -69,3 +69,28 @@ passed (existing Vite chunk-size warning only)
 npm run tauri build
 passed (existing Vite chunk-size warning only)
 ```
+
+## Fix round 2
+
+- `reloadFrom` now returns an explicit boolean confirmation result. An OK Apply response without inline configuration returns success only after the follow-up GET confirms the pending draft; stale generations, unavailable capability, and transport failures return false.
+- Precision draft discard delegates to that same result, so failed or unavailable reloads keep dirty-navigation on the current editor.
+- Notification stream completion now uses a small tested classifier. Aborted streams do nothing; unexpected stream endings invoke the existing snapshot-and-clear disconnect callback.
+
+### Verification
+
+```text
+npm test -- src/trackball/TrackballPrecisionContext.test.tsx src/trackball/TrackballPrecisionSettings.test.tsx src/App.notification.test.ts src/navigation/StudioSessionNavigation.test.tsx
+4 files, 43 tests passed
+
+npm test
+102 files, 654 tests passed
+
+npm run lint
+passed
+
+npm run build
+passed (existing Vite chunk-size warning only)
+
+npm run tauri build
+passed (existing Vite chunk-size warning only)
+```

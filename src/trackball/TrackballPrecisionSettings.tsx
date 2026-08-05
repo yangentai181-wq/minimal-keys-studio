@@ -17,7 +17,7 @@ export function TrackballPrecisionSettings() {
   useDirtyRegistration("trackball-precision", {
     dirty,
     save,
-    discard: async () => { await reload(); return true; },
+    discard: reload,
     snapshot: () => draft,
     restore: (snapshot) => updateDraft(snapshot as NonNullable<typeof draft>),
   });
@@ -55,7 +55,7 @@ export function TrackballPrecisionSettings() {
   );
 }
 
-function PrecisionStatus({ availability, retry }: { availability: ReturnType<typeof useTrackballPrecision>["availability"]; retry: () => Promise<void> }) {
+function PrecisionStatus({ availability, retry }: { availability: ReturnType<typeof useTrackballPrecision>["availability"]; retry: () => Promise<boolean> }) {
   const message = {
     loading: "設定を読み込んでいます…",
     disconnected: "キーボードに接続すると設定できます",

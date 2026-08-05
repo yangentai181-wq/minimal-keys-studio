@@ -1,0 +1,10 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-08-05-opus-uiux-remediation.md
+
+Baseline: commit 7324f07; `npm test` 94 files / 601 tests passed.
+Task 1: fix round 1/5 (4 addressed, 0 open — HID read failure state, ambiguous serial selection, production cleanup coverage, listener ordering; commits b9d7499..292248f)
+Task 1: complete (commits 7324f07..292248f, review clean)
+Task 1: note — strict Clippy remains blocked by 13 pre-existing diagnostics in gatt.rs, commands.rs, and serial.rs; final verification must resolve or adjudicate these before completion.
+Task 2: fix round 1/5 (2 addressed, 0 open — settings retry lifecycle and covering UI test; commits b0cf755..6cbf097)
+Task 2: complete (commits 292248f..6cbf097, review clean)
+Task 3: final implementation ready for review (active-tab session boundary, guarded explicit disconnect, unexpected-loss snapshot/restore, Encoder/HoldTap draft preservation; focused 37 tests, full 650 tests, lint/build/Tauri build pass)
+Task 3: fix round 2/5 (3 addressed, 0 open — explicit precision reload confirmation, failed precision discard navigation, tested aborted/unexpected notification-end classification; focused 43 tests, full 654 tests, lint/build/Tauri build pass)
