@@ -10,144 +10,12 @@ import type { KeyRecommendation } from "./key-roles";
 import {
   PhysicalLayout as PhysicalLayoutComp,
 } from "./PhysicalLayout";
-import { HidUsageLabel } from "./HidUsageLabel";
-import { resolveTooltipData } from "./tooltip-data";
 import { useOsMode } from "../OsModeContext";
-import {
-  getHidKeyDescription,
-  getMouseKeyDescription,
-  getMouseScrollDescription,
-} from "./key-descriptions";
-import { hid_usage_page_and_id_from_usage } from "../hid-usages";
-import type { ReactNode } from "react";
-import { modifierSymbols } from "./key-label-utils";
+import { useMemo } from "react";
+import { buildKeyPresentation } from "./key-presentation";
 
 type BehaviorMap = Record<number, GetBehaviorDetailsResponse>;
 
-// Get readable label for a HID usage param
-function hidParamLabel(param: number): string {
-  const [rawPage, id] = hid_usage_page_and_id_from_usage(param);
-  const page = rawPage & 0xff;
-  const desc = getHidKeyDescription(page, id);
-  return desc.roleName;
-}
-
-// Get short layer name for display on keys
-function shortLayerName(layerIndex: number, layerNames: string[]): string {
-  const name = layerNames[layerIndex];
-  if (!name) return `L${layerIndex}`;
-  // Truncate long names
-  if (name.length <= 6) return name;
-  // Use first word or abbreviation
-  const first = name.split(/[\s&/]+/)[0];
-  return first.length <= 6 ? first : first.substring(0, 5);
-}
-
-// Generate smart header + children based on behavior type
-function getKeyDisplay(
-  binding: BehaviorBinding,
-  displayName: string,
-  layerNames: string[],
-): { header: string; children: ReactNode } {
-  switch (displayName) {
-    case "Key Press":
-      return { header: "", children: <HidUsageLabel hid_usage={binding.param1} /> };
-
-    case "Layer-Tap":
-      // param1 = layer, param2 = tap key
-      return {
-        header: shortLayerName(binding.param1, layerNames),
-        children: <span>{hidParamLabel(binding.param2)}</span>,
-      };
-
-    case "LAYER_TAP_MKP":
-      return {
-        header: shortLayerName(binding.param1, layerNames),
-        children: <span>{getMouseKeyDescription(binding.param2).roleName}</span>,
-      };
-
-    case "Mod-Tap":
-      // param1 = modifier, param2 = tap key
-      return {
-        header: modifierSymbols(binding.param1),
-        children: <span>{hidParamLabel(binding.param2)}</span>,
-      };
-
-    case "Hold-Tap":
-      // param1 = hold behavior param, param2 = tap behavior param
-      return {
-        header: "Hold/Tap",
-        children: <span>{hidParamLabel(binding.param2)}</span>,
-      };
-
-    case "Momentary Layer":
-      return {
-        header: "MLayer",
-        children: <span>{shortLayerName(binding.param1, layerNames)}</span>,
-      };
-
-    case "Toggle Layer":
-      return {
-        header: "Toggle",
-        children: <span>{shortLayerName(binding.param1, layerNames)}</span>,
-      };
-
-    case "To Layer":
-      return {
-        header: "To",
-        children: <span>{shortLayerName(binding.param1, layerNames)}</span>,
-      };
-
-    case "Sticky Layer":
-      return {
-        header: "Sticky",
-        children: <span>{shortLayerName(binding.param1, layerNames)}</span>,
-      };
-
-    case "Sticky Key": {
-      const modLabel = modifierSymbols(binding.param1);
-      return {
-        header: "Sticky",
-        children: <span>{modLabel}</span>,
-      };
-    }
-
-    case "Mouse Key Press": {
-      const mouseDesc = getMouseKeyDescription(binding.param1);
-      return {
-        header: "",
-        children: <span>{mouseDesc.roleName}</span>,
-      };
-    }
-
-    case "Mouse Scroll": {
-      const scrollDesc = getMouseScrollDescription(binding.param1);
-      return {
-        header: "Scroll",
-        children: <span>{scrollDesc.roleName}</span>,
-      };
-    }
-
-    case "Bluetooth":
-      return {
-        header: "BT",
-        children: <span>{binding.param1}</span>,
-      };
-
-    case "None":
-      return { header: "None", children: <span></span> };
-
-    case "Transparent":
-      return { header: "Trans", children: <span></span> };
-
-    default:
-      // Fallback: show shortened name + param1 as HID
-      return {
-        header: displayName,
-        children: binding.param1 ? <HidUsageLabel hid_usage={binding.param1} /> : <span></span>,
-      };
-  }
-}
 
 export interface KeymapProps {
   layout: PhysicalLayout;
@@ -174,11 +42,7 @@ export const Keymap = ({
 }: KeymapProps) => {
   const { osMode } = useOsMode();
 
-  if (!keymap.layers[selectedLayerIndex]) {
-    return <></>;
-  }
-
-  const behaviorList = Object.values(behaviors);
+  const behaviorList = useMemo(() => Object.values(behaviors), [behaviors]);
   const os = osMode;
 
   const handleRecommendationClick = (rec: KeyRecommendation) => {
@@ -188,39 +52,11 @@ export const Keymap = ({
     }
   };
 
-  const positions = layout.keys.map((k, i) => {
-    if (i >= keymap.layers[selectedLayerIndex].bindings.length) {
-      return {
-        id: `${keymap.layers[selectedLayerIndex].id}-${i}`,
-        header: "Unknown",
-        x: k.x / 100.0,
-        y: k.y / 100.0,
-        width: k.width / 100,
-        height: k.height / 100.0,
-        children: <span></span>,
-        tooltipData: null,
-      };
-    }
+  const positions = useMemo(() => buildKeyPresentation({ layout, keymap, behaviors, selectedLayerIndex, os }), [layout, keymap, behaviors, selectedLayerIndex, os]);
 
-    const binding = keymap.layers[selectedLayerIndex].bindings[i];
-    const displayName = behaviors[binding.behaviorId]?.displayName || "Unknown";
-    const layerNames = keymap.layers.map((l, li) => l.name || `L${li}`);
-    const { header, children } = getKeyDisplay(binding, displayName, layerNames);
-
-    return {
-      id: `${keymap.layers[selectedLayerIndex].id}-${i}`,
-      header,
-      x: k.x / 100.0,
-      y: k.y / 100.0,
-      width: k.width / 100,
-      height: k.height / 100.0,
-      r: (k.r || 0) / 100.0,
-      rx: (k.rx || 0) / 100.0,
-      ry: (k.ry || 0) / 100.0,
-      children,
-      tooltipData: resolveTooltipData(binding, behaviorList, i, os),
-    };
-  });
+  if (!keymap.layers[selectedLayerIndex]) {
+    return <></>;
+  }
 
   return (
     <PhysicalLayoutComp

@@ -403,7 +403,7 @@ function AppInner() {
               {showMonitorOnly && (
                 <div className="bg-base-100 text-base-content h-dvh w-full overflow-hidden">
                   <MonitorPanel
-                    snapshot={rightUsb.monitor}
+                    monitorStore={rightUsb.monitorStore}
                     description={rightUsb.description}
                     editorAvailable={false}
                     busy={rightUsb.connecting}
@@ -435,7 +435,7 @@ function AppInner() {
                     onResetSettings={resetSettings}
                   />
                   <StudioConnectionOverview
-                    monitor={rightUsb.monitor}
+                    monitorStore={rightUsb.monitorStore}
                     monitorActive={rightUsb.monitorActive}
                     editorAvailable={!!conn.conn}
                     connectionTitle={rightUsb.description.title}

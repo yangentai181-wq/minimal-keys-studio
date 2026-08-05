@@ -15,25 +15,14 @@ import {
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
 import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
+import { createMonitorStore } from "./monitor/monitorStore";
 
 const previewActiveLayer = 3;
 const previewPressedKeys = new Set([30]);
-const previewMonitor = {
-  pressed: previewPressedKeys,
-  defaultLayer: 0,
-  activeLayerMask: 1 << previewActiveLayer,
-  activeLayerIndex: previewActiveLayer,
-  pointer: {
-    dx: 12,
-    dy: -4,
-    wheel: 0,
-    hwheel: 0,
-    buttons: 0,
-    at: 100,
-  },
-  encoders: {},
-  lastEventAt: 100,
-};
+const previewMonitorStore = createMonitorStore();
+previewMonitorStore.push({ kind: "layer", defaultLayer: 0, activeLayerMask: 1 << previewActiveLayer });
+previewMonitorStore.push({ kind: "key", position: 30, pressed: true });
+previewMonitorStore.push({ kind: "pointer", dx: 12, dy: -4, wheel: 0, hwheel: 0, buttons: 0 });
 
 const layers = MONITOR_LAYER_NAMES.map((name, id) => ({
   id,
@@ -271,7 +260,7 @@ export function UnifiedStudioPreview() {
       </header>
 
       <StudioConnectionOverview
-        monitor={previewMonitor}
+        monitorStore={previewMonitorStore}
         monitorActive
         editorAvailable
         connectionTitle="エディタ / モニタ統合"

@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, waitFor } from "@testing-library/react";
+import { useEffect, useRef } from "react";
 
 import type { RawHidSubscription } from "./rawHid";
 import {
   connectTauriSerialDevice,
   useRightUsbConnection,
 } from "./useRightUsbConnection";
+import { useMonitorSnapshot } from "../monitor/useMonitorSnapshot";
 
 const { tauriListDevicesMock, tauriSerialConnectMock } = vi.hoisted(() => ({
   tauriListDevicesMock: vi.fn(),
@@ -57,6 +59,54 @@ vi.mock("../transport/serial", async (importOriginal) => {
 });
 
 describe("useRightUsbConnection monitor open/close race", () => {
+  it("updates only the monitor leaf for pointer frames", async () => {
+    let pushPointer: (() => void) | undefined;
+    const renders = { header: 0, editor: 0, monitor: 0 };
+    const subscription: RawHidSubscription = { device: {} as RawHidSubscription["device"], close: vi.fn(async () => {}) };
+
+    function MonitorLeaf({ store }: { store: ReturnType<typeof useRightUsbConnection>["monitorStore"] }) {
+      const snapshot = useMonitorSnapshot(store);
+      renders.monitor += 1;
+      return <span>{snapshot.pointer?.dx ?? 0}</span>;
+    }
+    function Shell() {
+      const started = useRef(false);
+      const connection = useRightUsbConnection({
+        probeStudioRpc: vi.fn(async () => {}),
+        platform: {
+          connectMonitor: vi.fn(async (receive) => {
+            pushPointer = () => receive({ kind: "pointer", dx: 7, dy: 0, wheel: 0, hwheel: 0, buttons: 0 });
+            return subscription;
+          }),
+          detect: vi.fn(async () => ({ hidDevices: [], serialPorts: [], rawHidVisible: true, serialVisible: true })),
+          logDetection: vi.fn(),
+          openSerialTransport: vi.fn(async () => { throw new Error("not under test"); }),
+        },
+      });
+      const connectionRef = useRef(connection);
+      connectionRef.current = connection;
+      useEffect(() => {
+        if (!started.current) {
+          started.current = true;
+          void connectionRef.current.connectRightUsb();
+        }
+      }, []);
+      renders.header += 1;
+      renders.editor += 1;
+      return <><header /><main /><MonitorLeaf store={connection.monitorStore} /></>;
+    }
+
+    render(<Shell />);
+    await waitFor(() => expect(pushPointer).toBeDefined());
+    renders.header = 0;
+    renders.editor = 0;
+    renders.monitor = 0;
+    act(() => pushPointer?.());
+    await waitFor(() => expect(renders.monitor).toBeGreaterThan(0));
+
+    expect(renders.header).toBe(0);
+    expect(renders.editor).toBe(0);
+  });
   it("rejects ambiguous native serial candidates without opening either device", async () => {
     tauriListDevicesMock.mockResolvedValue([
       { id: "right", label: "right keyboard" },

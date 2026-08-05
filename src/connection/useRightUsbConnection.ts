@@ -7,7 +7,6 @@ import {
   useReducer,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
 
@@ -30,13 +29,14 @@ import {
 } from "../tauri/serial";
 import {
   createMonitorStore,
-  type MonitorSnapshot,
+  type MonitorStore,
 } from "../monitor/monitorStore";
 
 export type RightUsbConnection = {
   state: CoordinatorState;
   description: ConnectionDescription;
-  monitor: MonitorSnapshot;
+  /** A stable source of Raw HID frames. Only monitor UI leaves subscribe. */
+  monitorStore: MonitorStore;
   monitorActive: boolean;
   connecting: boolean;
   /** Full right-USB flow: Raw HID monitor + Studio RPC probe. */
@@ -110,11 +110,6 @@ export function useRightUsbConnection(options: {
   // the late subscription must be discarded instead of leaking an opened
   // HIDDevice behind a closed UI.
   const monitorGenerationRef = useRef(0);
-
-  const monitor = useSyncExternalStore(
-    storeRef.current.subscribe,
-    storeRef.current.getSnapshot,
-  );
 
   const openMonitor = useCallback(async () => {
     if (subscriptionRef.current) {
@@ -209,7 +204,7 @@ export function useRightUsbConnection(options: {
   return {
     state,
     description,
-    monitor,
+    monitorStore: storeRef.current,
     monitorActive: state.contracts.rawHidMonitor,
     connecting,
     connectRightUsb,

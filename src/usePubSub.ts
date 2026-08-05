@@ -1,5 +1,5 @@
 import Emittery from "emittery";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 const emitter = new Emittery();
 
@@ -14,13 +14,30 @@ export const useSub = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   callback: (data: any) => void | Promise<void>
 ) => {
-  const unsub = () => emitter.off(name, callback);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Be sure we unsub if unmounted.
+  const unsubscribe = useCallback(() => {
+    unsubscribeRef.current?.();
+  }, []);
+
   useEffect(() => {
-    emitter.on(name, callback);
-    return () => unsub();
-  });
+    const proxy = (data: unknown) => callbackRef.current(data);
+    let disposed = false;
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true;
+      emitter.off(name, proxy);
+      if (unsubscribeRef.current === dispose) {
+        unsubscribeRef.current = null;
+      }
+    };
 
-  return unsub;
+    emitter.on(name, proxy);
+    unsubscribeRef.current = dispose;
+    return dispose;
+  }, [name]);
+
+  return unsubscribe;
 };

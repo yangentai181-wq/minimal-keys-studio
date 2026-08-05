@@ -8,14 +8,15 @@ import { isLayerActive } from "../connection/rawHidFrames";
 import { LayerPicker } from "../keyboard/LayerPicker";
 import { AUTO_MOUSE_LAYER_INDEX } from "../keyboard/minimal-keys-layers";
 import { StudioConnectionOverview } from "../StudioConnectionOverview";
-import type { MonitorSnapshot } from "./monitorStore";
+import type { MonitorStore } from "./monitorStore";
+import { useMonitorSnapshot } from "./useMonitorSnapshot";
 
 import { MinimalKeysMonitorLayout } from "./MinimalKeysMonitorLayout";
 import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import { MONITOR_LAYER_NAMES } from "./layerNames";
 
 export interface MonitorPanelProps {
-  snapshot: MonitorSnapshot;
+  monitorStore: MonitorStore;
   description: ConnectionDescription;
   editorAvailable: boolean;
   busy?: boolean;
@@ -25,7 +26,7 @@ export interface MonitorPanelProps {
 }
 
 export function MonitorPanel({
-  snapshot,
+  monitorStore,
   description,
   editorAvailable,
   busy,
@@ -33,6 +34,7 @@ export function MonitorPanel({
   onConnectBle,
   onClose,
 }: MonitorPanelProps) {
+  const snapshot = useMonitorSnapshot(monitorStore);
   const layers = MONITOR_LAYER_NAMES.map((name, id) => ({ id, name }));
   const pressedList = [...snapshot.pressed].sort((a, b) => a - b);
   const autoMouseActive = isLayerActive(
@@ -62,7 +64,7 @@ export function MonitorPanel({
       </header>
 
       <StudioConnectionOverview
-        monitor={snapshot}
+        monitorStore={monitorStore}
         monitorActive={true}
         editorAvailable={editorAvailable}
         connectionTitle={description.title}

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
-import { initialMonitorSnapshot } from "./monitor/monitorStore";
+import { createMonitorStore } from "./monitor/monitorStore";
 import { useTrackballPrecision } from "./trackball/TrackballPrecisionContext";
 
 const confirmed = {
@@ -30,6 +30,13 @@ const precisionContext = (overrides = {}) => ({
   ...overrides,
 });
 
+function monitorStore() {
+  return createMonitorStore((notify) => {
+    notify();
+    return () => {};
+  });
+}
+
 vi.mock("./trackball/TrackballPrecisionContext", () => ({
   useTrackballPrecision: vi.fn(),
 }));
@@ -39,7 +46,7 @@ describe("StudioConnectionOverview", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue(precisionContext());
     render(
       <StudioConnectionOverview
-        monitor={initialMonitorSnapshot}
+        monitorStore={monitorStore()}
         monitorActive={false}
         editorAvailable
         connectionTitle="エディター利用可"
@@ -60,7 +67,7 @@ describe("StudioConnectionOverview", () => {
   it("routes confirmed precision status through the connected overview and updates notification state", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue(precisionContext());
     const props = {
-      monitor: initialMonitorSnapshot,
+      monitorStore: monitorStore(),
       monitorActive: false,
       editorAvailable: true,
       connectionTitle: "エディター利用可",
@@ -83,7 +90,7 @@ describe("StudioConnectionOverview", () => {
   it("does not mount precision status without an editor connection or available firmware", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue(precisionContext());
     const props = {
-      monitor: initialMonitorSnapshot,
+      monitorStore: monitorStore(),
       monitorActive: true,
       editorAvailable: false,
       connectionTitle: "Raw HIDで監視中",
@@ -104,20 +111,13 @@ describe("StudioConnectionOverview", () => {
   it("renders real editor and monitor status from props", () => {
     render(
       <StudioConnectionOverview
-        monitor={{
-          ...initialMonitorSnapshot,
-          pressed: new Set([30]),
-          activeLayerIndex: 3,
-          activeLayerMask: 0b1000,
-          pointer: {
-            dx: 12,
-            dy: -4,
-            wheel: 0,
-            hwheel: 0,
-            buttons: 0,
-            at: 100,
-          },
-        }}
+        monitorStore={(() => {
+          const store = monitorStore();
+          store.push({ kind: "layer", defaultLayer: 0, activeLayerMask: 0b1000 });
+          store.push({ kind: "key", position: 30, pressed: true });
+          store.push({ kind: "pointer", dx: 12, dy: -4, wheel: 0, hwheel: 0, buttons: 0 });
+          return store;
+        })()}
         monitorActive
         editorAvailable
         connectionTitle="エディター利用可"
@@ -145,7 +145,7 @@ describe("StudioConnectionOverview", () => {
   it("offers action content when supplied", () => {
     render(
       <StudioConnectionOverview
-        monitor={initialMonitorSnapshot}
+        monitorStore={monitorStore()}
         monitorActive={false}
         editorAvailable
         connectionTitle="エディター利用可"
