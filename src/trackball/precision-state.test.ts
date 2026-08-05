@@ -4,8 +4,8 @@ import {
   acceptConfig,
   beginSave,
   createPrecisionState,
+  disconnectPrecisionState,
   handleApplyResponse,
-  reconnect,
   transportError,
   updateDraft,
   validateDraft,
@@ -41,10 +41,16 @@ describe("precision state", () => {
     expect(next.error).toBe("接続が切れました");
   });
 
-  it("discards browser-only draft state on reconnect", () => {
+  it("preserves confirmed values and a dirty draft when disconnected during save", () => {
     const state = beginSave(updateDraft(acceptConfig(createPrecisionState(), config()), { normalCpi: 1000 }));
     expect(state.pending).toEqual(state.draft);
-    expect(reconnect(state)).toEqual({ confirmed: null, draft: null, pending: null, dirty: false, error: null });
+    expect(disconnectPrecisionState(state)).toEqual({
+      confirmed: config(),
+      draft: { normalCpi: 1000, precisionCpi: 200, enabled: true, selectedPosition: 0 },
+      pending: null,
+      dirty: true,
+      error: null,
+    });
   });
 
   it("accepts matching and newer revisions but rejects stale revisions", () => {
@@ -64,6 +70,14 @@ describe("precision state", () => {
     expect(next.draft?.normalCpi).toBe(1000);
     expect(next.dirty).toBe(true);
     expect(next.pending).toBeNull();
+  });
+
+  it("keeps a dirty draft when a newer device revision arrives", () => {
+    const dirty = updateDraft(acceptConfig(createPrecisionState(), config(4)), { normalCpi: 1000 });
+    const next = acceptConfig(dirty, config(5));
+    expect(next.draft?.normalCpi).toBe(1000);
+    expect(next.confirmed?.revision).toBe(5);
+    expect(next.dirty).toBe(true);
   });
 
   it("only confirms a pending draft from a matching successful apply response", () => {

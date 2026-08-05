@@ -6,4 +6,14 @@ export interface CustomSubsystemConnection {
   callRPC: (payload: Uint8Array) => Promise<Uint8Array>;
 }
 
-export const CustomSubsystemsContext = createContext<CustomSubsystemInfo[]>([]);
+export interface CustomSubsystemsState {
+  status: "disconnected" | "loading" | "ready" | "error";
+  subsystems: CustomSubsystemInfo[];
+  retry(): void;
+}
+
+export const CustomSubsystemsContext = createContext<CustomSubsystemsState>({
+  status: "disconnected",
+  subsystems: [],
+  retry: () => {},
+});

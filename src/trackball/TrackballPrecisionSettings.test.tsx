@@ -6,6 +6,7 @@ import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection
 
 const updateDraft = vi.fn();
 const save = vi.fn();
+const reload = vi.fn();
 const selection = (analysis: { supported: true; tapLabel: string; holdLabel: string } | { supported: false; reason: string } | null) => ({ keymap: undefined, behaviors: [], analysis });
 
 vi.mock("./TrackballPrecisionContext", () => ({
@@ -22,7 +23,7 @@ vi.mock("./TrackballPrecisionContext", () => ({
     error: null,
     updateDraft,
     save,
-    reload: vi.fn(),
+    reload,
   })),
 }));
 
@@ -129,6 +130,37 @@ describe("TrackballPrecisionSettings", () => {
     render(<TrackballPrecisionSettings />);
 
     expect(screen.getByText("ファームウェアの更新が必要です")).toBeVisible();
-    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["loading", "設定を読み込んでいます…"],
+    ["disconnected", "キーボードに接続すると設定できます"],
+    ["firmware-update-required", "ファームウェアの更新が必要です"],
+    ["error", "設定の読み込みに失敗しました"],
+  ] as const)("shows the truthful %s state", (availability, message) => {
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability,
+      confirmed: availability === "disconnected" ? {
+        schemaVersion: 1, normalCpi: 800, precisionCpi: 200, enabled: false,
+        selectedPosition: 0, originalBinding: null, revision: 1, precisionActive: false, currentCpi: 800,
+      } : null,
+      draft: null, dirty: false, saving: false, error: null, updateDraft, save, reload,
+    });
+    render(<TrackballPrecisionSettings />);
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it("retries a failed load", () => {
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "error", confirmed: null, draft: null, dirty: false, saving: false, error: null,
+      updateDraft, save, reload,
+    });
+    render(<TrackballPrecisionSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "もう一度読み込む" }));
+
+    expect(screen.getByRole("button", { name: "もう一度読み込む" })).toBeEnabled();
+    expect(reload).toHaveBeenCalledOnce();
   });
 });

@@ -5,9 +5,12 @@ import { ApplyResult, encodeApply, encodeGet, type TrackballConfig } from "../pr
 
 let subsystem: { subsystemIndex: number; callRPC: ReturnType<typeof vi.fn> } | null = null;
 let notificationHandler: ((payload: Uint8Array) => void) | undefined;
+const retryDiscovery = vi.fn();
+let discovery: { status: "disconnected" | "loading" | "ready" | "error"; retry: () => void } = { status: "ready", retry: retryDiscovery };
 
 vi.mock("../rpc/useCustomSubsystem", () => ({
   useCustomSubsystem: () => subsystem,
+  useCustomSubsystems: () => discovery,
   useCustomNotification: (_index: number | undefined, handler: (payload: Uint8Array) => void) => {
     notificationHandler = handler;
   },
@@ -93,6 +96,8 @@ afterEach(() => {
   subsystem = null;
   notificationHandler = undefined;
   vi.useRealTimers();
+  discovery = { status: "ready", retry: retryDiscovery };
+  retryDiscovery.mockClear();
 });
 
 describe("TrackballPrecisionProvider", () => {
@@ -156,9 +161,17 @@ describe("TrackballPrecisionProvider", () => {
     await act(async () => screen.getByText("edit").click());
     await act(async () => screen.getByText("save").click());
 
-    await waitFor(() => expect(screen.getByTestId("error")).toHaveTextContent("transport lost"));
+    await waitFor(() => expect(screen.getByTestId("error")).toHaveTextContent("デバイスとの通信に失敗しました"));
     expect(screen.getByTestId("confirmed")).toHaveTextContent("800");
     expect(screen.getByTestId("draft")).toHaveTextContent("1000");
+  });
+
+  it("reports an error when the initial settings read fails", async () => {
+    subsystem = { subsystemIndex: 4, callRPC: vi.fn().mockRejectedValue(new Error("transport lost")) };
+    renderProvider();
+
+    await waitFor(() => expect(screen.getByTestId("availability")).toHaveTextContent("error"));
+    expect(screen.getByTestId("error")).toHaveTextContent("デバイスとの通信に失敗しました");
   });
 
   it("reloads after a stale response and does not overwrite the device state", async () => {
@@ -170,28 +183,30 @@ describe("TrackballPrecisionProvider", () => {
 
     await waitFor(() => expect(subsystem?.callRPC).toHaveBeenCalledWith(encodeGet()));
     await waitFor(() => expect(screen.getByTestId("confirmed")).toHaveTextContent("1400"));
-    expect(screen.getByTestId("draft")).toHaveTextContent("1400");
-    expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+    expect(screen.getByTestId("draft")).toHaveTextContent("1000");
+    expect(screen.getByTestId("dirty")).toHaveTextContent("true");
   });
 
-  it("drops browser-only drafts on disconnect and refetches on reconnect", async () => {
+  it("preserves browser drafts on disconnect and refetches on reconnect", async () => {
     subsystem = { subsystemIndex: 4, callRPC: vi.fn().mockResolvedValue(getResponse(initialConfig)) };
     const view = renderProvider();
     await waitFor(() => expect(screen.getByTestId("availability")).toHaveTextContent("available"));
     await act(async () => screen.getByText("edit").click());
     subsystem = null;
+    discovery = { status: "disconnected", retry: retryDiscovery };
     view.rerender(
       <TrackballPrecisionProvider><Consumer /></TrackballPrecisionProvider>,
     );
-    expect(screen.getByTestId("availability")).toHaveTextContent("firmware-update-required");
-    expect(screen.getByTestId("draft")).toHaveTextContent("none");
+    expect(screen.getByTestId("availability")).toHaveTextContent("disconnected");
+    expect(screen.getByTestId("draft")).toHaveTextContent("1000");
 
     subsystem = { subsystemIndex: 4, callRPC: vi.fn().mockResolvedValue(getResponse({ ...initialConfig, revision: 8, normalCpi: 1200 })) };
+    discovery = { status: "ready", retry: retryDiscovery };
     view.rerender(
       <TrackballPrecisionProvider><Consumer /></TrackballPrecisionProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("confirmed")).toHaveTextContent("1200"));
-    expect(screen.getByTestId("draft")).toHaveTextContent("1200");
+    expect(screen.getByTestId("draft")).toHaveTextContent("1000");
   });
 
   it("ignores an in-flight save from a disconnected subsystem after reconnect", async () => {
@@ -218,7 +233,7 @@ describe("TrackballPrecisionProvider", () => {
     await act(async () => resolveOldApply?.(applyResponse(ApplyResult.OK, { ...initialConfig, revision: 8, normalCpi: 1200 })));
 
     expect(screen.getByTestId("confirmed")).toHaveTextContent("1400");
-    expect(screen.getByTestId("draft")).toHaveTextContent("1400");
+    expect(screen.getByTestId("draft")).toHaveTextContent("1000");
     expect(screen.getByTestId("error")).toHaveTextContent("none");
     expect(screen.getByTestId("saving")).toHaveTextContent("false");
     expect(oldSubsystem.callRPC).toHaveBeenCalledTimes(2);
@@ -229,5 +244,22 @@ describe("TrackballPrecisionProvider", () => {
 
     expect(screen.getByTestId("availability")).toHaveTextContent("firmware-update-required");
     expect(screen.getByTestId("runtime-editor")).toBeInTheDocument();
+  });
+
+  it("reports discovery loading and errors without calling the settings subsystem", () => {
+    discovery = { status: "loading", retry: retryDiscovery };
+    const view = renderProvider();
+    expect(screen.getByTestId("availability")).toHaveTextContent("loading");
+
+    discovery = { status: "error", retry: retryDiscovery };
+    view.rerender(<TrackballPrecisionProvider><Consumer /></TrackballPrecisionProvider>);
+    expect(screen.getByTestId("availability")).toHaveTextContent("error");
+  });
+
+  it("retries capability discovery before reloading settings after a discovery failure", async () => {
+    discovery = { status: "error", retry: retryDiscovery };
+    renderProvider();
+    await act(async () => screen.getByText("reload").click());
+    expect(retryDiscovery).toHaveBeenCalledOnce();
   });
 });

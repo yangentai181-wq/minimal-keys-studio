@@ -9,13 +9,13 @@ import {
   type PrecisionDraft,
   type TrackballConfig,
 } from "../proto/trackball-settings";
-import { useCustomNotification, useCustomSubsystem } from "../rpc/useCustomSubsystem";
+import { useCustomNotification, useCustomSubsystem, useCustomSubsystems } from "../rpc/useCustomSubsystem";
 import {
   acceptConfig,
   beginSave,
   createPrecisionState,
   handleApplyResponse,
-  reconnect,
+  disconnectPrecisionState,
   transportError,
   updateDraft as updatePrecisionDraft,
   validateDraft,
@@ -25,7 +25,7 @@ import {
 const SAVE_TIMEOUT_MS = 5000;
 
 export interface TrackballPrecisionContextValue {
-  availability: "loading" | "available" | "firmware-update-required";
+  availability: "loading" | "available" | "disconnected" | "firmware-update-required" | "error";
   confirmed: TrackballConfig | null;
   draft: PrecisionDraft | null;
   dirty: boolean;
@@ -47,11 +47,13 @@ function matchesPending(config: TrackballConfig, pending: PrecisionDraft, expect
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "デバイスとの通信に失敗しました";
+  void error;
+  return "デバイスとの通信に失敗しました";
 }
 
 export function TrackballPrecisionProvider({ children }: { children: React.ReactNode }) {
   const subsystem = useCustomSubsystem(SUBSYSTEM_ID);
+  const customSubsystems = useCustomSubsystems();
   const [availability, setAvailability] = useState<TrackballPrecisionContextValue["availability"]>("loading");
   const [state, setState] = useState<PrecisionState>(createPrecisionState);
   const [saving, setSaving] = useState(false);
@@ -97,16 +99,35 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
   }, [finishSaving]);
 
   const reload = useCallback(async () => {
+    if (customSubsystems.status === "error") {
+      customSubsystems.retry();
+      return;
+    }
     if (!subsystem) return;
     await reloadFrom(subsystem, generationRef.current);
-  }, [reloadFrom, subsystem]);
+  }, [customSubsystems, reloadFrom, subsystem]);
 
   useEffect(() => {
     const generation = ++generationRef.current;
+    if (customSubsystems.status === "disconnected") {
+      finishSaving();
+      setAvailability("disconnected");
+      setState((previous) => disconnectPrecisionState(previous));
+      return;
+    }
+    if (customSubsystems.status === "loading") {
+      finishSaving();
+      setAvailability("loading");
+      return;
+    }
+    if (customSubsystems.status === "error") {
+      finishSaving();
+      setAvailability("error");
+      return;
+    }
     if (!subsystem) {
       finishSaving();
       setAvailability("firmware-update-required");
-      setState((previous) => reconnect(previous));
       return;
     }
 
@@ -114,7 +135,6 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     const activeSubsystem = subsystem;
     finishSaving();
     setAvailability("loading");
-    setState((previous) => reconnect(previous));
 
     async function discover() {
       try {
@@ -126,13 +146,13 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
       } catch (error) {
         if (cancelled || generation !== generationRef.current) return;
         setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
-        setAvailability((current) => generation === generationRef.current ? "available" : current);
+        setAvailability((current) => generation === generationRef.current ? "error" : current);
       }
     }
 
     void discover();
     return () => { cancelled = true; };
-  }, [finishSaving, subsystem]);
+  }, [customSubsystems.status, finishSaving, subsystem]);
 
   useEffect(() => () => {
     if (saveTimeoutRef.current !== null) clearTimeout(saveTimeoutRef.current);

@@ -53,7 +53,7 @@ export function acceptConfig(state: PrecisionState, config: TrackballConfig): Pr
   if (state.confirmed !== null && config.revision < state.confirmed.revision) {
     return { ...state, error: "再読み込みが必要です" };
   }
-  if (state.confirmed !== null && state.dirty && config.revision === state.confirmed.revision) {
+  if (state.confirmed !== null && state.dirty) {
     return updateConfirmedKeepingDraft(state, config, state.error, state.pending);
   }
   const draft = draftFromConfig(config);
@@ -86,7 +86,7 @@ export function handleApplyResponse(state: PrecisionState, response: ApplyRespon
   if (response.result !== ApplyResult.OK) return { ...state, pending: null, error: applyErrorMessage(response.result) };
   if (response.config === null) return state;
   if (state.pending !== null && matchesDraft(response.config, state.pending)) {
-    return acceptConfig(state, response.config);
+    return updateConfirmedKeepingDraft(state, response.config, null, null);
   }
   if (state.dirty) return updateConfirmedKeepingDraft(state, response.config, state.error, state.pending);
   return acceptConfig(state, response.config);
@@ -109,7 +109,6 @@ export function transportError(state: PrecisionState, error: string): PrecisionS
   return { ...state, pending: null, error };
 }
 
-export function reconnect(state: PrecisionState): PrecisionState {
-  void state;
-  return createPrecisionState();
+export function disconnectPrecisionState(state: PrecisionState): PrecisionState {
+  return { ...state, pending: null, error: null };
 }

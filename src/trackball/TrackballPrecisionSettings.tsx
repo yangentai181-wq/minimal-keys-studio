@@ -9,7 +9,7 @@ const MAX_CPI = 3200;
 const CPI_STEP = 200;
 
 export function TrackballPrecisionSettings() {
-  const { availability, confirmed, draft, dirty, saving, error, updateDraft, save } = useTrackballPrecision();
+  const { availability, confirmed, draft, dirty, saving, error, updateDraft, save, reload } = useTrackballPrecision();
   const validationError = draft ? validateDraft(draft) : null;
   const unavailable = availability !== "available";
   const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null;
@@ -20,8 +20,8 @@ export function TrackballPrecisionSettings() {
         <h3 id="trackball-precision-title" className="text-base font-bold">精密モード</h3>
         <p className="text-sm text-base-content/70">通常時と精密モード時の速さ、使うキーを設定します。</p>
       </div>
-      {unavailable ? (
-        <p role="status" className="text-sm text-base-content/70">ファームウェアの更新が必要です</p>
+      {availability !== "available" ? (
+        <PrecisionStatus availability={availability} retry={reload} />
       ) : draft ? (
         <>
           <CpiControl label="通常の速さ" value={draft.normalCpi} onChange={(normalCpi) => updateDraft({ normalCpi })} />
@@ -40,10 +40,25 @@ export function TrackballPrecisionSettings() {
         <p role="status" className="text-sm text-base-content/70">設定を読み込んでいます…</p>
       )}
       {(validationError ?? error) && <p role="alert" className="text-sm text-error">{validationError ?? error}</p>}
+      {dirty && <p role="status" className="text-xs font-medium text-warning">未保存の変更があります</p>}
       {confirmed && <p className="text-xs text-base-content/50">確認済み: 通常 {confirmed.normalCpi} CPI / 精密 {confirmed.precisionCpi} CPI</p>}
-      {!draft?.enabled && <SaveButton save={save} disabled={saveDisabled} saving={saving} />}
+      {availability === "available" && !draft?.enabled && <SaveButton save={save} disabled={saveDisabled} saving={saving} />}
     </section>
   );
+}
+
+function PrecisionStatus({ availability, retry }: { availability: ReturnType<typeof useTrackballPrecision>["availability"]; retry: () => Promise<void> }) {
+  const message = {
+    loading: "設定を読み込んでいます…",
+    disconnected: "キーボードに接続すると設定できます",
+    "firmware-update-required": "ファームウェアの更新が必要です",
+    error: "設定の読み込みに失敗しました",
+    available: "",
+  }[availability];
+  return <>
+    <p role="status" className="text-sm text-base-content/70">{message}</p>
+    {availability === "error" && <Button onPress={() => void retry()} className="rounded border border-primary px-3 py-1.5 text-sm text-primary">もう一度読み込む</Button>}
+  </>;
 }
 
 function EnabledPrecisionControls({ confirmed, draftPosition, updateDraft, dirty, saving, unavailable, validationError, save }: {
