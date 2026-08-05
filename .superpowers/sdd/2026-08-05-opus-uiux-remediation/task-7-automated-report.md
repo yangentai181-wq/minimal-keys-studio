@@ -65,3 +65,7 @@ No screenshots were captured at 800x600 or 1200x800, and no physical keyboard wa
 - An unrequested BLE device-connection event-stream end is now an unexpected current-session failure, so it clears and notifies through the same session-safe helper.
 - Requested close is still classified through the shutdown signal and does not produce a duplicate notification. If the notification stream and device-event stream both end unexpectedly, the first cleanup wins and the second is stale.
 - Rust regression coverage proves that the two stream-end paths notify exactly once; strict Clippy remains clean.
+
+## Fix round 4/5
+
+- A regression test now models explicit close by removing the active session before both BLE stream-termination helpers run. Both helpers return stale and emit zero disconnect notifications.

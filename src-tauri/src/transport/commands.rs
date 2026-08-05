@@ -255,4 +255,31 @@ mod tests {
             assert_eq!(notifications, 1);
         });
     }
+
+    #[test]
+    fn explicit_close_makes_both_later_stream_ends_silent() {
+        block_on(async {
+            let connection = ActiveConnection::default();
+            let (sink, _) = channel(1);
+            let session_id = connection.activate(Box::new(sink)).await;
+            let mut notifications = 0;
+
+            assert!(connection.clear_if_current(session_id).await);
+            assert!(
+                !handle_notification_termination::<&str, _>(&connection, session_id, || {
+                    notifications += 1;
+                    Ok(())
+                })
+                .await
+            );
+            assert!(
+                !handle_device_event_stream_end::<&str, _>(&connection, session_id, || {
+                    notifications += 1;
+                    Ok(())
+                })
+                .await
+            );
+            assert_eq!(notifications, 0);
+        });
+    }
 }
