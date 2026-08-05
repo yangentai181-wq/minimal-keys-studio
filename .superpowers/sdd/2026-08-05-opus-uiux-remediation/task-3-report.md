@@ -40,3 +40,7 @@ passed
 RED observed before this round's implementation: `npm run build` reported the new boolean dirty-navigation contract was not yet satisfied by the Trackball precision save callback. GREEN: `npm test -- src/navigation/DirtyStateContext.test.tsx src/trackball/TrackballPrecisionSettings.test.tsx` passed (2 files, 16 tests); `npm run build` and `npm run lint` passed.
 
 Coverage added in `src/navigation/DirtyStateContext.test.tsx`: a resolved `false` save result keeps navigation at the current draft, in addition to rejected saves. Encoder and hold-tap now register their local form states with save/discard callbacks; failed RPC saves reject and keep the screen mounted.
+
+## Fix round 1 continuation
+
+GREEN: `npm test -- src/navigation/DirtyStateContext.test.tsx` passed (1 file, 8 tests); `npm run build` and `npm run lint` passed. The registry now snapshots dirty consumer-owned drafts before an unexpected notification-stream termination and restores them when the corresponding active screen registers after reconnect, with `未保存の変更を復元しました`.

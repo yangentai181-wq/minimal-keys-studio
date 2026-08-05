@@ -158,6 +158,7 @@ async function connect(
   setConnectedDeviceName: Dispatch<string | undefined>,
   abortController: AbortController,
   onError: (msg: string) => void,
+  onUnexpectedDisconnect: () => void,
   isWireless?: boolean,
 ) {
   const signal = abortController.signal;
@@ -183,10 +184,12 @@ async function connect(
 
   listen_for_notifications(conn.notification_readable, signal)
     .then(() => {
+      onUnexpectedDisconnect();
       setConnectedDeviceName(undefined);
       setConn({ conn: null });
     })
     .catch(() => {
+      onUnexpectedDisconnect();
       setConnectedDeviceName(undefined);
       setConn({ conn: null });
     });
@@ -256,7 +259,7 @@ const TAB_GROUPS: TabGroup[] = [
 ];
 
 function AppInner() {
-  const { requestNavigation } = useDirtyNavigation();
+  const { requestNavigation, preserveDirtyDrafts } = useDirtyNavigation();
   const { toast } = useToast();
   const { trackEvent } = useTelemetry();
   const [conn, setConn] = useState<ConnectionState>({ conn: null });
@@ -400,10 +403,11 @@ function AppInner() {
         setConnectedDeviceName,
         ac,
         (msg) => toast(msg, "error"),
+        preserveDirtyDrafts,
         isWireless,
       );
     },
-    [setConn, setConnectedDeviceName, toast],
+    [setConn, setConnectedDeviceName, toast, preserveDirtyDrafts],
   );
 
   // Studio RPC probe for the right-USB flow: only a successful

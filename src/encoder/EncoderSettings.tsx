@@ -257,6 +257,14 @@ export function EncoderSettings() {
       setCcwBinding(rsrBindingToBehavior(confirmedBinding.ccwBinding));
       return true;
     },
+    snapshot: () => ({ cwBinding, ccwBinding, selectedLayer, selectedSensorIndex }),
+    restore: (snapshot) => {
+      const draft = snapshot as { cwBinding: BehaviorBinding; ccwBinding: BehaviorBinding; selectedLayer: number; selectedSensorIndex: number | null };
+      setSelectedLayer(draft.selectedLayer);
+      setSelectedSensorIndex(draft.selectedSensorIndex);
+      setCwBinding(draft.cwBinding);
+      setCcwBinding(draft.ccwBinding);
+    },
   });
 
   if (!subsystem) {

@@ -18,6 +18,8 @@ export function TrackballPrecisionSettings() {
     dirty,
     save,
     discard: async () => { await reload(); return true; },
+    snapshot: () => draft,
+    restore: (snapshot) => updateDraft(snapshot as NonNullable<typeof draft>),
   });
 
   return (

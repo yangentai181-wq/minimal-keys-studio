@@ -181,6 +181,15 @@ export function HoldTapSettings() {
       applyInfo(selected);
       return true;
     },
+    snapshot: () => ({ selectedId, tappingTerm, quickTap, requirePriorIdle, flavor }),
+    restore: (snapshot) => {
+      const draft = snapshot as { selectedId: number | null; tappingTerm: number; quickTap: number; requirePriorIdle: number; flavor: HT.HoldTapFlavor };
+      setSelectedId(draft.selectedId);
+      setTappingTerm(draft.tappingTerm);
+      setQuickTap(draft.quickTap);
+      setRequirePriorIdle(draft.requirePriorIdle);
+      setFlavor(draft.flavor);
+    },
   });
 
   const handleReset = useCallback(async () => {

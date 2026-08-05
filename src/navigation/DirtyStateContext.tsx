@@ -15,6 +15,8 @@ type DirtyRegistration = {
   dirty: boolean;
   save: () => Promise<boolean>;
   discard: () => Promise<boolean>;
+  snapshot?: () => unknown;
+  restore?: (snapshot: unknown) => void;
 };
 type NavigationAction = () => void | Promise<void>;
 
@@ -24,12 +26,15 @@ type DirtyNavigation = {
   confirmDiscard(): Promise<void>;
   cancelNavigation(): void;
   register(id: string, registration: DirtyRegistration): () => void;
+  preserveDirtyDrafts(): void;
 };
 
 const DirtyStateContext = createContext<DirtyNavigation | null>(null);
 
 export function DirtyStateProvider({ children }: { children: ReactNode }) {
   const registrations = useRef(new Map<string, DirtyRegistration>());
+  const preserved = useRef(new Map<string, unknown>());
+  const [restoredNotice, setRestoredNotice] = useState(false);
   const [pending, setPending] = useState<{
     action: NavigationAction;
     resolve: (allowed: boolean) => void;
@@ -80,7 +85,19 @@ export function DirtyStateProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback((id: string, registration: DirtyRegistration) => {
     registrations.current.set(id, registration);
+    const snapshot = preserved.current.get(id);
+    if (snapshot !== undefined && registration.restore) {
+      registration.restore(snapshot);
+      preserved.current.delete(id);
+      setRestoredNotice(true);
+    }
     return () => registrations.current.delete(id);
+  }, []);
+
+  const preserveDirtyDrafts = useCallback(() => {
+    for (const [id, registration] of registrations.current) {
+      if (registration.dirty && registration.snapshot) preserved.current.set(id, registration.snapshot());
+    }
   }, []);
 
   const value: DirtyNavigation = {
@@ -89,11 +106,13 @@ export function DirtyStateProvider({ children }: { children: ReactNode }) {
     confirmDiscard: () => complete("discard"),
     cancelNavigation,
     register,
+    preserveDirtyDrafts,
   };
 
   return (
     <DirtyStateContext.Provider value={value}>
       {children}
+      {restoredNotice && <p role="status" className="fixed bottom-4 right-4 z-50 rounded bg-info px-3 py-2 text-sm text-info-content">未保存の変更を復元しました</p>}
       <UnsavedChangesDialog
         open={pending !== null}
         busy={busy}
