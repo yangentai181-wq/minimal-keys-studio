@@ -51,14 +51,21 @@ export type RightUsbConnection = {
 };
 
 type RightUsbPlatformOperations = {
-  connectMonitor: (onFrame: Parameters<typeof connectRawHidMonitor>[0]) => Promise<RawHidSubscription | undefined>;
+  connectMonitor: (
+    onFrame: Parameters<typeof connectRawHidMonitor>[0],
+    onError?: (reason: string) => void,
+  ) => Promise<RawHidSubscription | undefined>;
   detect: typeof detectRightUsbDevice;
   logDetection: typeof logRightUsbDetection;
   openSerialTransport: typeof serialConnect;
 };
 
-async function connectFirstTauriSerialDevice(): Promise<RpcTransport> {
-  const device = (await listTauriSerialDevices())[0];
+export async function connectTauriSerialDevice(): Promise<RpcTransport> {
+  const devices = await listTauriSerialDevices();
+  if (devices.length > 1) {
+    throw new Error("複数のUSBシリアルデバイスが見つかりました。詳細な接続方法から対象を選択してください。");
+  }
+  const device = devices[0];
   if (!device) {
     throw new Error("Studio RPC用のUSBシリアルデバイスが見つかりません。");
   }
@@ -68,10 +75,12 @@ async function connectFirstTauriSerialDevice(): Promise<RpcTransport> {
 function defaultPlatformOperations(): RightUsbPlatformOperations {
   const isTauri = typeof window !== "undefined" && !!window.__TAURI_INTERNALS__;
   return {
-    connectMonitor: isTauri ? connectTauriRawHidMonitor : connectRawHidMonitor,
+    connectMonitor: isTauri
+      ? connectTauriRawHidMonitor
+      : (onFrame) => connectRawHidMonitor(onFrame),
     detect: detectRightUsbDevice,
     logDetection: logRightUsbDetection,
-    openSerialTransport: isTauri ? connectFirstTauriSerialDevice : serialConnect,
+    openSerialTransport: isTauri ? connectTauriSerialDevice : serialConnect,
   };
 }
 
@@ -112,8 +121,13 @@ export function useRightUsbConnection(options: {
       return subscriptionRef.current;
     }
     const generation = monitorGenerationRef.current;
-    const subscription = await platform.connectMonitor((frame) =>
-      storeRef.current.push(frame),
+    const subscription = await platform.connectMonitor(
+      (frame) => storeRef.current.push(frame),
+      (reason) => {
+        subscriptionRef.current = null;
+        storeRef.current.reset();
+        dispatch({ type: "webhid_unavailable", reason });
+      },
     );
     if (!subscription) {
       return undefined;

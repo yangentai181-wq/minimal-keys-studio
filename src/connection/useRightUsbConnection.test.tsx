@@ -2,7 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
 import type { RawHidSubscription } from "./rawHid";
-import { useRightUsbConnection } from "./useRightUsbConnection";
+import {
+  connectTauriSerialDevice,
+  useRightUsbConnection,
+} from "./useRightUsbConnection";
+
+const { tauriListDevicesMock, tauriSerialConnectMock } = vi.hoisted(() => ({
+  tauriListDevicesMock: vi.fn(),
+  tauriSerialConnectMock: vi.fn(),
+}));
+
+vi.mock("../tauri/serial", () => ({
+  list_devices: tauriListDevicesMock,
+  connect: tauriSerialConnectMock,
+}));
 
 const connectRawHidMonitorMock = vi.fn<
   (onFrame: unknown) => Promise<RawHidSubscription | undefined>
@@ -44,6 +57,48 @@ vi.mock("../transport/serial", async (importOriginal) => {
 });
 
 describe("useRightUsbConnection monitor open/close race", () => {
+  it("rejects ambiguous native serial candidates without opening either device", async () => {
+    tauriListDevicesMock.mockResolvedValue([
+      { id: "right", label: "right keyboard" },
+      { id: "other", label: "other keyboard" },
+    ]);
+
+    await expect(connectTauriSerialDevice()).rejects.toThrow(
+      "複数のUSBシリアルデバイス",
+    );
+    expect(tauriSerialConnectMock).not.toHaveBeenCalled();
+  });
+
+  it("clears the monitor contract when the native reader reports a failure", async () => {
+    let reportFailure: ((reason: string) => void) | undefined;
+    const subscription: RawHidSubscription = {
+      device: {} as RawHidSubscription["device"],
+      close: vi.fn(async () => {}),
+    };
+    const { result } = renderHook(() =>
+      useRightUsbConnection({
+        probeStudioRpc: vi.fn(async () => {}),
+        platform: {
+          connectMonitor: vi.fn(async (_onFrame, onError) => {
+            reportFailure = onError;
+            return subscription;
+          }),
+          detect: vi.fn(async () => ({
+            hidDevices: [], serialPorts: [], rawHidVisible: true, serialVisible: true,
+          })),
+          logDetection: vi.fn(),
+          openSerialTransport: vi.fn(async () => { throw new Error("not under test"); }),
+        },
+      }),
+    );
+
+    await act(async () => { await result.current.connectRightUsb(); });
+    act(() => reportFailure?.("device lost"));
+
+    await waitFor(() => expect(result.current.monitorActive).toBe(false));
+    expect(result.current.state.detail).toBe("device lost");
+  });
+
   it("uses an injected native monitor operation for the right-USB flow", async () => {
     const subscription: RawHidSubscription = {
       device: {} as RawHidSubscription["device"],

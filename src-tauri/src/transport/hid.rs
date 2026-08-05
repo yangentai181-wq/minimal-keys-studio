@@ -31,10 +31,6 @@ impl HidLifecycle {
         Self::Idle
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn read_error(self) -> Self {
-        Self::Idle
-    }
 }
 
 pub fn matches_usage(usage_page: u16, usage: u16) -> bool {
@@ -58,13 +54,16 @@ struct RawHidReader {
     stop: Arc<AtomicBool>,
 }
 
-fn clear_reader(state: &RawHidState, stop: &Arc<AtomicBool>) {
+fn clear_reader(state: &RawHidState, stop: &Arc<AtomicBool>) -> bool {
     let mut reader = state.reader.lock().expect("Raw HID state lock poisoned");
     if matches!(
         reader.as_ref(),
         Some(active) if Arc::ptr_eq(&active.stop, stop)
     ) {
         *reader = None;
+        true
+    } else {
+        false
     }
 }
 
@@ -112,7 +111,12 @@ pub fn raw_hid_open(
                     let _ = app_handle.emit("raw_hid_input", buffer[..size].to_vec());
                 }
                 Ok(_) => {}
-                Err(_) => break,
+                Err(error) => {
+                    if clear_reader(&reader_state, &stop) {
+                        let _ = app_handle.emit("raw_hid_error", error.to_string());
+                    }
+                    return;
+                }
             }
         }
         clear_reader(&reader_state, &stop);
@@ -135,7 +139,8 @@ pub fn raw_hid_close(state: State<'_, RawHidState>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{matches_usage, HidLifecycle};
+    use super::{clear_reader, matches_usage, HidLifecycle, RawHidReader, RawHidState};
+    use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
     #[test]
     fn accepts_only_minimal_keys_vendor_interface() {
@@ -162,7 +167,14 @@ mod tests {
     }
 
     #[test]
-    fn read_error_cleans_up_the_open_reader() {
-        assert_eq!(HidLifecycle::Open.read_error(), HidLifecycle::Idle);
+    fn read_error_cleans_up_the_production_reader_state_once() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let state = RawHidState {
+            reader: Arc::new(Mutex::new(Some(RawHidReader { stop: stop.clone() }))),
+        };
+
+        assert!(clear_reader(&state, &stop));
+        assert!(state.reader.lock().unwrap().is_none());
+        assert!(!clear_reader(&state, &stop));
     }
 }

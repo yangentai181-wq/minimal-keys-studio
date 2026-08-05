@@ -6,11 +6,23 @@ import type { RawHidSubscription } from "../connection/rawHid";
 
 export async function connectTauriRawHidMonitor(
   onFrame: (frame: RawHidFrame) => void,
+  onError?: (reason: string) => void,
 ): Promise<RawHidSubscription | undefined> {
-  await invoke("raw_hid_open");
-  let unlisten: (() => void) | undefined;
+  let closed = false;
+  let unlistenInput: (() => void) | undefined;
+  let unlistenError: (() => void) | undefined;
+  const close = async () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    unlistenInput?.();
+    unlistenError?.();
+    await invoke("raw_hid_close");
+  };
+
   try {
-    unlisten = await listen<number[]>("raw_hid_input", ({ payload }) => {
+    unlistenInput = await listen<number[]>("raw_hid_input", ({ payload }) => {
       const frame = parseRawHidFrame(
         new DataView(Uint8Array.from(payload).buffer),
       );
@@ -18,21 +30,19 @@ export async function connectTauriRawHidMonitor(
         onFrame(frame);
       }
     });
+    unlistenError = await listen<string>("raw_hid_error", ({ payload }) => {
+      void close().then(() => onError?.(payload));
+    });
+    await invoke("raw_hid_open");
   } catch (error) {
+    unlistenInput?.();
+    unlistenError?.();
     await invoke("raw_hid_close");
     throw error;
   }
-  let closed = false;
 
   return {
     device: {} as RawHidSubscription["device"],
-    close: async () => {
-      if (closed) {
-        return;
-      }
-      closed = true;
-      unlisten?.();
-      await invoke("raw_hid_close");
-    },
+    close,
   };
 }
