@@ -67,16 +67,27 @@ pub async fn gatt_connect(
             let c2 = c.clone();
             let ah1 = app_handle.clone();
             let notify_handle = tauri::async_runtime::spawn(async move {
-                if let Ok(mut n) = c2.notify().await {
-                    use tauri::Emitter;
+                use tauri::{Emitter, Manager};
 
-                    while let Some(Ok(vn)) = n.next().await {
-                        if let Err(error) = ah1.emit("connection_data", vn) {
-                            eprintln!("[BLE] Failed to emit connection data: {error}");
-                            break;
+                match c2.notify().await {
+                    Ok(mut notifications) => {
+                        while let Some(Ok(value)) = notifications.next().await {
+                            if let Err(error) = ah1.emit("connection_data", value) {
+                                eprintln!("[BLE] Failed to emit connection data: {error}");
+                                break;
+                            }
                         }
                     }
+                    Err(error) => {
+                        eprintln!("[BLE] Failed to start notifications: {error}");
+                    }
                 }
+
+                let state = ah1.state::<super::commands::ActiveConnection>();
+                super::commands::handle_notification_termination(&state, session_id, || {
+                    ah1.emit("connection_disconnected", ())
+                })
+                .await;
             });
 
             // Oneshot channel to signal app-initiated disconnect

@@ -79,6 +79,18 @@ where
     true
 }
 
+pub async fn handle_notification_termination<E, F>(
+    connection: &ActiveConnection<'_>,
+    session_id: u64,
+    notify_disconnect: F,
+) -> bool
+where
+    E: std::fmt::Display,
+    F: FnOnce() -> Result<(), E>,
+{
+    clear_failed_transport_and_notify(connection, session_id, notify_disconnect).await
+}
+
 #[command]
 pub async fn transport_send_data(
     req: Request<'_>,
@@ -111,7 +123,9 @@ pub async fn transport_close(state: State<'_, ActiveConnection<'_>>) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_failed_transport_and_notify, ActiveConnection};
+    use super::{
+        clear_failed_transport_and_notify, handle_notification_termination, ActiveConnection,
+    };
     use futures::channel::mpsc::channel;
     use futures::executor::block_on;
 
@@ -157,6 +171,49 @@ mod tests {
                 .await
             );
             assert_eq!(notifications, 1);
+        });
+    }
+
+    #[test]
+    fn notification_setup_failure_and_stream_end_clear_the_current_session() {
+        block_on(async {
+            for _ in ["setup failure", "stream end"] {
+                let connection = ActiveConnection::default();
+                let (sink, _) = channel(1);
+                let session_id = connection.activate(Box::new(sink)).await;
+                let mut notifications = 0;
+
+                assert!(
+                    handle_notification_termination::<&str, _>(&connection, session_id, || {
+                        notifications += 1;
+                        Ok(())
+                    })
+                    .await
+                );
+                assert_eq!(notifications, 1);
+            }
+        });
+    }
+
+    #[test]
+    fn stale_notification_end_does_not_clear_or_notify_the_new_session() {
+        block_on(async {
+            let connection = ActiveConnection::default();
+            let (old_sink, _) = channel(1);
+            let old_id = connection.activate(Box::new(old_sink)).await;
+            let (new_sink, _) = channel(1);
+            let new_id = connection.activate(Box::new(new_sink)).await;
+            let mut notifications = 0;
+
+            assert!(
+                !handle_notification_termination::<&str, _>(&connection, old_id, || {
+                    notifications += 1;
+                    Ok(())
+                })
+                .await
+            );
+            assert_eq!(notifications, 0);
+            assert!(connection.clear_if_current(new_id).await);
         });
     }
 }
