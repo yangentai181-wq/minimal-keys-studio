@@ -45,15 +45,20 @@ The previously recorded 13 strict-Clippy diagnostics were resolved without `allo
 
 ## Visual and hardware observations
 
-- Exact headless-browser screenshots exist at [`evidence/connect-800x600.png`](evidence/connect-800x600.png) and [`evidence/connect-1200x800.png`](evidence/connect-1200x800.png). At both pixel-exact sizes, the connection card, primary `右手をUSBで接続` action, Japanese explanatory text, and `接続の詳細` toggle are visible without clipping.
+- Exact headless-browser screenshots are tracked at [`docs/audits/evidence/2026-08-05/connect-800x600.png`](../../../docs/audits/evidence/2026-08-05/connect-800x600.png) (800×600) and [`docs/audits/evidence/2026-08-05/connect-1200x800.png`](../../../docs/audits/evidence/2026-08-05/connect-1200x800.png) (1200×800). At both pixel-exact sizes, the connection card, primary `右手をUSBで接続` action, Japanese explanatory text, and `接続の詳細` toggle are visible without clipping.
 - This visual evidence is limited to the connection screen. The connected editor has not been visually verified because no secondary display was available.
 - Host inspection (`system_profiler`, `ioreg`, and `hidutil`) observed a USB minimal-keys device with VID `0x1d50`, PID `0x615e`, serial port `/dev/cu.usbmodem3101`, and Raw HID usage page `65376` (`0xff60`) / usage `97` (`0x61`). A BLE minimal-keys connection was simultaneously present.
-- While the user operated the device, Raw HID `InputReportCount` advanced from `2454` to `2615`, confirming host-visible native pointer-monitoring traffic.
+- While the user operated the device, Raw HID `InputReportCount` advanced from `2454` to `2615`, confirming host-visible Raw HID input traffic. It does not prove a pointer-monitoring payload was parsed or displayed by the application.
 - The following remain required before declaring the physical workflow complete: application UI shows monitor and editor ready; holding X shows precision `200` CPI then releasing shows normal `800` CPI; and left-half input remains stable through the right half.
 
 ## Independent final review
 
 The independent final review of the Task 7 automated branch was clean: Critical 0, Important 0, Minor 0.
+
+## Fix round 5/5
+
+- The input-report observation is limited to host-visible Raw HID traffic; parsed pointer-monitoring data remains a pending physical/application-UI check.
+- The two pixel-exact screenshots are now tracked repository artifacts, so fresh clones retain the visual evidence.
 
 ## Fix round 1/5
 
