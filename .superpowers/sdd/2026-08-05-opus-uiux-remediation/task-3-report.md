@@ -34,3 +34,9 @@ passed
 
 - The other listed settings screens do not expose a single discardable local draft contract: their controls issue RPC updates from their explicit save/apply actions, and their fetched selection state is not a pending edit. They are intentionally not registered rather than inventing unsafe discard behavior.
 - Existing Vite chunk-size warning remains; it is unrelated to this task.
+
+## Fix round 1
+
+RED observed before this round's implementation: `npm run build` reported the new boolean dirty-navigation contract was not yet satisfied by the Trackball precision save callback. GREEN: `npm test -- src/navigation/DirtyStateContext.test.tsx src/trackball/TrackballPrecisionSettings.test.tsx` passed (2 files, 16 tests); `npm run build` and `npm run lint` passed.
+
+Coverage added in `src/navigation/DirtyStateContext.test.tsx`: a resolved `false` save result keeps navigation at the current draft, in addition to rejected saves. Encoder and hold-tap now register their local form states with save/discard callbacks; failed RPC saves reject and keep the screen mounted.

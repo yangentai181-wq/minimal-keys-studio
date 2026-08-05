@@ -19,9 +19,9 @@ describe("DirtyStateContext", () => {
   });
 
   it("runs the save handler before completing dirty navigation", async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
+    const save = vi.fn().mockResolvedValue(true);
     const { result } = renderHook(() => {
-      useDirtyRegistration("keymap", { dirty: true, save, discard: vi.fn() });
+      useDirtyRegistration("keymap", { dirty: true, save, discard: vi.fn().mockResolvedValue(true) });
       return useDirtyNavigation();
     }, { wrapper });
     const destination = vi.fn();
@@ -35,9 +35,9 @@ describe("DirtyStateContext", () => {
   });
 
   it("discards dirty edits before completing navigation", async () => {
-    const discard = vi.fn().mockResolvedValue(undefined);
+    const discard = vi.fn().mockResolvedValue(true);
     const { result } = renderHook(() => {
-      useDirtyRegistration("keymap", { dirty: true, save: vi.fn(), discard });
+      useDirtyRegistration("keymap", { dirty: true, save: vi.fn().mockResolvedValue(true), discard });
       return useDirtyNavigation();
     }, { wrapper });
     const destination = vi.fn();
@@ -53,7 +53,7 @@ describe("DirtyStateContext", () => {
   it("keeps the current screen when navigation is cancelled or saving fails", async () => {
     const save = vi.fn().mockRejectedValue(new Error("failed"));
     const { result } = renderHook(() => {
-      useDirtyRegistration("keymap", { dirty: true, save, discard: vi.fn() });
+      useDirtyRegistration("keymap", { dirty: true, save, discard: vi.fn().mockResolvedValue(true) });
       return useDirtyNavigation();
     }, { wrapper });
     const destination = vi.fn();
@@ -65,6 +65,18 @@ describe("DirtyStateContext", () => {
     const failed = result.current.requestNavigation(destination);
     await act(async () => result.current.confirmSave());
     await expect(failed).resolves.toBe(false);
+    expect(destination).not.toHaveBeenCalled();
+  });
+
+  it("keeps the draft mounted when a save reports failure", async () => {
+    const { result } = renderHook(() => {
+      useDirtyRegistration("trackball", { dirty: true, save: vi.fn().mockResolvedValue(false), discard: vi.fn().mockResolvedValue(true) });
+      return useDirtyNavigation();
+    }, { wrapper });
+    const destination = vi.fn();
+    const pending = result.current.requestNavigation(destination);
+    await act(async () => result.current.confirmSave());
+    await expect(pending).resolves.toBe(false);
     expect(destination).not.toHaveBeenCalled();
   });
 });

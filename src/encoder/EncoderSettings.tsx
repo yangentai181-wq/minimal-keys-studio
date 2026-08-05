@@ -13,6 +13,7 @@ import { call_rpc } from "../rpc/logging";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { BehaviorBindingPicker } from "../behaviors/BehaviorBindingPicker";
 import { useBehaviorList } from "../behaviors/BehaviorsContext";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 
 interface LayerDisplay {
   id: number;
@@ -190,6 +191,8 @@ export function EncoderSettings() {
     () => sensors.find((s) => s.index === selectedSensorIndex) ?? null,
     [sensors, selectedSensorIndex]
   );
+  const confirmedBinding = layerBindings.find((binding) => binding.layer === selectedLayer);
+  const dirty = !!confirmedBinding && (JSON.stringify(behaviorToRsrBinding(cwBinding)) !== JSON.stringify(confirmedBinding.cwBinding) || JSON.stringify(behaviorToRsrBinding(ccwBinding)) !== JSON.stringify(confirmedBinding.ccwBinding));
 
   const handleSave = useCallback(async () => {
     if (!subsystem || selectedSensorIndex === null) return;
@@ -239,10 +242,22 @@ export function EncoderSettings() {
     } catch (e) {
       console.error("[Encoder] Failed to save:", e);
       toast("Failed to save encoder settings", "error");
+      throw e;
     } finally {
       setSaving(false);
     }
   }, [subsystem, selectedSensorIndex, selectedLayer, cwBinding, ccwBinding, callWithTimeout, behaviors, toast]);
+
+  useDirtyRegistration("encoder", {
+    dirty,
+    save: async () => { await handleSave(); return true; },
+    discard: async () => {
+      if (!confirmedBinding) return false;
+      setCwBinding(rsrBindingToBehavior(confirmedBinding.cwBinding));
+      setCcwBinding(rsrBindingToBehavior(confirmedBinding.ccwBinding));
+      return true;
+    },
+  });
 
   if (!subsystem) {
     return (

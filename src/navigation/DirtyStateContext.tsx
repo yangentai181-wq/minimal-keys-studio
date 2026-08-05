@@ -13,8 +13,8 @@ import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 
 type DirtyRegistration = {
   dirty: boolean;
-  save: () => Promise<void>;
-  discard: () => Promise<void>;
+  save: () => Promise<boolean>;
+  discard: () => Promise<boolean>;
 };
 type NavigationAction = () => void | Promise<void>;
 
@@ -43,7 +43,8 @@ export function DirtyStateProvider({ children }: { children: ReactNode }) {
     setBusy(true);
     try {
       const dirty = [...registrations.current.values()].filter((entry) => entry.dirty);
-      await Promise.all(dirty.map((entry) => entry[operation]()));
+      const results = await Promise.all(dirty.map((entry) => entry[operation]()));
+      if (results.some((result) => !result)) throw new Error("変更を確定できませんでした");
       await currentPending.action();
       currentPending.resolve(true);
       pendingRef.current = null;

@@ -17,7 +17,7 @@ export function TrackballPrecisionSettings() {
   useDirtyRegistration("trackball-precision", {
     dirty,
     save,
-    discard: reload,
+    discard: async () => { await reload(); return true; },
   });
 
   return (
@@ -88,7 +88,7 @@ function EnabledPrecisionControls({ confirmed, draftPosition, updateDraft, dirty
   </>;
 }
 
-function SaveButton({ save, disabled, saving }: { save: () => Promise<void>; disabled: boolean; saving: boolean }) {
+function SaveButton({ save, disabled, saving }: { save: () => Promise<boolean>; disabled: boolean; saving: boolean }) {
   return <div className="flex justify-end">
     <Button onPress={() => void save()} isDisabled={disabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">
       {saving ? "保存中…" : "保存"}

@@ -6,6 +6,7 @@ import { SubsystemUnavailable } from "../misc/SubsystemUnavailable";
 import { SettingsCard } from "../misc/SettingsCard";
 import { LoadingSkeleton } from "../misc/LoadingSkeleton";
 import * as HT from "../proto/holdtap";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 
 // -1 as uint32 in protobuf = "not configured in device tree" = effectively 0ms
 const SENTINEL = 0xFFFFFFFF;
@@ -110,6 +111,7 @@ export function HoldTapSettings() {
   }
 
   const selected = holdTaps.find((h) => h.id === selectedId) ?? null;
+  const dirty = !!selected && (tappingTerm !== selected.tappingTermMs || quickTap !== sanitizeMs(selected.quickTapMs) || requirePriorIdle !== sanitizeMs(selected.requirePriorIdleMs) || flavor !== selected.flavor);
 
   const handleApply = useCallback(async () => {
     if (!subsystem || selectedId === null || !selected) return;
@@ -155,6 +157,7 @@ export function HoldTapSettings() {
     } catch (e) {
       console.error("[HoldTap] Failed to save:", e);
       toast("Failed to save hold-tap settings", "error");
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -169,6 +172,16 @@ export function HoldTapSettings() {
     callWithTimeout,
     toast,
   ]);
+
+  useDirtyRegistration("holdtap", {
+    dirty,
+    save: async () => { await handleApply(); return true; },
+    discard: async () => {
+      if (!selected) return false;
+      applyInfo(selected);
+      return true;
+    },
+  });
 
   const handleReset = useCallback(async () => {
     if (!subsystem || selectedId === null) return;

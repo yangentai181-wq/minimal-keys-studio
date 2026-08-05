@@ -317,7 +317,7 @@ function AppInner() {
     updateLockState();
   }, [conn, setLockState, reset]);
 
-  const save = useCallback(async (): Promise<void> => {
+  const save = useCallback(async (): Promise<boolean> => {
       if (!conn.conn) throw new Error("接続されていません");
       const resp = await call_rpc(conn.conn, { keymap: { saveChanges: true } });
       if (!resp.keymap?.saveChanges || resp.keymap?.saveChanges.err) {
@@ -327,10 +327,11 @@ function AppInner() {
         toast("保存しました", "success");
         trackEvent("keymap_saved");
         pub("keymap_saved_success", true);
+        return true;
       }
   }, [conn, toast, trackEvent]);
 
-  const discard = useCallback(async (): Promise<void> => {
+  const discard = useCallback(async (): Promise<boolean> => {
       if (!conn.conn) throw new Error("接続されていません");
       const resp = await call_rpc(conn.conn, {
         keymap: { discardChanges: true },
@@ -346,6 +347,7 @@ function AppInner() {
       reset();
       // Re-mount Keyboard to re-fetch keymap (don't use setConn — it clears ALL data)
       setKeymapVersion((v) => v + 1);
+      return true;
   }, [conn, toast, reset, trackEvent]);
 
   useDirtyRegistration("keymap", { dirty: canUndo, save, discard });
@@ -497,8 +499,8 @@ function AppInner() {
                     canRedo={canRedo}
                     onUndo={undo}
                     onRedo={redo}
-                    onSave={save}
-                    onDiscard={discard}
+                    onSave={() => { void save().catch(() => {}); }}
+                    onDiscard={() => { void discard().catch(() => {}); }}
                     onDisconnect={disconnect}
                     onResetSettings={resetSettings}
                   />

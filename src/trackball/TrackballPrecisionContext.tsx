@@ -32,7 +32,7 @@ export interface TrackballPrecisionContextValue {
   saving: boolean;
   error: string | null;
   updateDraft(patch: Partial<PrecisionDraft>): void;
-  save(): Promise<void>;
+  save(): Promise<boolean>;
   reload(): Promise<void>;
 }
 
@@ -80,7 +80,7 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     if (generation !== generationRef.current) return;
     try {
       const response = decodeResponse(await activeSubsystem.callRPC(encodeGet()));
-      if (generation !== generationRef.current) return;
+      if (generation !== generationRef.current) return false;
       if (!response.get) throw new Error("トラックボール設定の応答が不正です");
 
       const expectedRevision = expectedRevisionRef.current;
@@ -94,7 +94,7 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
       setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
       setAvailability("available");
     } catch (error) {
-      if (generation !== generationRef.current) return;
+      if (generation !== generationRef.current) return false;
       setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
       setAvailability("error");
       finishSaving(generation);
@@ -183,17 +183,17 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     setState((previous) => updatePrecisionDraft(previous, patch));
   }, []);
 
-  const save = useCallback(async () => {
-    if (!subsystem) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!subsystem) return false;
     const activeSubsystem = subsystem;
     const generation = generationRef.current;
     const current = stateRef.current;
-    if (!current.draft || !current.confirmed || current.pending) return;
+    if (!current.draft || !current.confirmed || current.pending) return false;
 
     const validationError = validateDraft(current.draft);
     if (validationError) {
       setState((previous) => ({ ...previous, error: validationError }));
-      return;
+      return false;
     }
 
     const draft = current.draft;
@@ -203,40 +203,42 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     setState((previous) => generation === generationRef.current ? beginSave(previous) : previous);
     setSaving(true);
     saveTimeoutRef.current = setTimeout(() => {
-      if (generation !== generationRef.current) return;
+      if (generation !== generationRef.current) return false;
       setState((previous) => generation === generationRef.current ? transportError(previous, "保存の確認がタイムアウトしました") : previous);
       finishSaving(generation);
     }, SAVE_TIMEOUT_MS);
 
     try {
       const response = decodeResponse(await activeSubsystem.callRPC(encodeApply(draft, expectedRevision)));
-      if (generation !== generationRef.current) return;
+      if (generation !== generationRef.current) return false;
       if (!response.apply) throw new Error("トラックボール設定の応答が不正です");
 
       if (response.apply.result === ApplyResult.STALE_REVISION) {
         setState((previous) => generation === generationRef.current ? handleApplyResponse(previous, response.apply!) : previous);
         finishSaving(generation);
         await reloadFrom(activeSubsystem, generation);
-        return;
+        return false;
       }
       if (response.apply.result !== ApplyResult.OK) {
         setState((previous) => generation === generationRef.current ? handleApplyResponse(previous, response.apply!) : previous);
         finishSaving(generation);
-        return;
+        return false;
       }
 
       const config = response.apply.config;
       if (config && matchesPending(config, draft, expectedRevision)) {
         setState((previous) => generation === generationRef.current ? handleApplyResponse(previous, response.apply!) : previous);
         finishSaving(generation);
-        return;
+        return true;
       }
 
       await reloadFrom(activeSubsystem, generation);
+      return !stateRef.current.dirty;
     } catch (error) {
-      if (generation !== generationRef.current) return;
+      if (generation !== generationRef.current) return false;
       setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
       finishSaving(generation);
+      return false;
     }
   }, [finishSaving, reloadFrom, subsystem]);
 
