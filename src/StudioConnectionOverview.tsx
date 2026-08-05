@@ -8,7 +8,7 @@ import {
   MousePointer2,
   Usb,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { isLayerActive } from "./connection/rawHidFrames";
 import { AUTO_MOUSE_LAYER_INDEX } from "./keyboard/minimal-keys-layers";
@@ -107,6 +107,7 @@ export function StudioConnectionOverview({
   showLayout,
   actions,
 }: StudioConnectionOverviewProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const pressedList = [...monitor.pressed].sort((a, b) => a - b);
   const latestPosition = pressedList[pressedList.length - 1];
   const latestKey =
@@ -129,7 +130,7 @@ export function StudioConnectionOverview({
   return (
     <section className="border-b border-base-300 bg-base-200 px-3 py-3">
       <div className="mx-auto flex max-w-7xl flex-col gap-3">
-        <div className="grid gap-3 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <DeviceCard
             active={monitorActive}
             icon={<Usb className="h-4 w-4" aria-hidden="true" />}
@@ -166,7 +167,7 @@ export function StudioConnectionOverview({
           />
         </div>
 
-        <div className="rounded-lg border border-base-300 bg-white p-4 shadow-sm">
+        <div className="rounded-lg border border-base-300 bg-white p-3 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
@@ -182,17 +183,23 @@ export function StudioConnectionOverview({
             {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
           </div>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 text-xs text-base-content/60">レイヤー: {layerName} / 最新キー: {latestKey}</div>
+            <button type="button" className="shrink-0 rounded border border-base-300 px-2.5 py-1 text-xs font-medium" onClick={() => setDetailsOpen((open) => !open)} aria-expanded={detailsOpen}>
+              接続の詳細
+            </button>
+          </div>
+        </div>
+
+        {detailsOpen && <div data-testid="connection-details" className="max-h-[min(45dvh,360px)] overflow-y-auto pr-1 space-y-3">
+          <div className="grid gap-3 md:grid-cols-3">
             <MetricCard label="現在レイヤー" value={layerName} tone="accent" />
             <MetricCard label="最新キー" value={latestKey} tone="primary" />
             <MetricCard label="トラックボール" value={pointerSummary} />
           </div>
-        </div>
-
-        {editorAvailable && <TrackballPrecisionStatus />}
-
-        {showLayout && (
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+          {editorAvailable && <TrackballPrecisionStatus />}
+          {showLayout && (
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
             <MinimalKeysMonitorLayout
               activeLayerIndex={monitor.activeLayerIndex}
               pressed={monitor.pressed}
@@ -226,8 +233,9 @@ export function StudioConnectionOverview({
                 </span>
               </div>
             </div>
-          </div>
-        )}
+            </div>
+          )}
+        </div>}
       </div>
     </section>
   );

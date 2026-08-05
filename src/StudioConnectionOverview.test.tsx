@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
@@ -35,6 +35,28 @@ vi.mock("./trackball/TrackballPrecisionContext", () => ({
 }));
 
 describe("StudioConnectionOverview", () => {
+  it("keeps connection details collapsed until requested and bounds their scroll surface", () => {
+    vi.mocked(useTrackballPrecision).mockReturnValue(precisionContext());
+    render(
+      <StudioConnectionOverview
+        monitor={initialMonitorSnapshot}
+        monitorActive={false}
+        editorAvailable
+        connectionTitle="エディター利用可"
+        connectionBody="Studio RPCで接続中です。"
+        showLayout
+      />,
+    );
+
+    expect(screen.getByText("Studio RPCで接続中です。")).toBeInTheDocument();
+    expect(screen.queryByText("ライブ読み取り")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
+
+    expect(screen.getByText("ライブ読み取り")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-details")).toHaveClass("max-h-[min(45dvh,360px)]", "overflow-y-auto");
+  });
+
   it("routes confirmed precision status through the connected overview and updates notification state", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue(precisionContext());
     const props = {
@@ -45,6 +67,7 @@ describe("StudioConnectionOverview", () => {
       connectionBody: "Studio RPCで接続中です。",
     };
     const view = render(<StudioConnectionOverview {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
 
     expect(screen.getByRole("region", { name: "トラックボール精密モード" })).toHaveTextContent("通常");
 
@@ -103,6 +126,7 @@ describe("StudioConnectionOverview", () => {
         showLayout
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
 
     expect(screen.getByText("右手USBモニター")).toBeTruthy();
     expect(screen.getByText("minimal-keys を編集中")).toBeTruthy();

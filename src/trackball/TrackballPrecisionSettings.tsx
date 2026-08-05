@@ -3,6 +3,7 @@ import { ConnectedPrecisionKeyPicker } from "./PrecisionKeyPicker";
 import { useTrackballPrecision } from "./TrackballPrecisionContext";
 import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
 import { validateDraft } from "./precision-state";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 
 const MIN_CPI = 200;
 const MAX_CPI = 3200;
@@ -13,6 +14,11 @@ export function TrackballPrecisionSettings() {
   const validationError = draft ? validateDraft(draft) : null;
   const unavailable = availability !== "available";
   const saveDisabled = unavailable || !draft || !dirty || saving || validationError !== null;
+  useDirtyRegistration("trackball-precision", {
+    dirty,
+    save,
+    discard: reload,
+  });
 
   return (
     <section aria-labelledby="trackball-precision-title" className="rounded-xl border border-primary/20 bg-white p-4 shadow-sm space-y-4">

@@ -59,6 +59,7 @@ import { UnifiedStudioPreview } from "./UnifiedStudioPreview";
 import { useRightUsbConnection } from "./connection/useRightUsbConnection";
 import { MonitorPanel } from "./monitor/MonitorPanel";
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
+import { DirtyStateProvider, useDirtyNavigation, useDirtyRegistration } from "./navigation/DirtyStateContext";
 
 declare global {
   interface Window {
@@ -255,6 +256,7 @@ const TAB_GROUPS: TabGroup[] = [
 ];
 
 function AppInner() {
+  const { requestNavigation } = useDirtyNavigation();
   const { toast } = useToast();
   const { trackEvent } = useTelemetry();
   const [conn, setConn] = useState<ConnectionState>({ conn: null });
@@ -266,9 +268,6 @@ function AppInner() {
   const [showLicenseNotice, setShowLicenseNotice] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
   const [activeTab, setActiveTab] = useState<ActiveTab>("keymap");
-  const [mountedTabs, setMountedTabs] = useState<Set<ActiveTab>>(
-    new Set(["keymap"]),
-  );
   const [keymapVersion, setKeymapVersion] = useState(0);
 
   const [lockState, setLockState] = useState<LockState>(
@@ -297,7 +296,6 @@ function AppInner() {
     if (!conn.conn) {
       reset();
       setLockState(LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED);
-      setMountedTabs(new Set(["keymap"]));
       setActiveTab("keymap");
     }
 
@@ -319,36 +317,27 @@ function AppInner() {
     updateLockState();
   }, [conn, setLockState, reset]);
 
-  const save = useCallback(() => {
-    async function doSave() {
-      if (!conn.conn) {
-        return;
-      }
-
+  const save = useCallback(async (): Promise<void> => {
+      if (!conn.conn) throw new Error("接続されていません");
       const resp = await call_rpc(conn.conn, { keymap: { saveChanges: true } });
       if (!resp.keymap?.saveChanges || resp.keymap?.saveChanges.err) {
         toast("保存できませんでした", "error");
+        throw new Error("保存できませんでした");
       } else {
         toast("保存しました", "success");
         trackEvent("keymap_saved");
         pub("keymap_saved_success", true);
       }
-    }
-
-    doSave();
   }, [conn, toast, trackEvent]);
 
-  const discard = useCallback(() => {
-    async function doDiscard() {
-      if (!conn.conn) {
-        return;
-      }
-
+  const discard = useCallback(async (): Promise<void> => {
+      if (!conn.conn) throw new Error("接続されていません");
       const resp = await call_rpc(conn.conn, {
         keymap: { discardChanges: true },
       });
       if (!resp.keymap?.discardChanges) {
         toast("破棄できませんでした", "error");
+        throw new Error("破棄できませんでした");
       } else {
         toast("破棄しました", "info");
         trackEvent("keymap_discarded");
@@ -357,10 +346,9 @@ function AppInner() {
       reset();
       // Re-mount Keyboard to re-fetch keymap (don't use setConn — it clears ALL data)
       setKeymapVersion((v) => v + 1);
-    }
-
-    doDiscard();
   }, [conn, toast, reset, trackEvent]);
+
+  useDirtyRegistration("keymap", { dirty: canUndo, save, discard });
 
   const resetSettings = useCallback(() => {
     async function doReset() {
@@ -385,7 +373,7 @@ function AppInner() {
   }, [conn, toast, reset]);
 
   const disconnect = useCallback(() => {
-    async function doDisconnect() {
+    void requestNavigation(async () => {
       if (!conn.conn) {
         return;
       }
@@ -397,10 +385,8 @@ function AppInner() {
       setConn({ conn: null });
       setConnectedDeviceName(undefined);
       setConnectionAbort(new AbortController());
-    }
-
-    doDisconnect();
-  }, [conn, connectionAbort]);
+    });
+  }, [conn, connectionAbort, requestNavigation]);
 
   const onConnect = useCallback(
     (t: RpcTransport, isWireless?: boolean) => {
@@ -483,7 +469,7 @@ function AppInner() {
                 }
               />
               {showMonitorOnly && (
-                <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] overflow-hidden">
+                <div className="bg-base-100 text-base-content h-dvh w-full overflow-hidden">
                   <MonitorPanel
                     snapshot={rightUsb.monitor}
                     description={rightUsb.description}
@@ -504,7 +490,7 @@ function AppInner() {
                 onClose={() => setShowLicenseNotice(false)}
               />
                 {conn.conn && (
-                <div className="bg-base-100 text-base-content h-full max-h-[100vh] w-full max-w-[100vw] inline-grid grid-cols-[auto] grid-rows-[auto_auto_auto_1fr_auto] overflow-hidden">
+                <div className="bg-base-100 text-base-content h-dvh w-full min-h-[600px] inline-grid grid-cols-[auto] grid-rows-[auto_auto_auto_minmax(250px,1fr)_auto] overflow-hidden">
                   <AppHeader
                     connectedDeviceLabel={connectedDeviceName}
                     canUndo={canUndo}
@@ -553,11 +539,10 @@ function AppInner() {
                                 : "text-base-content/60 hover:text-base-content hover:bg-base-200"
                             }`}
                             onClick={() => {
-                              setActiveTab(tab.id);
-                              setMountedTabs((prev) =>
-                                new Set(prev).add(tab.id),
-                              );
-                              trackEvent("tab_switched", { tab: tab.id });
+                              void requestNavigation(() => {
+                                setActiveTab(tab.id);
+                                trackEvent("tab_switched", { tab: tab.id });
+                              });
                             }}
                           >
                             {tab.icon}
@@ -570,72 +555,14 @@ function AppInner() {
                     ))}
                   </nav>
                   <div className="min-h-0 overflow-hidden h-full">
-                    <div
-                      className={activeTab === "keymap" ? "h-full" : "hidden"}
-                    >
-                      <Keyboard key={keymapVersion} />
-                    </div>
-                    {mountedTabs.has("trackball") && (
-                      <div
-                        className={
-                          activeTab === "trackball" ? "h-full" : "hidden"
-                        }
-                      >
-                        <TrackballSettings />
-                      </div>
-                    )}
-                    {mountedTabs.has("encoder") && (
-                      <div
-                        className={
-                          activeTab === "encoder" ? "h-full" : "hidden"
-                        }
-                      >
-                        <EncoderSettings />
-                      </div>
-                    )}
-                    {mountedTabs.has("combo") && (
-                      <div
-                        className={activeTab === "combo" ? "h-full" : "hidden"}
-                      >
-                        <ComboSettings />
-                      </div>
-                    )}
-                    {mountedTabs.has("bluetooth") && (
-                      <div
-                        className={
-                          activeTab === "bluetooth" ? "h-full" : "hidden"
-                        }
-                      >
-                        <BleManagement />
-                      </div>
-                    )}
-                    {mountedTabs.has("holdtap") && (
-                      <div
-                        className={
-                          activeTab === "holdtap" ? "h-full" : "hidden"
-                        }
-                      >
-                        <HoldTapSettings />
-                      </div>
-                    )}
-                    {mountedTabs.has("battery") && (
-                      <div
-                        className={
-                          activeTab === "battery" ? "h-full" : "hidden"
-                        }
-                      >
-                        <BatteryHistory />
-                      </div>
-                    )}
-                    {mountedTabs.has("settings") && (
-                      <div
-                        className={
-                          activeTab === "settings" ? "h-full" : "hidden"
-                        }
-                      >
-                        <DeviceSettings />
-                      </div>
-                    )}
+                    {activeTab === "keymap" && <Keyboard key={keymapVersion} />}
+                    {activeTab === "trackball" && <TrackballSettings />}
+                    {activeTab === "encoder" && <EncoderSettings />}
+                    {activeTab === "combo" && <ComboSettings />}
+                    {activeTab === "bluetooth" && <BleManagement />}
+                    {activeTab === "holdtap" && <HoldTapSettings />}
+                    {activeTab === "battery" && <BatteryHistory />}
+                    {activeTab === "settings" && <DeviceSettings />}
                   </div>
                   <AppFooter
                     onShowAbout={() => setShowAbout(true)}
@@ -666,7 +593,9 @@ function App() {
       <OsModeProvider>
         <TelemetryProvider>
           <OptInDialog />
-          <AppInner />
+          <DirtyStateProvider>
+            <AppInner />
+          </DirtyStateProvider>
         </TelemetryProvider>
       </OsModeProvider>
     </ToastProvider>
