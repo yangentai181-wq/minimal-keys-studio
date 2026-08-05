@@ -8,3 +8,4 @@ Task 2: fix round 1/5 (2 addressed, 0 open — settings retry lifecycle and cove
 Task 2: complete (commits 292248f..6cbf097, review clean)
 Task 3: final implementation ready for review (active-tab session boundary, guarded explicit disconnect, unexpected-loss snapshot/restore, Encoder/HoldTap draft preservation; focused 37 tests, full 650 tests, lint/build/Tauri build pass)
 Task 3: fix round 2/5 (3 addressed, 0 open — explicit precision reload confirmation, failed precision discard navigation, tested aborted/unexpected notification-end classification; focused 43 tests, full 654 tests, lint/build/Tauri build pass)
+Task 3: fix round 3/5 (1 addressed, 0 open — successful precision discard replaces its dirty draft with fetched device settings; focused 30 tests, full 658 tests, lint/build/Tauri build pass)

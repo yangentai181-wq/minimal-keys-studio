@@ -169,7 +169,7 @@ describe("TrackballPrecisionSettings", () => {
     expect(reload).toHaveBeenCalledOnce();
   });
 
-  it("keeps navigation on the editor when reloading a precision draft fails", async () => {
+  it("keeps navigation on the editor when discarding a precision draft fails", async () => {
     vi.mocked(useTrackballPrecision).mockReturnValue({
       availability: "available", confirmed: null,
       draft: { normalCpi: 1000, precisionCpi: 200, enabled: false, selectedPosition: 0 },

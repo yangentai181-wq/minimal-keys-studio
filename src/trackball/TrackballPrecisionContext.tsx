@@ -33,7 +33,7 @@ export interface TrackballPrecisionContextValue {
   error: string | null;
   updateDraft(patch: Partial<PrecisionDraft>): void;
   save(): Promise<boolean>;
-  reload(): Promise<boolean>;
+  reload(options?: { discard?: boolean }): Promise<boolean>;
 }
 
 const TrackballPrecisionContext = createContext<TrackballPrecisionContextValue | null>(null);
@@ -76,12 +76,18 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     setSaving((current) => generation !== undefined && generation !== generationRef.current ? current : false);
   }, []);
 
-  const reloadFrom = useCallback(async (activeSubsystem: NonNullable<typeof subsystem>, generation: number): Promise<boolean> => {
+  const reloadFrom = useCallback(async (activeSubsystem: NonNullable<typeof subsystem>, generation: number, replaceDraft = false): Promise<boolean> => {
     if (generation !== generationRef.current) return false;
     try {
       const response = decodeResponse(await activeSubsystem.callRPC(encodeGet()));
       if (generation !== generationRef.current) return false;
       if (!response.get) throw new Error("トラックボール設定の応答が不正です");
+
+      if (replaceDraft) {
+        setState((previous) => generation === generationRef.current ? acceptConfig(createPrecisionState(), response.get!) : previous);
+        setAvailability("available");
+        return true;
+      }
 
       const expectedRevision = expectedRevisionRef.current;
       if (pendingDraftRef.current && expectedRevision !== null) {
@@ -103,14 +109,14 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
     }
   }, [finishSaving]);
 
-  const reload = useCallback(async (): Promise<boolean> => {
+  const reload = useCallback(async ({ discard = false }: { discard?: boolean } = {}): Promise<boolean> => {
     if (customSubsystems.status === "error") {
       customSubsystems.retry();
       return false;
     }
     if (!subsystem) return false;
     setAvailability("loading");
-    return reloadFrom(subsystem, generationRef.current);
+    return reloadFrom(subsystem, generationRef.current, discard);
   }, [customSubsystems, reloadFrom, subsystem]);
 
   useEffect(() => {

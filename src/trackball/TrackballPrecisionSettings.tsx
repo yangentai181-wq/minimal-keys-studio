@@ -17,7 +17,7 @@ export function TrackballPrecisionSettings() {
   useDirtyRegistration("trackball-precision", {
     dirty,
     save,
-    discard: reload,
+    discard: () => reload({ discard: true }),
     snapshot: () => draft,
     restore: (snapshot) => updateDraft(snapshot as NonNullable<typeof draft>),
   });

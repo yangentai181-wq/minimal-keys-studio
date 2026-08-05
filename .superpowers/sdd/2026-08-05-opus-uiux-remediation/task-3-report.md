@@ -94,3 +94,26 @@ passed (existing Vite chunk-size warning only)
 npm run tauri build
 passed (existing Vite chunk-size warning only)
 ```
+
+## Fix round 3
+
+- Precision draft discard now requests a dedicated replacement reload. Its successful GET replaces the local draft with the current device configuration and clears the dirty state; ordinary reload and save confirmation continue to preserve unsaved drafts.
+
+### Verification
+
+```text
+npm test -- src/trackball/TrackballPrecisionContext.test.tsx src/trackball/TrackballPrecisionSettings.test.tsx
+2 files, 30 tests passed
+
+npm test
+102 files, 658 tests passed
+
+npm run lint
+passed
+
+npm run build
+passed (existing Vite chunk-size warning only)
+
+npm run tauri build
+passed (existing Vite chunk-size warning only)
+```

@@ -71,6 +71,7 @@ function Consumer() {
   const value = useTrackballPrecision();
   const [saveResult, setSaveResult] = useState<string>("none");
   const [reloadResult, setReloadResult] = useState<string>("none");
+  const [discardResult, setDiscardResult] = useState<string>("none");
   return (
     <>
       <output data-testid="availability">{value.availability}</output>
@@ -82,8 +83,10 @@ function Consumer() {
       <button onClick={() => value.updateDraft({ normalCpi: 1000 })}>edit</button>
       <output data-testid="save-result">{saveResult}</output>
       <output data-testid="reload-result">{reloadResult}</output>
+      <output data-testid="discard-result">{discardResult}</output>
       <button onClick={() => void value.save().then((result) => setSaveResult(String(result)))}>save</button>
       <button onClick={() => void value.reload().then((result) => setReloadResult(String(result)))}>reload</button>
+      <button onClick={() => void value.reload({ discard: true }).then((result) => setDiscardResult(String(result)))}>discard</button>
     </>
   );
 }
@@ -158,6 +161,19 @@ describe("TrackballPrecisionProvider", () => {
     await act(async () => screen.getByText("save").click());
 
     await waitFor(() => expect(screen.getByTestId("save-result")).toHaveTextContent("true"));
+    expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+  });
+
+  it("discards a precision draft by replacing it with the fetched device configuration", async () => {
+    await discover();
+    await act(async () => screen.getByText("edit").click());
+    subsystem?.callRPC.mockResolvedValueOnce(getResponse({ ...initialConfig, revision: 8, normalCpi: 1200 }));
+
+    await act(async () => screen.getByText("discard").click());
+
+    await waitFor(() => expect(screen.getByTestId("discard-result")).toHaveTextContent("true"));
+    expect(screen.getByTestId("confirmed")).toHaveTextContent("1200");
+    expect(screen.getByTestId("draft")).toHaveTextContent("1200");
     expect(screen.getByTestId("dirty")).toHaveTextContent("false");
   });
 
