@@ -48,11 +48,11 @@ import { requestDeviceInfo } from "./rpc/deviceInfo";
 import { UnifiedStudioPreview } from "./UnifiedStudioPreview";
 import { useRightUsbConnection } from "./connection/useRightUsbConnection";
 import { MonitorPanel } from "./monitor/MonitorPanel";
-import { StudioConnectionOverview } from "./StudioConnectionOverview";
 import { DirtyStateProvider, useDirtyRegistration } from "./navigation/DirtyStateContext";
 import { StudioTabView } from "./navigation/StudioTabView";
 import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
 import { handleNotificationEnd } from "./notificationEnd";
+import { RightUsbEditorShell } from "./connection/RightUsbEditorShell";
 
 declare global {
   interface Window {
@@ -422,8 +422,8 @@ function AppInner() {
                 onClose={() => setShowLicenseNotice(false)}
               />
                 {conn.conn && (
-                <div className="bg-base-100 text-base-content h-dvh w-full min-h-[600px] inline-grid grid-cols-[auto] grid-rows-[auto_auto_auto_minmax(250px,1fr)_auto] overflow-hidden">
-                  <AppHeader
+                <RightUsbEditorShell
+                  header={<AppHeader
                     connectedDeviceLabel={connectedDeviceName}
                     canUndo={canUndo}
                     canRedo={canRedo}
@@ -433,16 +433,15 @@ function AppInner() {
                     onDiscard={() => { void discard().catch(() => {}); }}
                     onDisconnect={disconnect}
                     onResetSettings={resetSettings}
-                  />
-                  <StudioConnectionOverview
-                    monitorStore={rightUsb.monitorStore}
-                    monitorActive={rightUsb.monitorActive}
-                    editorAvailable={!!conn.conn}
-                    connectionTitle={rightUsb.description.title}
-                    connectionBody={rightUsb.description.body}
-                    deviceName={connectedDeviceName}
-                    showLayout={rightUsb.monitorActive}
-                    actions={
+                  />}
+                  monitorStore={rightUsb.monitorStore}
+                  monitorActive={rightUsb.monitorActive}
+                  editorAvailable={!!conn.conn}
+                  connectionTitle={rightUsb.description.title}
+                  connectionBody={rightUsb.description.body}
+                  deviceName={connectedDeviceName}
+                  showLayout={rightUsb.monitorActive}
+                  actions={
                       !rightUsb.monitorActive && hasRightUsbFlow ? (
                         <button
                           type="button"
@@ -455,8 +454,7 @@ function AppInner() {
                         </button>
                       ) : undefined
                     }
-                  />
-                  <StudioTabView
+                  editor={<StudioTabView
                     activeTab={session.activeTab}
                     onSelectTab={(tab) => { void session.requestTab(tab); }}
                     renderTab={(tab) => {
@@ -471,12 +469,12 @@ function AppInner() {
                         case "settings": return <DeviceSettings />;
                       }
                     }}
-                  />
-                  <AppFooter
+                  />}
+                  footer={<AppFooter
                     onShowAbout={() => setShowAbout(true)}
                     onShowLicenseNotice={() => setShowLicenseNotice(true)}
-                  />
-                </div>
+                  />}
+                />
                 )}
               </TrackballPrecisionProvider>
             </CustomSubsystemsProvider>
