@@ -44,6 +44,42 @@ vi.mock("../transport/serial", async (importOriginal) => {
 });
 
 describe("useRightUsbConnection monitor open/close race", () => {
+  it("uses an injected native monitor operation for the right-USB flow", async () => {
+    const subscription: RawHidSubscription = {
+      device: {} as RawHidSubscription["device"],
+      close: vi.fn(async () => {}),
+    };
+    const connectMonitor = vi.fn(async () => subscription);
+    const detect = vi.fn(async () => ({
+      hidDevices: [],
+      serialPorts: [],
+      rawHidVisible: true,
+      serialVisible: true,
+    }));
+
+    const { result } = renderHook(() =>
+      useRightUsbConnection({
+        probeStudioRpc: vi.fn(async () => {}),
+        platform: {
+          connectMonitor,
+          detect,
+          logDetection: vi.fn(),
+          openSerialTransport: vi.fn(async () => {
+            throw new Error("serial not under test");
+          }),
+        },
+      }),
+    );
+
+    await act(async () => {
+      await result.current.connectRightUsb();
+    });
+
+    expect(connectMonitor).toHaveBeenCalledOnce();
+    expect(detect).toHaveBeenCalledOnce();
+    expect(result.current.monitorActive).toBe(true);
+  });
+
   it("closes a subscription that resolves after closeMonitor instead of leaking it", async () => {
     let resolveMonitor:
       | ((subscription: RawHidSubscription) => void)

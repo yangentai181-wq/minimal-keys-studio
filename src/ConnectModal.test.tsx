@@ -161,6 +161,37 @@ describe("ConnectModal browser transports", () => {
 });
 
 describe("ConnectModal right-USB main flow", () => {
+  it("keeps the right-USB action available while native BLE devices enumerate", () => {
+    const transports: TransportFactory[] = [
+      {
+        label: "BLE",
+        isWireless: true,
+        pick_and_connect: {
+          list: vi.fn(
+            () => new Promise<Array<{ label: string; id: string }>>(() => {}),
+          ),
+          connect: vi.fn(),
+        },
+      },
+    ];
+
+    render(
+      <ConnectModal
+        open
+        transports={transports}
+        onTransportCreated={vi.fn()}
+        onConnectRightUsb={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: RIGHT_USB_BUTTON_NAME }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("詳細な接続方法（BLE / USBシリアルのみ）"),
+    ).toBeInTheDocument();
+  });
+
   it("renders the right-USB connect as the primary button above the transport list", () => {
     const transports: TransportFactory[] = [
       { label: "BLE", isWireless: true, connect: vi.fn() },

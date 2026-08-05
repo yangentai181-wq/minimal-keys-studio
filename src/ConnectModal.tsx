@@ -94,11 +94,13 @@ function SimpleDevicePicker({
   onTransportCreated,
   onConnectRightUsb,
   connectionNotice,
+  hideTransportDetails = false,
 }: {
   transports: TransportFactory[];
   onTransportCreated: TransportCreatedHandler;
   onConnectRightUsb?: () => Promise<void>;
   connectionNotice?: { title: string; body: string };
+  hideTransportDetails?: boolean;
 }) {
   const [connectingLabel, setConnectingLabel] = useState<string | undefined>(
     undefined,
@@ -251,7 +253,7 @@ function SimpleDevicePicker({
           </span>
         </button>
       )}
-      {onConnectRightUsb ? (
+      {onConnectRightUsb && !hideTransportDetails ? (
         <details className="rounded-xl border border-base-300 bg-white px-4 py-3">
           <summary className="cursor-pointer text-sm font-medium text-base-content/70">
             詳細な接続方法（BLE / USBシリアルのみ）
@@ -432,14 +434,44 @@ function ConnectOptions({
     [transports],
   );
 
-  return useSimplePicker ? (
+  if (useSimplePicker) {
+    return (
     <SimpleDevicePicker
       transports={transports}
       onTransportCreated={onTransportCreated}
       onConnectRightUsb={onConnectRightUsb}
       connectionNotice={connectionNotice}
     />
-  ) : (
+    );
+  }
+
+  if (onConnectRightUsb) {
+    return (
+      <div className="space-y-4">
+        <SimpleDevicePicker
+          transports={[]}
+          onTransportCreated={onTransportCreated}
+          onConnectRightUsb={onConnectRightUsb}
+          connectionNotice={connectionNotice}
+          hideTransportDetails
+        />
+        <details className="rounded-xl border border-base-300 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-base-content/70">
+            詳細な接続方法（BLE / USBシリアルのみ）
+          </summary>
+          <div className="mt-3">
+            <DeviceList
+              open={open || false}
+              transports={transports}
+              onTransportCreated={onTransportCreated}
+            />
+          </div>
+        </details>
+      </div>
+    );
+  }
+
+  return (
     <DeviceList
       open={open || false}
       transports={transports}

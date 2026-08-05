@@ -455,7 +455,7 @@ function AppInner() {
     }
   }, [onTransportCreated, toast]);
 
-  const hasRightUsbFlow = !window.__TAURI_INTERNALS__ && !!navigator.serial;
+  const hasRightUsbFlow = !!window.__TAURI_INTERNALS__ || !!navigator.serial;
   const showMonitorOnly = !conn.conn && rightUsb.monitorActive;
 
   return (

@@ -23,6 +23,11 @@ import { connectRawHidMonitor, type RawHidSubscription } from "./rawHid";
 import { runRightUsbFlow } from "./rightUsbFlow";
 import { detectRightUsbDevice, logRightUsbDetection } from "./usbDiagnostics";
 import { connect as serialConnect } from "../transport/serial";
+import { connectTauriRawHidMonitor } from "../tauri/rawHid";
+import {
+  connect as tauriSerialConnect,
+  list_devices as listTauriSerialDevices,
+} from "../tauri/serial";
 import {
   createMonitorStore,
   type MonitorSnapshot,
@@ -45,6 +50,31 @@ export type RightUsbConnection = {
   dispatch: (event: CoordinatorEvent) => void;
 };
 
+type RightUsbPlatformOperations = {
+  connectMonitor: (onFrame: Parameters<typeof connectRawHidMonitor>[0]) => Promise<RawHidSubscription | undefined>;
+  detect: typeof detectRightUsbDevice;
+  logDetection: typeof logRightUsbDetection;
+  openSerialTransport: typeof serialConnect;
+};
+
+async function connectFirstTauriSerialDevice(): Promise<RpcTransport> {
+  const device = (await listTauriSerialDevices())[0];
+  if (!device) {
+    throw new Error("Studio RPC用のUSBシリアルデバイスが見つかりません。");
+  }
+  return tauriSerialConnect(device);
+}
+
+function defaultPlatformOperations(): RightUsbPlatformOperations {
+  const isTauri = typeof window !== "undefined" && !!window.__TAURI_INTERNALS__;
+  return {
+    connectMonitor: isTauri ? connectTauriRawHidMonitor : connectRawHidMonitor,
+    detect: detectRightUsbDevice,
+    logDetection: logRightUsbDetection,
+    openSerialTransport: isTauri ? connectFirstTauriSerialDevice : serialConnect,
+  };
+}
+
 export function useRightUsbConnection(options: {
   /**
    * Establish Studio RPC on the transport (create_rpc_connection +
@@ -52,8 +82,13 @@ export function useRightUsbConnection(options: {
    * DeviceInfoTimeoutError on probe timeout.
    */
   probeStudioRpc: (transport: RpcTransport) => Promise<void>;
+  platform?: Partial<RightUsbPlatformOperations>;
 }): RightUsbConnection {
   const { probeStudioRpc } = options;
+  const platform = useMemo(
+    () => ({ ...defaultPlatformOperations(), ...options.platform }),
+    [options.platform],
+  );
   const [state, dispatch] = useReducer(
     reduceConnection,
     initialCoordinatorState,
@@ -77,7 +112,7 @@ export function useRightUsbConnection(options: {
       return subscriptionRef.current;
     }
     const generation = monitorGenerationRef.current;
-    const subscription = await connectRawHidMonitor((frame) =>
+    const subscription = await platform.connectMonitor((frame) =>
       storeRef.current.push(frame),
     );
     if (!subscription) {
@@ -91,7 +126,7 @@ export function useRightUsbConnection(options: {
     }
     subscriptionRef.current = subscription;
     return subscription;
-  }, []);
+  }, [platform]);
 
   const connectRightUsb = useCallback(async () => {
     if (connecting) {
@@ -101,16 +136,16 @@ export function useRightUsbConnection(options: {
     try {
       await runRightUsbFlow({
         dispatch,
-        detect: detectRightUsbDevice,
-        logDetection: logRightUsbDetection,
+        detect: platform.detect,
+        logDetection: platform.logDetection,
         openMonitor,
-        openSerialTransport: serialConnect,
+        openSerialTransport: platform.openSerialTransport,
         probeStudioRpc,
       });
     } finally {
       setConnecting(false);
     }
-  }, [connecting, openMonitor, probeStudioRpc]);
+  }, [connecting, openMonitor, platform, probeStudioRpc]);
 
   const retryEditor = useCallback(async () => {
     if (connecting) {
@@ -121,7 +156,7 @@ export function useRightUsbConnection(options: {
       dispatch({ type: "webserial_opening" });
       let transport: RpcTransport;
       try {
-        transport = await serialConnect();
+        transport = await platform.openSerialTransport();
       } catch (error) {
         dispatch({
           type: "serial_failed",
@@ -138,7 +173,7 @@ export function useRightUsbConnection(options: {
     } finally {
       setConnecting(false);
     }
-  }, [connecting, probeStudioRpc]);
+  }, [connecting, platform, probeStudioRpc]);
 
   const closeMonitor = useCallback(async () => {
     monitorGenerationRef.current += 1;
