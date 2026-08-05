@@ -44,3 +44,28 @@ Coverage added in `src/navigation/DirtyStateContext.test.tsx`: a resolved `false
 ## Fix round 1 continuation
 
 GREEN: `npm test -- src/navigation/DirtyStateContext.test.tsx` passed (1 file, 8 tests); `npm run build` and `npm run lint` passed. The registry now snapshots dirty consumer-owned drafts before an unexpected notification-stream termination and restores them when the corresponding active screen registers after reconnect, with `未保存の変更を復元しました`.
+
+## Final implementation handoff
+
+- `AppInner` now uses `useStudioSessionNavigation` and `StudioTabView`; it renders just the active editor tab. Explicit disconnect is dirty-guarded and resets to the keymap only after a successful save or discard. Notification stream completion ignores an already-aborted signal; an unexpected completion snapshots drafts before App clears the connection while retaining the active tab for reconnect.
+- Encoder and hold-tap forms now reject decoded RPC errors and unsuccessful setter acknowledgements. Their named local drafts are registered with the dirty guard, and restored drafts win over a late device-discovery baseline.
+- `StudioSessionNavigation.test.tsx` provides App-level state-transition coverage without replacing real transports: tab unmounting, save/discard/cancel, failed save, explicit disconnect, unexpected loss ordering, and reconnect restoration.
+
+## Final verification
+
+```text
+npm test -- src/navigation/StudioSessionNavigation.test.tsx src/navigation/DirtyStateContext.test.tsx src/navigation/UnsavedChangesDialog.test.tsx src/encoder/EncoderSettings.test.tsx src/holdtap/HoldTapSettings.test.tsx src/trackball/TrackballPrecisionSettings.test.tsx
+6 files, 37 tests passed
+
+npm test
+101 files, 650 tests passed
+
+npm run lint
+passed
+
+npm run build
+passed (existing Vite chunk-size warning only)
+
+npm run tauri build
+passed (existing Vite chunk-size warning only)
+```
