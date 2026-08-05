@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bluetooth, Cable, Loader2, RefreshCw, Usb } from "lucide-react";
 
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
-import { UserCancelledError } from "@zmkfirmware/zmk-studio-ts-client/transport/errors";
 import { useModalRef } from "./misc/useModalRef";
 import { GenericModal } from "./GenericModal";
 import type { AvailableDevice } from "./tauri";
+import { getConnectionErrorMessage } from "./copy/connectionErrors";
 
 export type TransportFactory = {
   label: string;
@@ -34,18 +34,6 @@ export interface ConnectModalProps {
   onConnectRightUsb?: () => Promise<void>;
   /** Latest coordinator message ("which contract was established"). */
   connectionNotice?: { title: string; body: string };
-}
-
-function getConnectionErrorMessage(error: unknown): string | undefined {
-  if (error instanceof UserCancelledError) {
-    return undefined;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "接続中にエラーが発生しました。";
 }
 
 function ConnectionErrorNotice({ message }: { message?: string }) {

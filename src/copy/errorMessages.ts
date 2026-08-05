@@ -22,3 +22,6 @@ export const ERROR_MESSAGES = {
   "holdTap.save": "長押し設定を保存できませんでした。接続を確認して、もう一度お試しください。",
   "holdTap.reset": "長押し設定を初期化できませんでした。接続を確認して、もう一度お試しください。",
 } as const;
+
+export const CONNECTION_FAILURE_MESSAGE =
+  "キーボードに接続できませんでした。接続を確認して、もう一度お試しください。";

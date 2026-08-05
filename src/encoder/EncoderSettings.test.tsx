@@ -9,6 +9,7 @@ import type { DirtyRegistration } from "../navigation/DirtyStateContext";
 import { ConnectionContext } from "../rpc/ConnectionContext";
 import { LockStateContext } from "../rpc/LockStateContext";
 import { EncoderSettings } from "./EncoderSettings";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
 
 const mocks = vi.hoisted(() => ({
   subsystem: null as { callRPC: ReturnType<typeof vi.fn> } | null,
@@ -185,6 +186,42 @@ describe("EncoderSettings dirty drafts", () => {
 
     await waitFor(() => expect(registration().dirty).toBe(true));
     expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    expect(mocks.toast).toHaveBeenCalledWith(
+      ERROR_MESSAGES["encoder.setClockwiseBinding"],
+      "error",
+    );
+  });
+
+  it("identifies a clockwise binding failure for recovery", async () => {
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(setterResponse("cw", false));
+    renderSettings();
+
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+    await act(async () => {
+      await expect(registration().save()).rejects.toThrow("時計回りの設定を保存できませんでした");
+    });
+
+    expect(mocks.toast).toHaveBeenCalledWith(
+      ERROR_MESSAGES["encoder.setClockwiseBinding"],
+      "error",
+    );
+  });
+
+  it("identifies a counter-clockwise binding failure for recovery", async () => {
+    mocks.subsystem!.callRPC
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", false));
+    renderSettings();
+
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+    await act(async () => {
+      await expect(registration().save()).rejects.toThrow("反時計回りの設定を保存できませんでした");
+    });
+
+    expect(mocks.toast).toHaveBeenCalledWith(
+      ERROR_MESSAGES["encoder.setCounterClockwiseBinding"],
+      "error",
+    );
   });
 
   it("reapplies a restored encoder snapshot after reconnect discovery resolves", async () => {

@@ -10,6 +10,7 @@ const userFacingSources = [
   "src/settings/DeviceSettings.tsx",
   "src/holdtap/HoldTapSettings.tsx",
   "src/rpc/rpcCall.ts",
+  "src/ConnectModal.tsx",
 ];
 
 describe("user-facing failure copy", () => {
@@ -18,6 +19,7 @@ describe("user-facing failure copy", () => {
       const contents = readFileSync(resolve(process.cwd(), source), "utf8");
       expect(contents).not.toMatch(/toast\(\s*[`'"][^`'"]*\bfailed\b/i);
       expect(contents).not.toMatch(/toast\(\s*(?:e|error|message)\b/);
+      expect(contents).not.toMatch(/return error\.message/);
     }
   });
 });

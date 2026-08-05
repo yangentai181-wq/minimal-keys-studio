@@ -232,6 +232,7 @@ export function EncoderSettings() {
   const handleSave = useCallback(async () => {
     if (!subsystem || selectedSensorIndex === null) return;
     setSaving(true);
+    let failureMessage: string = ERROR_MESSAGES["encoder.save"];
     try {
       const cwRsr = behaviorToRsrBinding(cwBinding);
       const ccwRsr = behaviorToRsrBinding(ccwBinding);
@@ -242,19 +243,37 @@ export function EncoderSettings() {
       console.debug(`[Encoder] CW: behaviorId=${cwRsr.behaviorId} (${cwBehavior?.displayName ?? 'unknown'}) param1=${cwRsr.param1} param2=${cwRsr.param2}`);
       console.debug(`[Encoder] CCW: behaviorId=${ccwRsr.behaviorId} (${ccwBehavior?.displayName ?? 'unknown'}) param1=${ccwRsr.param1} param2=${ccwRsr.param2}`);
 
-      const cwResp = await callWithTimeout(
-        "setLayerCwBinding",
-        RSR.encodeSetLayerCwBinding(selectedSensorIndex, selectedLayer, cwRsr)
-      );
+      let cwResp: RSR.RsrResponse;
+      try {
+        cwResp = await callWithTimeout(
+          "setLayerCwBinding",
+          RSR.encodeSetLayerCwBinding(selectedSensorIndex, selectedLayer, cwRsr)
+        );
+      } catch (error) {
+        failureMessage = ERROR_MESSAGES["encoder.setClockwiseBinding"];
+        throw error;
+      }
       console.debug("[Encoder] CW set response:", JSON.stringify(cwResp));
-      if (!cwResp.setLayerCwBinding?.success) throw new Error("時計回りの設定を保存できませんでした");
+      if (!cwResp.setLayerCwBinding?.success) {
+        failureMessage = ERROR_MESSAGES["encoder.setClockwiseBinding"];
+        throw new Error("時計回りの設定を保存できませんでした");
+      }
 
-      const ccwResp = await callWithTimeout(
-        "setLayerCcwBinding",
-        RSR.encodeSetLayerCcwBinding(selectedSensorIndex, selectedLayer, ccwRsr)
-      );
+      let ccwResp: RSR.RsrResponse;
+      try {
+        ccwResp = await callWithTimeout(
+          "setLayerCcwBinding",
+          RSR.encodeSetLayerCcwBinding(selectedSensorIndex, selectedLayer, ccwRsr)
+        );
+      } catch (error) {
+        failureMessage = ERROR_MESSAGES["encoder.setCounterClockwiseBinding"];
+        throw error;
+      }
       console.debug("[Encoder] CCW set response:", JSON.stringify(ccwResp));
-      if (!ccwResp.setLayerCcwBinding?.success) throw new Error("反時計回りの設定を保存できませんでした");
+      if (!ccwResp.setLayerCcwBinding?.success) {
+        failureMessage = ERROR_MESSAGES["encoder.setCounterClockwiseBinding"];
+        throw new Error("反時計回りの設定を保存できませんでした");
+      }
 
       // Reload bindings to confirm saved values
       const resp = await callWithTimeout(
@@ -270,7 +289,7 @@ export function EncoderSettings() {
       }
     } catch (e) {
       console.error("[Encoder] Failed to save:", e);
-      toast(ERROR_MESSAGES["encoder.save"], "error");
+      toast(failureMessage, "error");
       throw e;
     } finally {
       setSaving(false);

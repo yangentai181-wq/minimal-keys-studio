@@ -18,3 +18,10 @@
 - `npm run lint` — passed.
 - `npm run build` — passed.
 - `npm run tauri build` — passed.
+
+## Fix round 1
+
+- Connection failures now use a tested normalizer: cancellation remains silent, while all other failures use fixed Japanese recovery guidance and preserve the original error only in developer logs.
+- The source regression scan now covers the connection error renderer in addition to toasts.
+- Clockwise and counter-clockwise encoder binding failures now each invoke their corresponding audited messages; the 22-entry table is no longer carrying unused keys.
+- Focused: 5 files / 27 tests passed. Full: 104 files / 665 tests passed. Lint, web build, and Tauri build passed.

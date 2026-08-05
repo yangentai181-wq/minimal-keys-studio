@@ -11,3 +11,4 @@ Task 3: fix round 2/5 (3 addressed, 0 open — explicit precision reload confirm
 Task 3: fix round 3/5 (1 addressed, 0 open — successful precision discard replaces its dirty draft with fetched device settings; focused 30 tests, full 658 tests, lint/build/Tauri build pass)
 Task 3: complete (commits f707b94..c265f45, independent re-review clean — Critical 0 / Important 0 / Minor 0)
 Task 4: implementation ready for review (22 audited failure paths centralized in Japanese copy, toast regression scan added; focused 2 tests, full 660 tests, lint/build/Tauri build pass)
+Task 4: fix round 1/5 (3 addressed, 0 open — normalized connection errors, renderer regression protection, live CW/CCW encoder recovery messages; focused 27 tests, full 665 tests, lint/build/Tauri build pass)
