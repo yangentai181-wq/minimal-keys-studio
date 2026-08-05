@@ -30,7 +30,6 @@ impl HidLifecycle {
     pub fn close(self) -> Self {
         Self::Idle
     }
-
 }
 
 pub fn matches_usage(usage_page: u16, usage: u16) -> bool {
