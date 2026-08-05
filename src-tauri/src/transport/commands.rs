@@ -91,6 +91,18 @@ where
     clear_failed_transport_and_notify(connection, session_id, notify_disconnect).await
 }
 
+pub async fn handle_device_event_stream_end<E, F>(
+    connection: &ActiveConnection<'_>,
+    session_id: u64,
+    notify_disconnect: F,
+) -> bool
+where
+    E: std::fmt::Display,
+    F: FnOnce() -> Result<(), E>,
+{
+    clear_failed_transport_and_notify(connection, session_id, notify_disconnect).await
+}
+
 #[command]
 pub async fn transport_send_data(
     req: Request<'_>,
@@ -124,7 +136,8 @@ pub async fn transport_close(state: State<'_, ActiveConnection<'_>>) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_failed_transport_and_notify, handle_notification_termination, ActiveConnection,
+        clear_failed_transport_and_notify, handle_device_event_stream_end,
+        handle_notification_termination, ActiveConnection,
     };
     use futures::channel::mpsc::channel;
     use futures::executor::block_on;
@@ -214,6 +227,32 @@ mod tests {
             );
             assert_eq!(notifications, 0);
             assert!(connection.clear_if_current(new_id).await);
+        });
+    }
+
+    #[test]
+    fn notification_and_device_event_stream_ends_notify_only_once() {
+        block_on(async {
+            let connection = ActiveConnection::default();
+            let (sink, _) = channel(1);
+            let session_id = connection.activate(Box::new(sink)).await;
+            let mut notifications = 0;
+
+            assert!(
+                handle_notification_termination::<&str, _>(&connection, session_id, || {
+                    notifications += 1;
+                    Ok(())
+                })
+                .await
+            );
+            assert!(
+                !handle_device_event_stream_end::<&str, _>(&connection, session_id, || {
+                    notifications += 1;
+                    Ok(())
+                })
+                .await
+            );
+            assert_eq!(notifications, 1);
         });
     }
 }

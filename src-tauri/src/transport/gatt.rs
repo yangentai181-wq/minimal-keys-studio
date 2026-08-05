@@ -135,7 +135,14 @@ pub async fn gatt_connect(
                         )
                         .await;
                     }
-                    DisconnectReason::AppRequested | DisconnectReason::EventStreamEnded => {
+                    DisconnectReason::EventStreamEnded => {
+                        let state = ah2.state::<super::commands::ActiveConnection>();
+                        super::commands::handle_device_event_stream_end(&state, session_id, || {
+                            ah2.emit("connection_disconnected", ())
+                        })
+                        .await;
+                    }
+                    DisconnectReason::AppRequested => {
                         // App requested disconnect - properly close BLE connection
                         println!("[BLE] Disconnecting device...");
                         let _ = a.disconnect_device(&d).await;

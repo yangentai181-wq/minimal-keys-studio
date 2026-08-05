@@ -59,3 +59,9 @@ No screenshots were captured at 800x600 or 1200x800, and no physical keyboard wa
 - BLE notification setup failure and an unrequested notification stream end now take the same session-safe cleanup/notification route as other transport failures.
 - Explicit disconnect first removes the active session, so its resulting notification end is stale and produces no duplicate disconnect event.
 - Regression tests cover setup failure, current stream end, and stale stream end. Requirement 2 now identifies adapter/lifecycle-contract coverage only; physical hardware remains the evidence for real native report forwarding.
+
+## Fix round 3/5
+
+- An unrequested BLE device-connection event-stream end is now an unexpected current-session failure, so it clears and notifies through the same session-safe helper.
+- Requested close is still classified through the shutdown signal and does not produce a duplicate notification. If the notification stream and device-event stream both end unexpectedly, the first cleanup wins and the second is stale.
+- Rust regression coverage proves that the two stream-end paths notify exactly once; strict Clippy remains clean.
