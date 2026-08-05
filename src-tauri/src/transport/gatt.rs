@@ -62,6 +62,8 @@ pub async fn gatt_connect(
             .cloned();
 
         if let Some(c) = char {
+            let (send, mut recv) = channel(5);
+            let session_id = state.activate(Box::new(send)).await;
             let c2 = c.clone();
             let ah1 = app_handle.clone();
             let notify_handle = tauri::async_runtime::spawn(async move {
@@ -115,10 +117,12 @@ pub async fn gatt_connect(
                     DisconnectReason::DeviceDisconnected => {
                         // Device disconnected on its own - notify the app
                         let state = ah2.state::<super::commands::ActiveConnection>();
-                        *state.conn.lock().await = None;
-                        if let Err(e) = ah2.emit("connection_disconnected", ()) {
-                            println!("ERROR RAISING! {:?}", e);
-                        }
+                        super::commands::clear_failed_transport_and_notify(
+                            &state,
+                            session_id,
+                            || ah2.emit("connection_disconnected", ()),
+                        )
+                        .await;
                     }
                     DisconnectReason::AppRequested | DisconnectReason::EventStreamEnded => {
                         // App requested disconnect - properly close BLE connection
@@ -129,18 +133,21 @@ pub async fn gatt_connect(
                 }
             });
 
-            let (send, mut recv) = channel(5);
-            *state.conn.lock().await = Some(Box::new(send));
             let ah3 = app_handle.clone();
             tauri::async_runtime::spawn(async move {
+                use tauri::Emitter;
+
                 while let Some(data) = recv.next().await {
                     if let Err(e) = c.write(&data).await {
                         eprintln!("[BLE] Write failed: {:?}", e);
-                        // Notify JS side of disconnect
-                        {
-                            use tauri::Emitter;
-                            let _ = ah3.emit("connection_disconnected", ());
-                        }
+                        use tauri::Manager;
+                        let state = ah3.state::<super::commands::ActiveConnection>();
+                        super::commands::clear_failed_transport_and_notify(
+                            &state,
+                            session_id,
+                            || ah3.emit("connection_disconnected", ()),
+                        )
+                        .await;
                         break;
                     }
                 }

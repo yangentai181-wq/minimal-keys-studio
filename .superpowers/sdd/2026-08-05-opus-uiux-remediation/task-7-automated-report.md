@@ -10,7 +10,7 @@ Date: 2026-08-05
 | Lint | PASS | `npm run lint` exited 0. |
 | Production web build | PASS | `npm run build` exited 0; its mandatory `verify:local-fonts` gate passed on fresh `dist`. |
 | Storybook build | PASS | `npm run build-storybook` exited 0. It reports only the existing no-MDX and third-party `eval` advisories. |
-| Rust tests | PASS | `cargo test --manifest-path src-tauri/Cargo.toml`: 5 HID tests passed. |
+| Rust tests | PASS | `cargo test --manifest-path src-tauri/Cargo.toml`: 8 transport/HID lifecycle tests passed. |
 | Rust strict lint | PASS | `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` exited 0. |
 | Tauri production build | PASS | `npm run tauri build` exited 0 and produced the macOS bundle/DMG. |
 
@@ -31,7 +31,7 @@ The previously recorded 13 strict-Clippy diagnostics were resolved without `allo
 | # | Requirement | Direct evidence | Status |
 | --- | --- | --- | --- |
 | 1 | Desktop has primary `右手をUSBで接続` | `src/ConnectModal.test.tsx` and Task 1 focused suite cover the immediate Tauri primary action. | Automated proof complete |
-| 2 | One USB connection supports monitor and Studio editing | `src/connection/rightUsbFlow.test.ts`, `src/connection/useRightUsbConnection.test.tsx`, `src/tauri/rawHid.test.ts`, and Rust HID lifecycle tests cover independent monitor/RPC contracts and native event forwarding. | Automated proof complete; physical proof pending |
+| 2 | One USB connection supports monitor and Studio editing | `src/connection/rightUsbFlow.test.ts`, `src/connection/useRightUsbConnection.test.tsx`, `src/tauri/rawHid.test.ts`, and Rust HID lifecycle tests cover independent monitor/RPC contracts and native event forwarding. `transport::commands::tests::failed_transport_notifies_only_when_its_session_is_still_current` proves a failed stale serial/BLE session cannot clear a newer editor session, while `transport::hid::tests::input_emit_failure_stops_and_clears_the_active_reader` proves native monitor event delivery failure stops and clears only its own reader. | Automated proof complete; physical proof pending |
 | 3 | Precision loading/disconnect/unsupported/error are distinct | `src/rpc/CustomSubsystemsProvider.test.tsx`, `src/trackball/precision-state.test.ts`, `src/trackball/TrackballPrecisionContext.test.tsx`, and `src/trackball/TrackballPrecisionSettings.test.tsx` cover all states and retry. | Automated proof complete |
 | 4 | 800x600 remains usable; default is 1200x800 | `src/keyboard/compute-one-u.test.ts` covers 800x600 sizing and Task 3 tests cover compact/bounded connection details; `src-tauri/tauri.conf.json` sets default 1200x800 and minimum 800x600. | Automated/configuration proof complete; visual proof pending |
 | 5 | Audited failures do not show English | `src/copy/errorMessages.test.ts`, `src/copy/userFacingEnglish.test.ts`, `src/ConnectModal.test.tsx`, `src/App.disconnected.test.tsx`, and `src/ErrorBoundary.test.tsx` cover the fixed Japanese surface and raw-error exclusion. | Automated proof complete |
@@ -46,3 +46,10 @@ The previously recorded 13 strict-Clippy diagnostics were resolved without `allo
 ## Deliberately unverified manual evidence
 
 No screenshots were captured at 800x600 or 1200x800, and no physical keyboard was connected during this automated task. The following must therefore be checked before declaring the overall work complete: actual compact layout/editor visibility, right-hand USB monitor and editor readiness, X-hold 200 CPI then release 800 CPI, and left-hand wireless input stability through the right half.
+
+## Fix round 1/5
+
+- Raw HID now treats an input-event emission failure as terminal for that reader: it logs the failure, requests reader stop, and clears the matching reader state. Failure to emit the subsequent raw-HID error is also logged.
+- Serial and BLE writer failures now clear and notify through one session-identified helper. A stale task cannot clear or emit a disconnect for a newer connection; disconnect-event emission failures are logged.
+- Rust regression coverage adds the Raw HID event-emission cleanup seam and both current/stale failed-transport notification paths.
+- Re-run verification: Rust tests (8), strict Clippy, frontend tests (110 files / 682), lint, production build, Storybook build, and Tauri build all pass.

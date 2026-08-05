@@ -66,6 +66,22 @@ fn clear_reader(state: &RawHidState, stop: &Arc<AtomicBool>) -> bool {
     }
 }
 
+fn continue_after_input_emit<E: std::fmt::Display>(
+    state: &RawHidState,
+    stop: &Arc<AtomicBool>,
+    result: Result<(), E>,
+) -> bool {
+    match result {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("[Raw HID] Failed to emit input: {error}");
+            stop.store(true, Ordering::Relaxed);
+            clear_reader(state, stop);
+            false
+        }
+    }
+}
+
 #[command]
 pub fn raw_hid_open(
     app_handle: AppHandle,
@@ -107,12 +123,21 @@ pub fn raw_hid_open(
         while !stop.load(Ordering::Relaxed) {
             match device.read_timeout(&mut buffer, READ_TIMEOUT_MS) {
                 Ok(size) if size > 0 => {
-                    let _ = app_handle.emit("raw_hid_input", buffer[..size].to_vec());
+                    if !continue_after_input_emit(
+                        &reader_state,
+                        &stop,
+                        app_handle.emit("raw_hid_input", buffer[..size].to_vec()),
+                    ) {
+                        return;
+                    }
                 }
                 Ok(_) => {}
                 Err(error) => {
                     if clear_reader(&reader_state, &stop) {
-                        let _ = app_handle.emit("raw_hid_error", error.to_string());
+                        if let Err(emit_error) = app_handle.emit("raw_hid_error", error.to_string())
+                        {
+                            eprintln!("[Raw HID] Failed to emit reader error: {emit_error}");
+                        }
                     }
                     return;
                 }
@@ -138,7 +163,10 @@ pub fn raw_hid_close(state: State<'_, RawHidState>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_reader, matches_usage, HidLifecycle, RawHidReader, RawHidState};
+    use super::{
+        clear_reader, continue_after_input_emit, matches_usage, HidLifecycle, RawHidReader,
+        RawHidState,
+    };
     use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
     #[test]
@@ -175,5 +203,21 @@ mod tests {
         assert!(clear_reader(&state, &stop));
         assert!(state.reader.lock().unwrap().is_none());
         assert!(!clear_reader(&state, &stop));
+    }
+
+    #[test]
+    fn input_emit_failure_stops_and_clears_the_active_reader() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let state = RawHidState {
+            reader: Arc::new(Mutex::new(Some(RawHidReader { stop: stop.clone() }))),
+        };
+
+        assert!(!continue_after_input_emit(
+            &state,
+            &stop,
+            Err("listener missing")
+        ));
+        assert!(stop.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(state.reader.lock().unwrap().is_none());
     }
 }

@@ -26,7 +26,7 @@ pub async fn serial_connect(
 
             let ahc = app_handle.clone();
             let (send, mut recv) = channel(5);
-            *state.conn.lock().await = Some(Box::new(send));
+            let session_id = state.activate(Box::new(send)).await;
 
             let read_process = tauri::async_runtime::spawn(async move {
                 use tauri::Emitter;
@@ -45,23 +45,32 @@ pub async fn serial_connect(
                 }
 
                 let state = app_handle.state::<super::commands::ActiveConnection>();
-                *state.conn.lock().await = None;
-
-                if let Err(error) = app_handle.emit("connection_disconnected", ()) {
-                    eprintln!("[Serial] Failed to emit disconnect notification: {error}");
-                }
+                super::commands::clear_failed_transport_and_notify(&state, session_id, || {
+                    app_handle.emit("connection_disconnected", ())
+                })
+                .await;
             });
 
             tauri::async_runtime::spawn(async move {
-                use tauri::Manager;
+                use tauri::{Emitter, Manager};
 
                 while let Some(data) = recv.next().await {
-                    let _res = writer.write(&data).await;
+                    if let Err(error) = writer.write(&data).await {
+                        eprintln!("[Serial] Write failed: {error}");
+                        let state = ahc.state::<super::commands::ActiveConnection>();
+                        super::commands::clear_failed_transport_and_notify(
+                            &state,
+                            session_id,
+                            || ahc.emit("connection_disconnected", ()),
+                        )
+                        .await;
+                        break;
+                    }
                 }
 
                 let state = ahc.state::<super::commands::ActiveConnection>();
                 read_process.abort();
-                *state.conn.lock().await = None;
+                state.clear_if_current(session_id).await;
             });
 
             Ok(true)
