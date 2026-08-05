@@ -10,7 +10,7 @@ Date: 2026-08-05
 | Lint | PASS | `npm run lint` exited 0. |
 | Production web build | PASS | `npm run build` exited 0; its mandatory `verify:local-fonts` gate passed on fresh `dist`. |
 | Storybook build | PASS | `npm run build-storybook` exited 0. It reports only the existing no-MDX and third-party `eval` advisories. |
-| Rust tests | PASS | `cargo test --manifest-path src-tauri/Cargo.toml`: 8 transport/HID lifecycle tests passed. |
+| Rust tests | PASS | `cargo test --manifest-path src-tauri/Cargo.toml`: 12 transport/HID lifecycle tests passed. |
 | Rust strict lint | PASS | `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` exited 0. |
 | Tauri production build | PASS | `npm run tauri build` exited 0 and produced the macOS bundle/DMG. |
 
@@ -31,9 +31,9 @@ The previously recorded 13 strict-Clippy diagnostics were resolved without `allo
 | # | Requirement | Direct evidence | Status |
 | --- | --- | --- | --- |
 | 1 | Desktop has primary `右手をUSBで接続` | `src/ConnectModal.test.tsx` and Task 1 focused suite cover the immediate Tauri primary action. | Automated proof complete |
-| 2 | One USB connection supports monitor and Studio editing | `src/connection/rightUsbFlow.test.ts`, `src/connection/useRightUsbConnection.test.tsx`, `src/tauri/rawHid.test.ts`, and Rust lifecycle tests cover the adapter and independent monitor/editor contracts. `transport::commands::tests::failed_transport_notifies_only_when_its_session_is_still_current` proves a failed stale serial/BLE session cannot clear a newer editor session, while `transport::hid::tests::input_emit_failure_stops_and_clears_the_active_reader` proves monitor delivery failure stops and clears only its own reader. Actual native-device report forwarding remains physical evidence. | Automated contract proof complete; physical proof pending |
+| 2 | One USB connection supports monitor and Studio editing | `src/connection/rightUsbFlow.test.ts`, `src/connection/useRightUsbConnection.test.tsx`, `src/tauri/rawHid.test.ts`, and Rust lifecycle tests cover the adapter and independent monitor/editor contracts. Host inspection observed the USB minimal-keys device, serial port, matching Raw HID usage, simultaneous BLE connection, and Raw HID traffic (details below). App UI readiness remains unobserved. | Automated contract proof complete; partial hardware transport evidence |
 | 3 | Precision loading/disconnect/unsupported/error are distinct | `src/rpc/CustomSubsystemsProvider.test.tsx`, `src/trackball/precision-state.test.ts`, `src/trackball/TrackballPrecisionContext.test.tsx`, and `src/trackball/TrackballPrecisionSettings.test.tsx` cover all states and retry. | Automated proof complete |
-| 4 | 800x600 remains usable; default is 1200x800 | `src/keyboard/compute-one-u.test.ts` covers 800x600 sizing and Task 3 tests cover compact/bounded connection details; `src-tauri/tauri.conf.json` sets default 1200x800 and minimum 800x600. | Automated/configuration proof complete; visual proof pending |
+| 4 | 800x600 remains usable; default is 1200x800 | `src/keyboard/compute-one-u.test.ts` covers 800x600 sizing and Task 3 tests cover compact/bounded connection details; `src-tauri/tauri.conf.json` sets default 1200x800 and minimum 800x600. Exact headless-browser screenshots at both sizes show the connection card, primary CTA, Japanese text, and detail toggle without clipping. | Automated/configuration and connection-screen visual proof complete; connected-editor visual proof pending |
 | 5 | Audited failures do not show English | `src/copy/errorMessages.test.ts`, `src/copy/userFacingEnglish.test.ts`, `src/ConnectModal.test.tsx`, `src/App.disconnected.test.tsx`, and `src/ErrorBoundary.test.tsx` cover the fixed Japanese surface and raw-error exclusion. | Automated proof complete |
 | 6 | Pointer frames do not rerender shell/editor | `src/App.monitor-isolation.test.tsx` and `src/connection/useRightUsbConnection.test.tsx` assert only monitor leaves update. | Automated proof complete |
 | 7 | Inactive tabs unmount; drafts are guarded | `src/navigation/StudioSessionNavigation.test.tsx`, `src/navigation/DirtyStateContext.test.tsx`, `src/navigation/UnsavedChangesDialog.test.tsx`, `src/encoder/EncoderSettings.test.tsx`, and `src/holdtap/HoldTapSettings.test.tsx` cover unmount, save, discard, cancel, failure, loss, and restoration. | Automated proof complete |
@@ -41,11 +41,19 @@ The previously recorded 13 strict-Clippy diagnostics were resolved without `allo
 | 9 | Selection/resize does not recompute 43-key data | `src/keyboard/key-presentation.test.tsx` covers selector memoization and invalidation boundaries. | Automated proof complete |
 | 10 | Resolved loading is immediate | `src/keyboard/Keyboard.loading.test.tsx` asserts ready data renders within 100 ms and no 500 ms floor remains. | Automated proof complete |
 | 11 | No Google Fonts at runtime or build | `src/style/noRemoteFonts.test.ts` and mandatory `verify:local-fonts` after the fresh production build reject Google font URLs in source and output. | Automated proof complete |
-| 12 | All automated gates and physical workflow | All automated gates above pass. No physical-keyboard observation was performed in this task. | Physical verification pending |
+| 12 | All automated gates and physical workflow | All automated gates above pass. USB/HID/BLE host evidence and active Raw HID traffic were observed, but the application readiness UI, precision CPI transition, and left-half input stability were not observed. | Physical workflow partially verified; remaining checks required |
 
-## Deliberately unverified manual evidence
+## Visual and hardware observations
 
-No screenshots were captured at 800x600 or 1200x800, and no physical keyboard was connected during this automated task. The following must therefore be checked before declaring the overall work complete: actual compact layout/editor visibility, right-hand USB monitor and editor readiness, X-hold 200 CPI then release 800 CPI, and left-hand wireless input stability through the right half.
+- Exact headless-browser screenshots exist at [`evidence/connect-800x600.png`](evidence/connect-800x600.png) and [`evidence/connect-1200x800.png`](evidence/connect-1200x800.png). At both pixel-exact sizes, the connection card, primary `右手をUSBで接続` action, Japanese explanatory text, and `接続の詳細` toggle are visible without clipping.
+- This visual evidence is limited to the connection screen. The connected editor has not been visually verified because no secondary display was available.
+- Host inspection (`system_profiler`, `ioreg`, and `hidutil`) observed a USB minimal-keys device with VID `0x1d50`, PID `0x615e`, serial port `/dev/cu.usbmodem3101`, and Raw HID usage page `65376` (`0xff60`) / usage `97` (`0x61`). A BLE minimal-keys connection was simultaneously present.
+- While the user operated the device, Raw HID `InputReportCount` advanced from `2454` to `2615`, confirming host-visible native pointer-monitoring traffic.
+- The following remain required before declaring the physical workflow complete: application UI shows monitor and editor ready; holding X shows precision `200` CPI then releasing shows normal `800` CPI; and left-half input remains stable through the right half.
+
+## Independent final review
+
+The independent final review of the Task 7 automated branch was clean: Critical 0, Important 0, Minor 0.
 
 ## Fix round 1/5
 
