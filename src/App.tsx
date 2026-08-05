@@ -1,15 +1,5 @@
 import { AppHeader } from "./AppHeader";
-import {
-  Grid3x3,
-  Timer,
-  RotateCw,
-  MousePointer2,
-  Cable,
-  Bluetooth,
-  BatteryMedium,
-  SlidersHorizontal,
-  Combine,
-} from "lucide-react";
+import { Cable } from "lucide-react";
 
 import { create_rpc_connection } from "@zmkfirmware/zmk-studio-ts-client";
 import { call_rpc } from "./rpc/logging";
@@ -59,7 +49,9 @@ import { UnifiedStudioPreview } from "./UnifiedStudioPreview";
 import { useRightUsbConnection } from "./connection/useRightUsbConnection";
 import { MonitorPanel } from "./monitor/MonitorPanel";
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
-import { DirtyStateProvider, useDirtyNavigation, useDirtyRegistration } from "./navigation/DirtyStateContext";
+import { DirtyStateProvider, useDirtyRegistration } from "./navigation/DirtyStateContext";
+import { StudioTabView } from "./navigation/StudioTabView";
+import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
 
 declare global {
   interface Window {
@@ -158,7 +150,7 @@ async function connect(
   setConnectedDeviceName: Dispatch<string | undefined>,
   abortController: AbortController,
   onError: (msg: string) => void,
-  onUnexpectedDisconnect: () => void,
+  onUnexpectedDisconnect: () => void | Promise<void>,
   isWireless?: boolean,
 ) {
   const signal = abortController.signal;
@@ -182,86 +174,25 @@ async function connect(
     throw error instanceof Error ? error : new Error(message);
   }
 
-  listen_for_notifications(conn.notification_readable, signal)
-    .then(() => {
-      onUnexpectedDisconnect();
-      setConnectedDeviceName(undefined);
-      setConn({ conn: null });
-    })
-    .catch(() => {
-      onUnexpectedDisconnect();
-      setConnectedDeviceName(undefined);
-      setConn({ conn: null });
-    });
+  const handleNotificationEnd = () => {
+    if (signal.aborted) return;
+    void onUnexpectedDisconnect();
+  };
+  void listen_for_notifications(conn.notification_readable, signal).then(
+    handleNotificationEnd,
+    handleNotificationEnd,
+  );
 
   setConnectedDeviceName(details.name);
   setConn({ conn });
 }
 
-type ActiveTab =
-  | "keymap"
-  | "trackball"
-  | "encoder"
-  | "combo"
-  | "bluetooth"
-  | "battery"
-  | "holdtap"
-  | "settings";
-
-type TabDef = { id: ActiveTab; label: string; icon: React.ReactNode };
-type TabGroup = { tabs: TabDef[] };
-
-const TAB_GROUPS: TabGroup[] = [
-  {
-    tabs: [
-      {
-        id: "keymap",
-        label: "キーマップ",
-        icon: <Grid3x3 className="w-4 h-4" />,
-      },
-      {
-        id: "holdtap",
-        label: "長押し設定",
-        icon: <Timer className="w-4 h-4" />,
-      },
-      {
-        id: "encoder",
-        label: "エンコーダー",
-        icon: <RotateCw className="w-4 h-4" />,
-      },
-      { id: "combo", label: "コンボ", icon: <Combine className="w-4 h-4" /> },
-    ],
-  },
-  {
-    tabs: [
-      {
-        id: "trackball",
-        label: "トラックボール",
-        icon: <MousePointer2 className="w-4 h-4" />,
-      },
-      {
-        id: "bluetooth",
-        label: "Bluetooth",
-        icon: <Bluetooth className="w-4 h-4" />,
-      },
-      {
-        id: "battery",
-        label: "バッテリー",
-        icon: <BatteryMedium className="w-4 h-4" />,
-      },
-      {
-        id: "settings",
-        label: "設定",
-        icon: <SlidersHorizontal className="w-4 h-4" />,
-      },
-    ],
-  },
-];
-
 function AppInner() {
-  const { requestNavigation, preserveDirtyDrafts } = useDirtyNavigation();
   const { toast } = useToast();
   const { trackEvent } = useTelemetry();
+  const session = useStudioSessionNavigation({
+    onTabChanged: (tab) => trackEvent("tab_switched", { tab }),
+  });
   const [conn, setConn] = useState<ConnectionState>({ conn: null });
   const [connectedDeviceName, setConnectedDeviceName] = useState<
     string | undefined
@@ -270,7 +201,6 @@ function AppInner() {
   const [showAbout, setShowAbout] = useState(false);
   const [showLicenseNotice, setShowLicenseNotice] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
-  const [activeTab, setActiveTab] = useState<ActiveTab>("keymap");
   const [keymapVersion, setKeymapVersion] = useState(0);
 
   const [lockState, setLockState] = useState<LockState>(
@@ -299,7 +229,6 @@ function AppInner() {
     if (!conn.conn) {
       reset();
       setLockState(LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED);
-      setActiveTab("keymap");
     }
 
     async function updateLockState() {
@@ -378,7 +307,7 @@ function AppInner() {
   }, [conn, toast, reset]);
 
   const disconnect = useCallback(() => {
-    void requestNavigation(async () => {
+    void session.requestExplicitDisconnect(async () => {
       if (!conn.conn) {
         return;
       }
@@ -391,7 +320,7 @@ function AppInner() {
       setConnectedDeviceName(undefined);
       setConnectionAbort(new AbortController());
     });
-  }, [conn, connectionAbort, requestNavigation]);
+  }, [conn, connectionAbort, session]);
 
   const onConnect = useCallback(
     (t: RpcTransport, isWireless?: boolean) => {
@@ -403,11 +332,14 @@ function AppInner() {
         setConnectedDeviceName,
         ac,
         (msg) => toast(msg, "error"),
-        preserveDirtyDrafts,
+        () => session.handleUnexpectedDisconnect(() => {
+          setConnectedDeviceName(undefined);
+          setConn({ conn: null });
+        }),
         isWireless,
       );
     },
-    [setConn, setConnectedDeviceName, toast, preserveDirtyDrafts],
+    [setConn, setConnectedDeviceName, toast, session],
   );
 
   // Studio RPC probe for the right-USB flow: only a successful
@@ -530,46 +462,22 @@ function AppInner() {
                       ) : undefined
                     }
                   />
-                  <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
-                    {TAB_GROUPS.map((group, gi) => (
-                      <div key={gi} className="flex items-center gap-0.5">
-                        {gi > 0 && (
-                          <div className="w-px h-6 bg-gray-300 mx-2" />
-                        )}
-                        {group.tabs.map((tab) => (
-                          <button
-                            key={tab.id}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${
-                              activeTab === tab.id
-                                ? "bg-primary/10 text-primary font-medium"
-                                : "text-base-content/60 hover:text-base-content hover:bg-base-200"
-                            }`}
-                            onClick={() => {
-                              void requestNavigation(() => {
-                                setActiveTab(tab.id);
-                                trackEvent("tab_switched", { tab: tab.id });
-                              });
-                            }}
-                          >
-                            {tab.icon}
-                            <span className="hidden sm:inline">
-                              {tab.label}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </nav>
-                  <div className="min-h-0 overflow-hidden h-full">
-                    {activeTab === "keymap" && <Keyboard key={keymapVersion} />}
-                    {activeTab === "trackball" && <TrackballSettings />}
-                    {activeTab === "encoder" && <EncoderSettings />}
-                    {activeTab === "combo" && <ComboSettings />}
-                    {activeTab === "bluetooth" && <BleManagement />}
-                    {activeTab === "holdtap" && <HoldTapSettings />}
-                    {activeTab === "battery" && <BatteryHistory />}
-                    {activeTab === "settings" && <DeviceSettings />}
-                  </div>
+                  <StudioTabView
+                    activeTab={session.activeTab}
+                    onSelectTab={(tab) => { void session.requestTab(tab); }}
+                    renderTab={(tab) => {
+                      switch (tab) {
+                        case "keymap": return <Keyboard key={keymapVersion} />;
+                        case "trackball": return <TrackballSettings />;
+                        case "encoder": return <EncoderSettings />;
+                        case "combo": return <ComboSettings />;
+                        case "bluetooth": return <BleManagement />;
+                        case "battery": return <BatteryHistory />;
+                        case "holdtap": return <HoldTapSettings />;
+                        case "settings": return <DeviceSettings />;
+                      }
+                    }}
+                  />
                   <AppFooter
                     onShowAbout={() => setShowAbout(true)}
                     onShowLicenseNotice={() => setShowLicenseNotice(true)}

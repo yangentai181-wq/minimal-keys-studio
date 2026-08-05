@@ -21,6 +21,13 @@ interface LayerDisplay {
   name: string;
 }
 
+type EncoderDraft = {
+  selectedSensorIndex: number | null;
+  selectedLayer: number;
+  cwBinding: BehaviorBinding;
+  ccwBinding: BehaviorBinding;
+};
+
 function useLayers(): LayerDisplay[] {
   const connection = useContext(ConnectionContext);
   const lockState = useContext(LockStateContext);
@@ -84,6 +91,15 @@ export function EncoderSettings() {
   const [ccwBinding, setCcwBinding] = useState<BehaviorBinding>({
     behaviorId: 0, param1: 0, param2: 0,
   });
+  const pendingRestoredDraftRef = useRef<EncoderDraft | null>(null);
+  const skipBaselineApplyRef = useRef(false);
+
+  const applyDraft = useCallback((draft: EncoderDraft) => {
+    setSelectedSensorIndex(draft.selectedSensorIndex);
+    setSelectedLayer(draft.selectedLayer);
+    setCwBinding(draft.cwBinding);
+    setCcwBinding(draft.ccwBinding);
+  }, []);
 
   const callWithTimeout = useCallback(
     async (label: string, payload: Uint8Array, timeoutMs = 5000) => {
@@ -93,7 +109,9 @@ export function EncoderSettings() {
         setTimeout(() => reject(new Error(`RPC timeout: ${label}`)), timeoutMs)
       );
       const data = await Promise.race([subsystem.callRPC(payload), timeout]);
-      return RSR.decodeResponse(data);
+      const response = RSR.decodeResponse(data);
+      if (response.error) throw new Error(response.error);
+      return response;
     },
     [subsystem]
   );
@@ -140,6 +158,12 @@ export function EncoderSettings() {
           if (bindResp.getAllLayerBindings?.bindings) {
             console.debug("[Encoder] Layer bindings:", JSON.stringify(bindResp.getAllLayerBindings.bindings));
             setLayerBindings(bindResp.getAllLayerBindings.bindings);
+            const restored = pendingRestoredDraftRef.current;
+            if (restored) {
+              skipBaselineApplyRef.current = true;
+              applyDraft(restored);
+              pendingRestoredDraftRef.current = null;
+            }
           }
         }
       } catch (e) {
@@ -153,7 +177,7 @@ export function EncoderSettings() {
     }
 
     discoverAndLoad();
-  }, [subsystem, callWithTimeout, toast]);
+  }, [subsystem, callWithTimeout, toast, applyDraft]);
 
   // Reload bindings when user switches sensor (not on initial load)
   const loadBindingsForSensor = useCallback(async (sensorIndex: number) => {
@@ -166,6 +190,12 @@ export function EncoderSettings() {
       );
       if (resp.getAllLayerBindings?.bindings) {
         setLayerBindings(resp.getAllLayerBindings.bindings);
+        const restored = pendingRestoredDraftRef.current;
+        if (restored) {
+          skipBaselineApplyRef.current = true;
+          applyDraft(restored);
+          pendingRestoredDraftRef.current = null;
+        }
       }
     } catch (e) {
       console.error("[Encoder] Failed to load bindings:", e);
@@ -173,10 +203,14 @@ export function EncoderSettings() {
     } finally {
       setLoading(false);
     }
-  }, [subsystem, callWithTimeout, toast]);
+  }, [subsystem, callWithTimeout, toast, applyDraft]);
 
   // Update local form state when selected layer changes
   useEffect(() => {
+    if (skipBaselineApplyRef.current) {
+      skipBaselineApplyRef.current = false;
+      return;
+    }
     const lb = layerBindings.find((b) => b.layer === selectedLayer);
     if (lb) {
       setCwBinding(rsrBindingToBehavior(lb.cwBinding));
@@ -212,20 +246,14 @@ export function EncoderSettings() {
         RSR.encodeSetLayerCwBinding(selectedSensorIndex, selectedLayer, cwRsr)
       );
       console.debug("[Encoder] CW set response:", JSON.stringify(cwResp));
-      if (cwResp.error) {
-        console.error("[Encoder] CW set error:", cwResp.error);
-        toast("Failed to set clockwise binding", "error");
-      }
+      if (!cwResp.setLayerCwBinding?.success) throw new Error("時計回りの設定を保存できませんでした");
 
       const ccwResp = await callWithTimeout(
         "setLayerCcwBinding",
         RSR.encodeSetLayerCcwBinding(selectedSensorIndex, selectedLayer, ccwRsr)
       );
       console.debug("[Encoder] CCW set response:", JSON.stringify(ccwResp));
-      if (ccwResp.error) {
-        console.error("[Encoder] CCW set error:", ccwResp.error);
-        toast("Failed to set counter-clockwise binding", "error");
-      }
+      if (!ccwResp.setLayerCcwBinding?.success) throw new Error("反時計回りの設定を保存できませんでした");
 
       // Reload bindings to confirm saved values
       const resp = await callWithTimeout(
@@ -253,17 +281,16 @@ export function EncoderSettings() {
     save: async () => { await handleSave(); return true; },
     discard: async () => {
       if (!confirmedBinding) return false;
+      pendingRestoredDraftRef.current = null;
       setCwBinding(rsrBindingToBehavior(confirmedBinding.cwBinding));
       setCcwBinding(rsrBindingToBehavior(confirmedBinding.ccwBinding));
       return true;
     },
-    snapshot: () => ({ cwBinding, ccwBinding, selectedLayer, selectedSensorIndex }),
+    snapshot: (): EncoderDraft => ({ cwBinding, ccwBinding, selectedLayer, selectedSensorIndex }),
     restore: (snapshot) => {
-      const draft = snapshot as { cwBinding: BehaviorBinding; ccwBinding: BehaviorBinding; selectedLayer: number; selectedSensorIndex: number | null };
-      setSelectedLayer(draft.selectedLayer);
-      setSelectedSensorIndex(draft.selectedSensorIndex);
-      setCwBinding(draft.cwBinding);
-      setCcwBinding(draft.ccwBinding);
+      const draft = snapshot as EncoderDraft;
+      pendingRestoredDraftRef.current = draft;
+      applyDraft(draft);
     },
   });
 

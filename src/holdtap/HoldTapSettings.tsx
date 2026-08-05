@@ -29,6 +29,14 @@ function msDescription(ms: number): string {
   return "長い";
 }
 
+type HoldTapDraft = {
+  selectedId: number | null;
+  tappingTerm: number;
+  quickTap: number;
+  requirePriorIdle: number;
+  flavor: HT.HoldTapFlavor;
+};
+
 export function HoldTapSettings() {
   const subsystem = useCustomSubsystem(HT.SUBSYSTEM_ID);
   const { toast } = useToast();
@@ -42,6 +50,15 @@ export function HoldTapSettings() {
   const [quickTap, setQuickTap] = useState(0);
   const [requirePriorIdle, setRequirePriorIdle] = useState(0);
   const [flavor, setFlavor] = useState<HT.HoldTapFlavor>(0);
+  const pendingRestoredDraftRef = useRef<HoldTapDraft | null>(null);
+
+  const applyDraft = useCallback((draft: HoldTapDraft) => {
+    setSelectedId(draft.selectedId);
+    setTappingTerm(draft.tappingTerm);
+    setQuickTap(draft.quickTap);
+    setRequirePriorIdle(draft.requirePriorIdle);
+    setFlavor(draft.flavor);
+  }, []);
 
   const discoveryVersionRef = useRef(0);
 
@@ -58,7 +75,9 @@ export function HoldTapSettings() {
         subsystem.callRPC(payload),
         timeout,
       ]);
-      return HT.decodeResponse(data);
+      const response = HT.decodeResponse(data);
+      if (response.error) throw new Error(response.error);
+      return response;
     },
     [subsystem]
   );
@@ -89,6 +108,11 @@ export function HoldTapSettings() {
         if (list.length > 0) {
           setSelectedId(list[0].id);
           applyInfo(list[0]);
+          const restored = pendingRestoredDraftRef.current;
+          if (restored) {
+            applyDraft(restored);
+            pendingRestoredDraftRef.current = null;
+          }
         }
       } catch (e) {
         if (version === discoveryVersionRef.current) {
@@ -101,7 +125,7 @@ export function HoldTapSettings() {
     }
 
     discover();
-  }, [subsystem, callWithTimeout, toast]);
+  }, [subsystem, callWithTimeout, toast, applyDraft]);
 
   function applyInfo(info: HT.HoldTapInfo) {
     setTappingTerm(info.tappingTermMs);
@@ -119,28 +143,32 @@ export function HoldTapSettings() {
     try {
       const id = selectedId;
       if (tappingTerm !== selected.tappingTermMs) {
-        await callWithTimeout(
+        const response = await callWithTimeout(
           "setTappingTerm",
           HT.encodeSetTappingTerm(id, tappingTerm)
         );
+        if (!response.setTappingTerm?.success) throw new Error("タッピングタームを保存できませんでした");
       }
       if (quickTap !== sanitizeMs(selected.quickTapMs)) {
-        await callWithTimeout(
+        const response = await callWithTimeout(
           "setQuickTap",
           HT.encodeSetQuickTap(id, quickTap)
         );
+        if (!response.setQuickTap?.success) throw new Error("クイックタップを保存できませんでした");
       }
       if (requirePriorIdle !== sanitizeMs(selected.requirePriorIdleMs)) {
-        await callWithTimeout(
+        const response = await callWithTimeout(
           "setRequirePriorIdle",
           HT.encodeSetRequirePriorIdle(id, requirePriorIdle)
         );
+        if (!response.setRequirePriorIdle?.success) throw new Error("入力前待ち時間を保存できませんでした");
       }
       if (flavor !== selected.flavor) {
-        await callWithTimeout(
+        const response = await callWithTimeout(
           "setFlavor",
           HT.encodeSetFlavor(id, flavor)
         );
+        if (!response.setFlavor?.success) throw new Error("判定モードを保存できませんでした");
       }
 
       const resp = await callWithTimeout(
@@ -178,17 +206,15 @@ export function HoldTapSettings() {
     save: async () => { await handleApply(); return true; },
     discard: async () => {
       if (!selected) return false;
+      pendingRestoredDraftRef.current = null;
       applyInfo(selected);
       return true;
     },
-    snapshot: () => ({ selectedId, tappingTerm, quickTap, requirePriorIdle, flavor }),
+    snapshot: (): HoldTapDraft => ({ selectedId, tappingTerm, quickTap, requirePriorIdle, flavor }),
     restore: (snapshot) => {
-      const draft = snapshot as { selectedId: number | null; tappingTerm: number; quickTap: number; requirePriorIdle: number; flavor: HT.HoldTapFlavor };
-      setSelectedId(draft.selectedId);
-      setTappingTerm(draft.tappingTerm);
-      setQuickTap(draft.quickTap);
-      setRequirePriorIdle(draft.requirePriorIdle);
-      setFlavor(draft.flavor);
+      const draft = snapshot as HoldTapDraft;
+      pendingRestoredDraftRef.current = draft;
+      applyDraft(draft);
     },
   });
 
