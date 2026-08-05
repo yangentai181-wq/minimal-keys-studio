@@ -69,4 +69,30 @@ describe("createMonitorStore", () => {
     expect(store.getSnapshot().pressed.size).toBe(0);
     unsubscribe();
   });
+
+  it("coalesces a burst of pointer frames into one subscriber update", () => {
+    const scheduled: Array<() => void> = [];
+    const store = createMonitorStore((notify) => {
+      scheduled.push(notify);
+      return () => {
+        scheduled.length = 0;
+      };
+    });
+    let notified = 0;
+    store.subscribe(() => {
+      notified += 1;
+    });
+
+    store.push({ kind: "pointer", dx: 1, dy: 0, wheel: 0, hwheel: 0, buttons: 0 }, 100);
+    store.push({ kind: "pointer", dx: 2, dy: 0, wheel: 0, hwheel: 0, buttons: 0 }, 101);
+    store.push({ kind: "pointer", dx: 3, dy: 0, wheel: 0, hwheel: 0, buttons: 0 }, 102);
+
+    expect(notified).toBe(0);
+    expect(store.getSnapshot().pointer?.dx).toBe(3);
+    expect(scheduled).toHaveLength(1);
+
+    scheduled[0]();
+
+    expect(notified).toBe(1);
+  });
 });

@@ -48,7 +48,14 @@ export function PrecisionKeyPicker({ keymap, behaviors, confirmed, draftPosition
     width: position.width / 100,
     height: position.height / 100,
     header: analyses[index]?.supported ? "選択可" : "使用不可",
-    children: <span>キー {index}{analyses[index]?.supported ? "" : `（${analyses[index]?.reason}）`}</span>,
+    children: analyses[index]?.supported ? (
+      <span className="flex flex-col items-center">
+        <span className="font-semibold">{analyses[index].tapLabel}</span>
+        <span className="text-[9px] opacity-70">キー {index}</span>
+      </span>
+    ) : (
+      <span>キー {index}（{analyses[index]?.reason}）</span>
+    ),
   }));
 
   return (

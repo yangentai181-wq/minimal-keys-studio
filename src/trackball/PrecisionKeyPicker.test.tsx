@@ -38,6 +38,21 @@ const keymap = {
 };
 
 describe("PrecisionKeyPicker", () => {
+  it("labels selectable positions with their actual tap action", () => {
+    render(
+      <PrecisionKeyPicker
+        keymap={keymap}
+        behaviors={behaviors}
+        confirmed={null}
+        draftPosition={0}
+        updateDraft={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /選択可.*A.*キー 0/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /選択可.*B.*キー 1/ })).toBeVisible();
+  });
+
   it("switches displayed actions to the newly selected draft key before save", () => {
     const wrappedKeymap = {
       ...keymap,

@@ -99,14 +99,42 @@ export type MonitorStore = {
   reset: () => void;
 };
 
-export function createMonitorStore(): MonitorStore {
+export type PointerNotifyScheduler = (notify: () => void) => () => void;
+
+const schedulePointerNotify: PointerNotifyScheduler = (notify) => {
+  if (typeof requestAnimationFrame === "function") {
+    const id = requestAnimationFrame(notify);
+    return () => cancelAnimationFrame(id);
+  }
+  const id = setTimeout(notify, 16);
+  return () => clearTimeout(id);
+};
+
+export function createMonitorStore(
+  schedule: PointerNotifyScheduler = schedulePointerNotify,
+): MonitorStore {
   let snapshot = initialMonitorSnapshot;
   const listeners = new Set<() => void>();
+  let cancelPendingPointerNotify: (() => void) | null = null;
 
   const notify = () => {
     for (const listener of listeners) {
       listener();
     }
+  };
+
+  const notifyPointerFrame = () => {
+    if (cancelPendingPointerNotify) return;
+    cancelPendingPointerNotify = schedule(() => {
+      cancelPendingPointerNotify = null;
+      notify();
+    });
+  };
+
+  const notifyImmediately = () => {
+    cancelPendingPointerNotify?.();
+    cancelPendingPointerNotify = null;
+    notify();
   };
 
   return {
@@ -117,11 +145,15 @@ export function createMonitorStore(): MonitorStore {
     },
     push: (frame, at = Date.now()) => {
       snapshot = applyFrame(snapshot, frame, at);
-      notify();
+      if (frame.kind === "pointer") {
+        notifyPointerFrame();
+      } else {
+        notifyImmediately();
+      }
     },
     reset: () => {
       snapshot = initialMonitorSnapshot;
-      notify();
+      notifyImmediately();
     },
   };
 }
