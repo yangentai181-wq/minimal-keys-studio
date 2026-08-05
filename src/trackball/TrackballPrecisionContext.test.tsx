@@ -16,10 +16,16 @@ vi.mock("../rpc/useCustomSubsystem", () => ({
   },
 }));
 
+vi.mock("./PrecisionKeyPicker", () => ({ ConnectedPrecisionKeyPicker: () => null }));
+vi.mock("./useConnectedPrecisionSelection", () => ({
+  useConnectedPrecisionSelection: () => ({ keymap: undefined, behaviors: [], analysis: null }),
+}));
+
 import {
   TrackballPrecisionProvider,
   useTrackballPrecision,
 } from "./TrackballPrecisionContext";
+import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 
 const initialConfig: TrackballConfig = {
   schemaVersion: 1,
@@ -172,6 +178,22 @@ describe("TrackballPrecisionProvider", () => {
 
     await waitFor(() => expect(screen.getByTestId("availability")).toHaveTextContent("error"));
     expect(screen.getByTestId("error")).toHaveTextContent("デバイスとの通信に失敗しました");
+  });
+
+  it("retries a failed settings read and restores editable precision controls", async () => {
+    subsystem = {
+      subsystemIndex: 4,
+      callRPC: vi.fn()
+        .mockRejectedValueOnce(new Error("transport lost"))
+        .mockResolvedValueOnce(getResponse({ ...initialConfig, enabled: false })),
+    };
+    render(<TrackballPrecisionProvider><TrackballPrecisionSettings /></TrackballPrecisionProvider>);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "もう一度読み込む" })).toBeEnabled());
+    await act(async () => screen.getByRole("button", { name: "もう一度読み込む" }).click());
+
+    await waitFor(() => expect(screen.getByLabelText("通常の速さ")).toBeVisible());
+    expect(screen.getByLabelText("精密モードの速さ")).toBeVisible();
   });
 
   it("reloads after a stale response and does not overwrite the device state", async () => {

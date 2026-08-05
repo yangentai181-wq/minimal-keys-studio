@@ -87,13 +87,16 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
       if (pendingDraftRef.current && expectedRevision !== null) {
         if (!matchesPending(response.get, pendingDraftRef.current, expectedRevision)) return;
         setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
+        setAvailability("available");
         finishSaving(generation);
         return;
       }
       setState((previous) => generation === generationRef.current ? acceptConfig(previous, response.get!) : previous);
+      setAvailability("available");
     } catch (error) {
       if (generation !== generationRef.current) return;
       setState((previous) => generation === generationRef.current ? transportError(previous, errorMessage(error)) : previous);
+      setAvailability("error");
       finishSaving(generation);
     }
   }, [finishSaving]);
@@ -104,6 +107,7 @@ export function TrackballPrecisionProvider({ children }: { children: React.React
       return;
     }
     if (!subsystem) return;
+    setAvailability("loading");
     await reloadFrom(subsystem, generationRef.current);
   }, [customSubsystems, reloadFrom, subsystem]);
 
