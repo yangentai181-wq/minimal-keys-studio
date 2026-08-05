@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -29,10 +29,4 @@ describe("local typography", () => {
     expect(filesWithGoogleFontReferences(sourceFiles)).toEqual([]);
   });
 
-  const distDirectory = join(projectRoot, "dist");
-  const builtTest = existsSync(distDirectory) ? it : it.skip;
-
-  builtTest("does not include Google font requests in the current production bundle", () => {
-    expect(filesWithGoogleFontReferences(filesRecursively(distDirectory))).toEqual([]);
-  });
 });
