@@ -14,3 +14,5 @@ Task 4: implementation ready for review (22 audited failure paths centralized in
 Task 4: fix round 1/5 (3 addressed, 0 open — normalized connection errors, renderer regression protection, live CW/CCW encoder recovery messages; focused 27 tests, full 665 tests, lint/build/Tauri build pass)
 Task 4: fix round 2/5 (1 addressed, 0 open — App device-info failure normalizes before toast; focused 24 tests, full 666 tests, lint/build/Tauri build pass)
 Task 4: fix round 3/5 (2 addressed, 0 open — safe ErrorBoundary fallback and single modal connection-failure surface; focused 30 tests, full 666 tests, lint/build/Tauri build pass)
+Task 4: complete (commits 79fd40e..f28ce0f, independent re-review clean — Critical 0 / Important 0 / Minor 0)
+Task 5: fix round 3/5 (1 addressed, 0 open — connected AppInner performance integration test proves Raw HID pointer frames update only the monitor leaf; focused 1 test, full 673 tests, lint/build/Tauri build pass)

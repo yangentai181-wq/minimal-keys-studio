@@ -11,6 +11,7 @@
 - `useRightUsbConnection.test.tsx` proves a pointer frame re-renders the monitor leaf while header/editor counters remain unchanged.
 - `usePubSub.test.ts` covers callback replacement, event-name replacement, explicit unsubscribe, and cleanup.
 - `key-presentation.test.tsx` covers the selector output and input invalidation boundary.
+- `App.monitor-isolation.test.tsx` takes the connected App path through `AppInner`, then pushes a pointer frame into the production monitor store. It proves the monitor summary changes without re-rendering the App root boundary, `AppInner`, `AppHeader`, `StudioTabView`, or its active editor.
 
 ## Verification
 
@@ -30,3 +31,8 @@ passed (existing Vite chunk-size warning only)
 npm run tauri build
 passed (existing Vite chunk-size warning only)
 ```
+
+## Fix round 3
+
+- Added the missing full-App integration regression test. The first test setup entered the monitor-only shell before it could establish the editor connection; the corrected setup starts with the monitor idle, establishes the regular Studio RPC connection through `AppInner`, and then drives the same stable monitor store used by the production editor shell.
+- `npm test` now passes 107 files / 673 tests; lint, web build, and Tauri build also pass (existing Vite chunk-size warning only).
