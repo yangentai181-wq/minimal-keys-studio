@@ -10,8 +10,9 @@ export default {
         xs: "0.4rem",
       },
       fontFamily: {
-        sans: ["JetBrains Mono", "ui-monospace", "monospace"],
-        keycap: ["JetBrains Mono", "ui-monospace", "monospace"],
+        sans: ["-apple-system", "BlinkMacSystemFont", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+        keycap: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
       },
       colors: {
         primary: "#0D9488",

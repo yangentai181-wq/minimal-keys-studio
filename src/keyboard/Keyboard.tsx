@@ -50,32 +50,6 @@ import { publishKeymapChanged } from "./keymap-events";
 import { runGuardedKeymapWrite } from "./keymap-operation-guards";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
 
-// Keeps loading state visible for at least minMs so users always see feedback.
-function useMinLoadingTime(isLoading: boolean, minMs = 500): boolean {
-  const [show, setShow] = useState(isLoading);
-  const startRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (isLoading) {
-      startRef.current = Date.now();
-      setShow(true);
-    } else if (startRef.current !== null) {
-      const remaining = minMs - (Date.now() - startRef.current);
-      if (remaining > 0) {
-        const timer = setTimeout(() => {
-          setShow(false);
-          startRef.current = null;
-        }, remaining);
-        return () => clearTimeout(timer);
-      }
-      setShow(false);
-      startRef.current = null;
-    }
-  }, [isLoading, minMs]);
-
-  return show;
-}
-
 // Separate component for keyboard area — measures container and computes oneU.
 // Isolated so ResizeObserver doesn't cause feedback loops with the keyboard rendering.
 function KeyboardArea({
@@ -226,7 +200,7 @@ export default function Keyboard() {
   const behaviors = useBehaviorMap();
   const behaviorsLoading = useBehaviorsLoading();
   const isDataLoading = !layouts || !keymap || behaviorsLoading;
-  const showLoading = useMinLoadingTime(isDataLoading);
+  const showLoading = isDataLoading;
 
   const conn = useContext(ConnectionContext);
   const undoRedo = useContext(UndoRedoContext);
