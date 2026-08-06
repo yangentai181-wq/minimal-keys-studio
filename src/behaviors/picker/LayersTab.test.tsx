@@ -78,6 +78,10 @@ describe("LayersTab", () => {
     fireEvent.click(screen.getByText("レイヤー / タップ"));
     const applyBtn = screen.getByText("適用する");
     expect(applyBtn).toHaveAttribute("disabled");
+    fireEvent.click(screen.getByText("Symbols"));
+    expect(screen.getByTestId("layer-tap-key-grid")).not.toHaveClass(
+      "overflow-y-auto",
+    );
   });
 
   it("Layer-Tap: apply button enabled after both params", () => {

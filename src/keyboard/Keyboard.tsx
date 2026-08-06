@@ -660,7 +660,7 @@ export default function Keyboard() {
   }, [keymap, conn, behaviors, layouts, selectedPhysicalLayoutIndex, toast, setKeymap]);
 
   return (
-    <div className="grid grid-cols-[auto_1fr] grid-rows-[55fr_45fr] bg-base-300 max-w-full min-w-0 min-h-0 h-full">
+    <div className="grid h-full min-h-0 min-w-0 max-w-full grid-cols-[auto_1fr] grid-rows-[minmax(180px,42fr)_minmax(250px,58fr)] bg-base-300">
       <div className="p-2 flex flex-col gap-2 bg-gray-50 border-r border-gray-200 row-span-2">
         {!showLoading && layouts ? (
           <div className="col-start-3 row-start-1 row-end-2">
@@ -742,7 +742,10 @@ export default function Keyboard() {
         encoderRotationLabel={encoderSummary?.rotationLabel}
         showLoading={showLoading}
       />
-      <div className="p-3 col-start-2 row-start-2 bg-white border-t border-gray-200 overflow-y-auto">
+      <div
+        data-testid="binding-picker-panel"
+        className="col-start-2 row-start-2 min-h-0 overflow-hidden border-t border-gray-200 bg-white p-2"
+      >
         {!showLoading && keymap && selectedBinding != null ? (
           <BehaviorBindingPicker
             binding={selectedBinding}

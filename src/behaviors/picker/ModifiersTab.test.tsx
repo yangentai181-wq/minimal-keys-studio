@@ -51,6 +51,10 @@ describe("ModifiersTab", () => {
     fireEvent.click(screen.getByText("Mod-Tap"));
     const applyBtn = screen.getByText("適用する");
     expect(applyBtn).toHaveAttribute("disabled");
+    fireEvent.click(screen.getByText("Ctrl (左)"));
+    expect(screen.getByTestId("modifier-tap-key-grid")).not.toHaveClass(
+      "overflow-y-auto",
+    );
   });
 
   it("mod-tap mode: apply sends correct binding", () => {

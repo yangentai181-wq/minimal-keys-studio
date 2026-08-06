@@ -37,13 +37,13 @@ export function PickerTabs({
   const [activeTab, setActiveTab] = useState<TabId>("actions");
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
       {/* Tab bar */}
-      <div className="flex gap-0.5 bg-base-200 p-1 rounded-lg overflow-x-auto">
+      <div className="flex gap-0.5 overflow-x-auto rounded-lg bg-base-200 p-0.5">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            className={`px-3 py-1.5 text-sm rounded-md transition-all whitespace-nowrap ${
+            className={`whitespace-nowrap rounded-md px-2.5 py-1 text-sm transition-all ${
               activeTab === tab.id
                 ? "bg-white text-primary font-medium shadow-sm"
                 : "text-base-content/50 hover:text-base-content"
@@ -56,7 +56,7 @@ export function PickerTabs({
       </div>
 
       {/* Tab content */}
-      <div className="min-h-[6rem]">
+      <div data-testid="picker-tab-content" className="min-h-0 flex-1">
         {activeTab === "actions" && (
           <ActionsTab
             keyPosition={keyPosition}

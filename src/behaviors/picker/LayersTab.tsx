@@ -173,7 +173,10 @@ export function LayersTab({
           <div className="text-sm text-base-content/60 mb-1">
             タップキーを選択
           </div>
-          <div className="grid grid-cols-8 gap-1 max-h-32 overflow-y-auto">
+          <div
+            data-testid="layer-tap-key-grid"
+            className="grid grid-cols-8 gap-1 lg:grid-cols-10 xl:grid-cols-13"
+          >
             {commonTapKeys.map((key) => (
               <button
                 key={key.modifier ? `s${key.hidId}` : key.hidId}

@@ -13,6 +13,11 @@ describe("LettersTab", () => {
     render(<LettersTab behaviors={mockBehaviors} onApplyBinding={onApply} />);
     expect(screen.getByText("A")).toBeTruthy();
     expect(screen.getByText("Z")).toBeTruthy();
+    const grid = screen.getByTestId("letters-key-grid");
+    expect(grid).not.toHaveClass("overflow-y-auto");
+    for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      expect(screen.getByRole("button", { name: letter })).toBeInTheDocument();
+    }
   });
 
   it("calls onApplyBinding with correct HID usage on letter click", () => {

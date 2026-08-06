@@ -85,6 +85,10 @@ describe("Keyboard loading", () => {
     });
 
     expect(screen.getByText("キーマップ本体: 表示可能")).toBeInTheDocument();
+    expect(screen.getByTestId("binding-picker-panel")).toHaveClass(
+      "min-h-0",
+      "overflow-hidden",
+    );
   });
 
   it("keeps the spinner visible while the physical-layout request remains unresolved", async () => {

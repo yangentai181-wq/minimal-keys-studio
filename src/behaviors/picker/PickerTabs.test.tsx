@@ -28,6 +28,9 @@ describe("PickerTabs", () => {
     expect(screen.getByText("修飾キー")).toBeDefined();
     expect(screen.getByText("日本語")).toBeDefined();
     expect(screen.getByText("システム")).toBeDefined();
+    expect(screen.getByTestId("picker-tab-content")).not.toHaveClass(
+      "overflow-y-auto",
+    );
     // OS toggle is now in AppHeader, not PickerTabs
   });
 

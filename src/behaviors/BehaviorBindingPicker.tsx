@@ -61,9 +61,9 @@ export const BehaviorBindingPicker = ({
     : "";
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-1.5">
       {currentBehavior && currentDesc && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-primary/50 bg-primary/5 text-sm">
+        <div className="flex items-center gap-2 rounded-md border-2 border-primary/50 bg-primary/5 px-2 py-1 text-sm">
           <span className="text-primary font-medium">現在の設定:</span>
           <span className="font-bold">{currentDesc.label}</span>
           {bindingDetail && (
