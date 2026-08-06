@@ -80,6 +80,7 @@ export function MinimalKeysMonitorLayout({
             index,
             activeLayerIndex,
           );
+          const isLongLabel = label.length > 4 || label.includes(" / ");
 
           return (
             <div
@@ -93,7 +94,7 @@ export function MinimalKeysMonitorLayout({
             >
               <div
                 className={cx(
-                  "flex h-full w-full min-w-0 items-center justify-center rounded-md border px-1 text-center text-xs font-bold leading-tight shadow-sm transition",
+                  "flex h-full w-full min-w-0 items-center justify-center rounded-md border px-1 text-center leading-tight shadow-sm transition",
                   isPressed
                     ? "border-primary bg-primary text-primary-content ring-2 ring-primary/30"
                     : transparent
@@ -101,7 +102,15 @@ export function MinimalKeysMonitorLayout({
                       : "border-base-300 bg-white text-base-content",
                 )}
               >
-                <span className="line-clamp-2 break-words">{label}</span>
+                <span
+                  data-testid={`monitor-key-label-${index}`}
+                  className={cx(
+                    "line-clamp-2 break-words font-bold leading-tight",
+                    isLongLabel ? "text-sm" : "text-base",
+                  )}
+                >
+                  {label}
+                </span>
               </div>
             </div>
           );

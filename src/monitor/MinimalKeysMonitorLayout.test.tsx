@@ -37,6 +37,21 @@ describe("MinimalKeysMonitorLayout", () => {
     });
   });
 
+  it("uses readable type sizes for short and dual-function labels", () => {
+    render(
+      <MinimalKeysMonitorLayout activeLayerIndex={0} pressed={new Set()} />,
+    );
+
+    expect(screen.getByTestId("monitor-key-label-0")).toHaveClass(
+      "text-base",
+      "font-bold",
+    );
+    expect(screen.getByTestId("monitor-key-label-40")).toHaveClass(
+      "text-sm",
+      "font-bold",
+    );
+  });
+
   it("keeps every static monitor layer aligned to the 43 physical positions", () => {
     expect(MONITOR_KEY_LABELS_BY_LAYER.map((labels) => labels.length)).toEqual(
       Array.from({ length: 8 }, () => 43),
