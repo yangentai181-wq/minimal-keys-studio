@@ -3,12 +3,38 @@ use futures::channel::mpsc::channel;
 use futures::StreamExt;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_serial::{available_ports, SerialPortBuilderExt, SerialPortType};
+use tokio_serial::{available_ports, SerialPortBuilderExt, SerialPortInfo, SerialPortType};
 
 use tauri::{command, AppHandle, State};
 use tauri_plugin_cli::CliExt;
 
 const READ_BUF_SIZE: usize = 1024;
+
+fn usb_serial_candidates(ports: Vec<SerialPortInfo>) -> Vec<super::commands::AvailableDevice> {
+    let callout_suffixes = ports
+        .iter()
+        .filter_map(|port| port.port_name.strip_prefix("/dev/cu."))
+        .map(str::to_owned)
+        .collect::<std::collections::HashSet<_>>();
+
+    ports
+        .into_iter()
+        .filter(|pi| match pi.port_name.strip_prefix("/dev/tty.") {
+            Some(suffix) => !callout_suffixes.contains(suffix),
+            None => true,
+        })
+        .filter_map(|pi| {
+            if let SerialPortType::UsbPort(u) = pi.port_type {
+                Some(super::commands::AvailableDevice {
+                    id: pi.port_name,
+                    label: u.product.unwrap_or("Unnamed device".to_string()),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
 
 #[command]
 pub async fn serial_connect(
@@ -85,19 +111,7 @@ pub async fn serial_list_devices(
 ) -> Result<Vec<super::commands::AvailableDevice>, ()> {
     let ports = unblock(available_ports).await.unwrap();
 
-    let mut candidates = ports
-        .into_iter()
-        .filter_map(|pi| {
-            if let SerialPortType::UsbPort(u) = pi.port_type {
-                Some(super::commands::AvailableDevice {
-                    id: pi.port_name,
-                    label: u.product.unwrap_or("Unnamed device".to_string()),
-                })
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+    let mut candidates = usb_serial_candidates(ports);
 
     if let Ok(m) = app_handle.cli().matches() {
         if let Some(p) = m.args.get("serial-port") {
@@ -111,4 +125,42 @@ pub async fn serial_list_devices(
     }
 
     Ok(candidates)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::usb_serial_candidates;
+    use tokio_serial::{SerialPortInfo, SerialPortType, UsbPortInfo};
+
+    fn minimal_keys_port(path: &str) -> SerialPortInfo {
+        SerialPortInfo {
+            port_name: path.to_string(),
+            port_type: SerialPortType::UsbPort(UsbPortInfo {
+                vid: 0x1d50,
+                pid: 0x615e,
+                serial_number: Some("F2A88EBCCBC3757A".to_string()),
+                manufacturer: Some("ZMK Project".to_string()),
+                product: Some("minimal-keys".to_string()),
+            }),
+        }
+    }
+
+    #[test]
+    fn macos_callout_and_tty_names_are_one_usb_candidate() {
+        let candidates = usb_serial_candidates(vec![
+            minimal_keys_port("/dev/cu.usbmodem1101"),
+            minimal_keys_port("/dev/tty.usbmodem1101"),
+        ]);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].id, "/dev/cu.usbmodem1101");
+    }
+
+    #[test]
+    fn tty_name_is_kept_when_no_callout_name_exists() {
+        let candidates = usb_serial_candidates(vec![minimal_keys_port("/dev/tty.usbmodem1101")]);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].id, "/dev/tty.usbmodem1101");
+    }
 }
