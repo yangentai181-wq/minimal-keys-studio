@@ -81,9 +81,45 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Editor800x600: Story = {};
+const viewports = {
+  desktop800x600: {
+    name: "800 × 600",
+    styles: { width: "800px", height: "600px" },
+  },
+  desktop1200x800: {
+    name: "1200 × 800",
+    styles: { width: "1200px", height: "800px" },
+  },
+};
+
+function SizedWorkspace({
+  width,
+  height,
+  args,
+}: {
+  width: number;
+  height: number;
+  args: React.ComponentProps<typeof KeyboardWorkspace>;
+}) {
+  return (
+    <div style={{ width, height }} className="overflow-hidden bg-[#F8FAFC]">
+      <KeyboardWorkspace {...args} />
+    </div>
+  );
+}
+
+export const Editor800x600: Story = {
+  render: (args) => <SizedWorkspace width={800} height={600} args={args} />,
+  parameters: {
+    viewport: { viewports, defaultViewport: "desktop800x600" },
+  },
+};
 
 export const Monitor800x600: Story = {
+  render: (args) => <SizedWorkspace width={800} height={600} args={args} />,
+  parameters: {
+    viewport: { viewports, defaultViewport: "desktop800x600" },
+  },
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole("button", { name: "リアルタイム" }),
@@ -92,6 +128,10 @@ export const Monitor800x600: Story = {
 };
 
 export const Monitor1200x800: Story = {
+  render: (args) => <SizedWorkspace width={1200} height={800} args={args} />,
+  parameters: {
+    viewport: { viewports, defaultViewport: "desktop1200x800" },
+  },
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole("button", { name: "リアルタイム" }),
@@ -134,10 +174,16 @@ function IntegratedFrame(args: React.ComponentProps<typeof KeyboardWorkspace>) {
 
 export const IntegratedEditor800x600: Story = {
   render: (args) => <IntegratedFrame {...args} />,
+  parameters: {
+    viewport: { viewports, defaultViewport: "desktop800x600" },
+  },
 };
 
 export const IntegratedMonitor800x600: Story = {
   render: (args) => <IntegratedFrame {...args} />,
+  parameters: {
+    viewport: { viewports, defaultViewport: "desktop800x600" },
+  },
   play: async ({ canvasElement }) => {
     await userEvent.click(
       within(canvasElement).getByRole("button", { name: "リアルタイム" }),
