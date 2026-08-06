@@ -31,7 +31,7 @@ export function KeyboardWorkspace({
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-[#F8FAFC]">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-base-300 bg-white px-3 py-2">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-base-300 bg-white px-3 py-1">
         <div
           role="group"
           aria-label="キーボード表示"
@@ -92,7 +92,7 @@ export function KeyboardWorkspace({
         )}
       </header>
 
-      <div className="min-h-0 flex-1 p-3">
+      <div className="min-h-0 flex-1 p-2">
         <div hidden={monitorSelected} className="h-full min-h-0">
           {editor}
         </div>

@@ -660,7 +660,7 @@ export default function Keyboard() {
   }, [keymap, conn, behaviors, layouts, selectedPhysicalLayoutIndex, toast, setKeymap]);
 
   return (
-    <div className="grid h-full min-h-0 min-w-0 max-w-full grid-cols-[auto_1fr] grid-rows-[minmax(180px,42fr)_minmax(250px,58fr)] bg-base-300">
+    <div className="grid h-full min-h-0 min-w-0 max-w-full grid-cols-[auto_1fr] grid-rows-[minmax(150px,42fr)_minmax(160px,58fr)] bg-base-300">
       <div className="p-2 flex flex-col gap-2 bg-gray-50 border-r border-gray-200 row-span-2">
         {!showLoading && layouts ? (
           <div className="col-start-3 row-start-1 row-end-2">

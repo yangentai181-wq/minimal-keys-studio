@@ -69,7 +69,7 @@ export function KeyboardMonitorSurface({
         className="min-h-0 flex-1 bg-base-200"
       />
 
-      <dl className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
+      <dl className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
         {summaries.map((summary) => (
           <div
             key={summary.label}
