@@ -13,7 +13,6 @@ export function RightUsbEditorShell({
   connectionTitle,
   connectionBody,
   deviceName,
-  showLayout,
   actions,
 }: {
   header: ReactNode;
@@ -25,12 +24,11 @@ export function RightUsbEditorShell({
   connectionTitle: string;
   connectionBody: string;
   deviceName?: string;
-  showLayout?: boolean;
   actions?: ReactNode;
 }) {
   return <div className="bg-base-100 text-base-content h-dvh w-full min-h-[600px] inline-grid grid-cols-[auto] grid-rows-[auto_auto_auto_minmax(250px,1fr)_auto] overflow-hidden">
     {header}
-    <StudioConnectionOverview monitorStore={monitorStore} monitorActive={monitorActive} editorAvailable={editorAvailable} connectionTitle={connectionTitle} connectionBody={connectionBody} deviceName={deviceName} showLayout={showLayout} actions={actions} />
+    <StudioConnectionOverview monitorStore={monitorStore} monitorActive={monitorActive} editorAvailable={editorAvailable} connectionTitle={connectionTitle} connectionBody={connectionBody} deviceName={deviceName} actions={actions} />
     {editor}
     {footer}
   </div>;

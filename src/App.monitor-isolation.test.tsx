@@ -130,12 +130,17 @@ describe("App monitor isolation", () => {
 
     await screen.findByText("アプリヘッダー");
     await screen.findByText("アクティブエディター");
+    expect(screen.getByRole("group", { name: "キーボード表示" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "リアルタイム" }));
+    expect(
+      screen.getByRole("grid", { name: "minimal-keys 実配列モニター" }),
+    ).toBeInTheDocument();
     const before = { ...mocks.renders };
     const rightUsb = mocks.rightUsb as { monitorStore: ReturnType<typeof createMonitorStore> };
 
     act(() => rightUsb.monitorStore.push({ kind: "pointer", dx: 9, dy: -2, wheel: 0, hwheel: 0, buttons: 0 }));
 
-    await waitFor(() => expect(screen.getByText("dx +9 / dy -2")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("dx +9 / dy -2").length).toBeGreaterThan(0));
     expect(mocks.renders.appHeader).toBe(before.appHeader);
     expect(mocks.renders.appRoot).toBe(before.appRoot);
     expect(mocks.renders.appInner).toBe(before.appInner);

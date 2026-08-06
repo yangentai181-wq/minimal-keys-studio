@@ -1,5 +1,4 @@
 import { AppHeader } from "./AppHeader";
-import { Cable } from "lucide-react";
 
 import { create_rpc_connection } from "@zmkfirmware/zmk-studio-ts-client";
 import { call_rpc } from "./rpc/logging";
@@ -21,6 +20,7 @@ import {
   list_devices as serial_list_devices,
 } from "./tauri/serial";
 import Keyboard from "./keyboard/Keyboard";
+import { KeyboardWorkspace } from "./keyboard/KeyboardWorkspace";
 import { TrackballSettings } from "./trackball/TrackballSettings";
 import { TrackballPrecisionProvider } from "./trackball/TrackballPrecisionContext";
 import { EncoderSettings } from "./encoder/EncoderSettings";
@@ -440,26 +440,24 @@ function AppInner() {
                   connectionTitle={rightUsb.description.title}
                   connectionBody={rightUsb.description.body}
                   deviceName={connectedDeviceName}
-                  showLayout={rightUsb.monitorActive}
-                  actions={
-                      !rightUsb.monitorActive && hasRightUsbFlow ? (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50"
-                          onClick={rightUsb.connectRightUsb}
-                          disabled={rightUsb.connecting}
-                        >
-                          <Cable className="h-4 w-4" aria-hidden="true" />
-                          右手USBモニターを接続
-                        </button>
-                      ) : undefined
-                    }
                   editor={<StudioTabView
                     activeTab={session.activeTab}
                     onSelectTab={(tab) => { void session.requestTab(tab); }}
                     renderTab={(tab) => {
                       switch (tab) {
-                        case "keymap": return <Keyboard key={keymapVersion} />;
+                        case "keymap": return (
+                          <KeyboardWorkspace
+                            editor={<Keyboard key={keymapVersion} />}
+                            monitorStore={rightUsb.monitorStore}
+                            monitorActive={rightUsb.monitorActive}
+                            monitorBusy={rightUsb.connecting}
+                            onConnectMonitor={
+                              hasRightUsbFlow
+                                ? rightUsb.connectRightUsb
+                                : undefined
+                            }
+                          />
+                        );
                         case "trackball": return <TrackballSettings />;
                         case "encoder": return <EncoderSettings />;
                         case "combo": return <ComboSettings />;

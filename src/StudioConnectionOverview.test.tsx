@@ -73,7 +73,6 @@ describe("StudioConnectionOverview", () => {
         editorAvailable
         connectionTitle="エディター利用可"
         connectionBody="Studio RPCで接続中です。"
-        showLayout
       />,
     );
 
@@ -82,7 +81,10 @@ describe("StudioConnectionOverview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
 
-    expect(screen.getByText("ライブ読み取り")).toBeInTheDocument();
+    expect(screen.queryByText("ライブ読み取り")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("grid", { name: "minimal-keys 実配列モニター" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("connection-details")).toHaveClass("max-h-[min(45dvh,360px)]", "overflow-y-auto");
   });
 
@@ -145,7 +147,6 @@ describe("StudioConnectionOverview", () => {
         connectionTitle="エディター利用可"
         connectionBody="Raw HIDとStudio RPCが同じ画面で使えます。"
         deviceName="minimal-keys"
-        showLayout
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
@@ -156,12 +157,8 @@ describe("StudioConnectionOverview", () => {
     expect(screen.getByText("#30 /")).toBeTruthy();
     expect(screen.getAllByText("dx +12 / dy -4").length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("grid", { name: "minimal-keys 実配列モニター" }),
-    ).toBeTruthy();
-    expect(screen.getByLabelText("pos 30 / 押下中")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+      screen.queryByRole("grid", { name: "minimal-keys 実配列モニター" }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers action content when supplied", () => {

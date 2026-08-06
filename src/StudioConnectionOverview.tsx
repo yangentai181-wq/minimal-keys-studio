@@ -1,18 +1,8 @@
-import {
-  Activity,
-  Bluetooth,
-  Cable,
-  Keyboard,
-  Layers,
-  Link2,
-  MousePointer2,
-  Usb,
-} from "lucide-react";
+import { Cable, Keyboard, Link2, MousePointer2, Usb } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { isLayerActive } from "./connection/rawHidFrames";
 import { AUTO_MOUSE_LAYER_INDEX } from "./keyboard/minimal-keys-layers";
-import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { getMonitorKeyLabel } from "./monitor/minimalKeysMonitorLabels";
 import type { MonitorStore } from "./monitor/monitorStore";
@@ -26,7 +16,6 @@ interface StudioConnectionOverviewProps {
   connectionTitle: string;
   connectionBody: string;
   deviceName?: string;
-  showLayout?: boolean;
   actions?: ReactNode;
 }
 
@@ -104,14 +93,12 @@ function MonitorSummary({
   editorAvailable,
   connectionTitle,
   deviceName,
-  showLayout,
 }: {
   store: MonitorStore;
   monitorActive: boolean;
   editorAvailable: boolean;
   connectionTitle: string;
   deviceName?: string;
-  showLayout?: boolean;
 }) {
   const monitor = useMonitorSnapshot(store);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -183,10 +170,6 @@ function MonitorSummary({
         <MetricCard label="トラックボール" value={pointerSummary} />
       </div>
       {editorAvailable && <TrackballPrecisionStatus />}
-      {showLayout && <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <MinimalKeysMonitorLayout activeLayerIndex={monitor.activeLayerIndex} pressed={monitor.pressed} holdTapStates={monitor.holdTapStates} className="bg-white" />
-        <div className="rounded-lg border border-base-300 bg-white p-4 shadow-sm"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-primary" aria-hidden="true" /><h2 className="text-sm font-bold text-base-content">ライブ読み取り</h2></div><p className="mt-2 text-sm leading-6 text-base-content/70">Raw HIDのpositionを実配列に重ねて表示しています。Studio RPCが成立している場合は、この下のエディターで同じキーを編集できます。</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-lg bg-primary/10 px-3 py-1 text-primary">{monitorActive ? "monitor live" : "monitor idle"}</span><span className="rounded-lg bg-base-200 px-3 py-1 text-base-content/60">{editorAvailable ? "editor ready" : "editor pending"}</span><span className="inline-flex items-center gap-1 rounded-lg bg-base-200 px-3 py-1 text-base-content/60"><Layers className="h-3.5 w-3.5" aria-hidden="true" />L{monitor.activeLayerIndex}</span><span className="inline-flex items-center gap-1 rounded-lg bg-base-200 px-3 py-1 text-base-content/60"><Bluetooth className="h-3.5 w-3.5" aria-hidden="true" />split input via central</span></div></div>
-      </div>}
     </div>}
   </div>;
 }
@@ -198,7 +181,6 @@ export function StudioConnectionOverview({
   connectionTitle,
   connectionBody,
   deviceName,
-  showLayout,
   actions,
 }: StudioConnectionOverviewProps) {
   return (
@@ -218,7 +200,7 @@ export function StudioConnectionOverview({
               </p>
             </div>
             {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
-            <MonitorSummary store={monitorStore} monitorActive={monitorActive} editorAvailable={editorAvailable} connectionTitle={connectionTitle} deviceName={deviceName} showLayout={showLayout} />
+            <MonitorSummary store={monitorStore} monitorActive={monitorActive} editorAvailable={editorAvailable} connectionTitle={connectionTitle} deviceName={deviceName} />
           </div>
         </div>
       </div>
