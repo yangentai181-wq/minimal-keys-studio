@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
+import { createElement } from "react";
+import { fn, userEvent, within } from "@storybook/test";
 import { BehaviorBindingPicker } from "./BehaviorBindingPicker";
 
 // More on how to set up stories at: https://storybook.js.org/docs/writing-stories#default-export
@@ -47,4 +48,37 @@ export const Example: Story = {
       },
     ],
   },
+};
+
+const openLettersTab = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole("button", { name: "文字・記号" }));
+};
+
+export const Compact800x600: Story = {
+  ...Example,
+  parameters: { layout: "fullscreen" },
+  decorators: [
+    (Story) =>
+      createElement(
+        "div",
+        { style: { width: 800, height: 330, overflow: "hidden", padding: 8 } },
+        createElement(Story),
+      ),
+  ],
+  play: openLettersTab,
+};
+
+export const Default1200x800: Story = {
+  ...Example,
+  parameters: { layout: "fullscreen" },
+  decorators: [
+    (Story) =>
+      createElement(
+        "div",
+        { style: { width: 1200, height: 390, overflow: "hidden", padding: 12 } },
+        createElement(Story),
+      ),
+  ],
+  play: openLettersTab,
 };
