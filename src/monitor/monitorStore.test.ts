@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applyFrame, createMonitorStore, initialMonitorSnapshot } from "./monitorStore";
 
@@ -48,9 +48,24 @@ describe("applyFrame", () => {
     expect(snapshot.pointer).toMatchObject({ dx: 5, dy: -2, buttons: 1 });
     expect(snapshot.encoders[0]).toMatchObject({ delta: -1 });
   });
+
+  it("records an authoritative hold-tap decision per key position", () => {
+    const snapshot = applyFrame(
+      initialMonitorSnapshot,
+      { kind: "holdTap", position: 40, phase: "hold" },
+      120,
+    );
+
+    expect(snapshot.holdTapStates[40]).toBe("hold");
+    expect(snapshot.lastEventAt).toBe(120);
+  });
 });
 
 describe("createMonitorStore", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("notifies subscribers and exposes immutable snapshots", () => {
     const store = createMonitorStore();
     let notified = 0;
@@ -94,5 +109,51 @@ describe("createMonitorStore", () => {
     scheduled[0]();
 
     expect(notified).toBe(1);
+  });
+
+  it("shows tap briefly after release, then clears it", () => {
+    vi.useFakeTimers();
+    const store = createMonitorStore();
+
+    store.push({ kind: "holdTap", position: 4, phase: "pending" }, 100);
+    expect(store.getSnapshot().holdTapStates[4]).toBe("pending");
+    store.push({ kind: "holdTap", position: 4, phase: "tap" }, 110);
+    store.push({ kind: "holdTap", position: 4, phase: "released" }, 120);
+    expect(store.getSnapshot().holdTapStates[4]).toBe("tap");
+
+    vi.advanceTimersByTime(399);
+    expect(store.getSnapshot().holdTapStates[4]).toBe("tap");
+    vi.advanceTimersByTime(1);
+    expect(store.getSnapshot().holdTapStates[4]).toBeUndefined();
+  });
+
+  it("shows an orange hold afterglow briefly after release", () => {
+    vi.useFakeTimers();
+    const store = createMonitorStore();
+
+    store.push({ kind: "holdTap", position: 8, phase: "hold" }, 100);
+    store.push({ kind: "holdTap", position: 8, phase: "released" }, 110);
+    expect(store.getSnapshot().holdTapStates[8]).toBe("hold-afterglow");
+
+    vi.advanceTimersByTime(250);
+    expect(store.getSnapshot().holdTapStates[8]).toBeUndefined();
+  });
+
+  it("cancels hold-tap cleanup timers when reset", () => {
+    vi.useFakeTimers();
+    const store = createMonitorStore();
+    let notified = 0;
+    store.subscribe(() => {
+      notified += 1;
+    });
+
+    store.push({ kind: "holdTap", position: 8, phase: "tap" }, 100);
+    store.push({ kind: "holdTap", position: 8, phase: "released" }, 110);
+    store.reset();
+    const notificationsAfterReset = notified;
+
+    vi.runAllTimers();
+    expect(store.getSnapshot().holdTapStates).toEqual({});
+    expect(notified).toBe(notificationsAfterReset);
   });
 });

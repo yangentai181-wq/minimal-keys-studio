@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   ENCODER_PACKET_MARKER,
+  HOLD_TAP_PACKET_MARKER,
+  HOLD_TAP_PROTOCOL_VERSION,
   KEY_PACKET_MARKER,
   LAYER_PACKET_MARKER,
   POINTER_PACKET_MARKER,
@@ -78,6 +80,38 @@ describe("parseRawHidFrame", () => {
       sensor: 1,
       delta: -1,
     });
+  });
+
+  it.each([
+    [0, "pending"],
+    [1, "tap"],
+    [2, "hold"],
+    [3, "released"],
+  ] as const)("parses hold-tap phase %i as %s", (phase, expected) => {
+    expect(
+      parseRawHidFrame(
+        view([
+          HOLD_TAP_PACKET_MARKER,
+          HOLD_TAP_PROTOCOL_VERSION,
+          40,
+          phase,
+        ]),
+      ),
+    ).toEqual({ kind: "holdTap", position: 40, phase: expected });
+  });
+
+  it("rejects unsupported or malformed hold-tap frames", () => {
+    expect(
+      parseRawHidFrame(view([HOLD_TAP_PACKET_MARKER, 2, 40, 0])),
+    ).toBeNull();
+    expect(
+      parseRawHidFrame(
+        view([HOLD_TAP_PACKET_MARKER, HOLD_TAP_PROTOCOL_VERSION, 40, 4]),
+      ),
+    ).toBeNull();
+    expect(
+      parseRawHidFrame(view([HOLD_TAP_PACKET_MARKER, 1, 40])),
+    ).toBeNull();
   });
 
   it("drops unknown markers such as boot mouse reports", () => {

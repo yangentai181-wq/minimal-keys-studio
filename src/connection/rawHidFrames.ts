@@ -9,6 +9,8 @@ export const KEY_PACKET_MARKER = 0xf1;
 export const LAYER_PACKET_MARKER = 0xff;
 export const POINTER_PACKET_MARKER = 0xf2;
 export const ENCODER_PACKET_MARKER = 0xf3;
+export const HOLD_TAP_PACKET_MARKER = 0xf4;
+export const HOLD_TAP_PROTOCOL_VERSION = 0x01;
 
 export type KeyFrame = {
   kind: "key";
@@ -37,7 +39,27 @@ export type EncoderFrame = {
   delta: number;
 };
 
-export type RawHidFrame = KeyFrame | LayerFrame | PointerFrame | EncoderFrame;
+export type HoldTapPhase = "pending" | "tap" | "hold" | "released";
+
+export type HoldTapFrame = {
+  kind: "holdTap";
+  position: number;
+  phase: HoldTapPhase;
+};
+
+export type RawHidFrame =
+  | KeyFrame
+  | LayerFrame
+  | PointerFrame
+  | EncoderFrame
+  | HoldTapFrame;
+
+const HOLD_TAP_PHASES: readonly HoldTapPhase[] = [
+  "pending",
+  "tap",
+  "hold",
+  "released",
+];
 
 /**
  * Parse one WebHID input report payload into a typed Raw HID frame.
@@ -87,6 +109,20 @@ export function parseRawHidFrame(data: DataView): RawHidFrame | null {
         sensor: data.getUint8(2),
         delta: data.getInt8(3),
       };
+    case HOLD_TAP_PACKET_MARKER: {
+      if (data.getUint8(1) !== HOLD_TAP_PROTOCOL_VERSION) {
+        return null;
+      }
+      const phase = HOLD_TAP_PHASES[data.getUint8(3)];
+      if (!phase) {
+        return null;
+      }
+      return {
+        kind: "holdTap",
+        position: data.getUint8(2),
+        phase,
+      };
+    }
     default:
       return null;
   }

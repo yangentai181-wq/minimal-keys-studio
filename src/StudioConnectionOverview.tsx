@@ -184,7 +184,7 @@ function MonitorSummary({
       </div>
       {editorAvailable && <TrackballPrecisionStatus />}
       {showLayout && <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <MinimalKeysMonitorLayout activeLayerIndex={monitor.activeLayerIndex} pressed={monitor.pressed} className="bg-white" />
+        <MinimalKeysMonitorLayout activeLayerIndex={monitor.activeLayerIndex} pressed={monitor.pressed} holdTapStates={monitor.holdTapStates} className="bg-white" />
         <div className="rounded-lg border border-base-300 bg-white p-4 shadow-sm"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-primary" aria-hidden="true" /><h2 className="text-sm font-bold text-base-content">ライブ読み取り</h2></div><p className="mt-2 text-sm leading-6 text-base-content/70">Raw HIDのpositionを実配列に重ねて表示しています。Studio RPCが成立している場合は、この下のエディターで同じキーを編集できます。</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-lg bg-primary/10 px-3 py-1 text-primary">{monitorActive ? "monitor live" : "monitor idle"}</span><span className="rounded-lg bg-base-200 px-3 py-1 text-base-content/60">{editorAvailable ? "editor ready" : "editor pending"}</span><span className="inline-flex items-center gap-1 rounded-lg bg-base-200 px-3 py-1 text-base-content/60"><Layers className="h-3.5 w-3.5" aria-hidden="true" />L{monitor.activeLayerIndex}</span><span className="inline-flex items-center gap-1 rounded-lg bg-base-200 px-3 py-1 text-base-content/60"><Bluetooth className="h-3.5 w-3.5" aria-hidden="true" />split input via central</span></div></div>
       </div>}
     </div>}

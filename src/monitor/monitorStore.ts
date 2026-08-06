@@ -20,6 +20,12 @@ export type EncoderSample = {
   at: number;
 };
 
+export type HoldTapDisplayState =
+  | "pending"
+  | "tap"
+  | "hold"
+  | "hold-afterglow";
+
 export type MonitorSnapshot = {
   pressed: ReadonlySet<number>;
   defaultLayer: number;
@@ -28,6 +34,7 @@ export type MonitorSnapshot = {
   activeLayerIndex: number;
   pointer: PointerSample | null;
   encoders: Readonly<Record<number, EncoderSample>>;
+  holdTapStates: Readonly<Record<number, HoldTapDisplayState>>;
   lastEventAt: number | null;
 };
 
@@ -38,6 +45,7 @@ export const initialMonitorSnapshot: MonitorSnapshot = {
   activeLayerIndex: 0,
   pointer: null,
   encoders: {},
+  holdTapStates: {},
   lastEventAt: null,
 };
 
@@ -89,6 +97,15 @@ export function applyFrame(
         },
         lastEventAt: at,
       };
+    case "holdTap": {
+      const holdTapStates = { ...snapshot.holdTapStates };
+      if (frame.phase === "released") {
+        delete holdTapStates[frame.position];
+      } else {
+        holdTapStates[frame.position] = frame.phase;
+      }
+      return { ...snapshot, holdTapStates, lastEventAt: at };
+    }
   }
 }
 
@@ -116,6 +133,10 @@ export function createMonitorStore(
   let snapshot = initialMonitorSnapshot;
   const listeners = new Set<() => void>();
   let cancelPendingPointerNotify: (() => void) | null = null;
+  const holdTapCleanupTimers = new Map<
+    number,
+    ReturnType<typeof setTimeout>
+  >();
 
   const notify = () => {
     for (const listener of listeners) {
@@ -137,6 +158,63 @@ export function createMonitorStore(
     notify();
   };
 
+  const cancelHoldTapCleanup = (position: number) => {
+    const timer = holdTapCleanupTimers.get(position);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      holdTapCleanupTimers.delete(position);
+    }
+  };
+
+  const scheduleHoldTapCleanup = (
+    position: number,
+    expected: HoldTapDisplayState,
+    delay: number,
+  ) => {
+    cancelHoldTapCleanup(position);
+    const timer = setTimeout(() => {
+      holdTapCleanupTimers.delete(position);
+      if (snapshot.holdTapStates[position] !== expected) return;
+      const holdTapStates = { ...snapshot.holdTapStates };
+      delete holdTapStates[position];
+      snapshot = { ...snapshot, holdTapStates };
+      notifyImmediately();
+    }, delay);
+    holdTapCleanupTimers.set(position, timer);
+  };
+
+  const pushHoldTapFrame = (
+    frame: Extract<RawHidFrame, { kind: "holdTap" }>,
+    at: number,
+  ) => {
+    const current = snapshot.holdTapStates[frame.position];
+
+    if (frame.phase === "released") {
+      if (current === "hold") {
+        cancelHoldTapCleanup(frame.position);
+        snapshot = {
+          ...snapshot,
+          holdTapStates: {
+            ...snapshot.holdTapStates,
+            [frame.position]: "hold-afterglow",
+          },
+          lastEventAt: at,
+        };
+        scheduleHoldTapCleanup(frame.position, "hold-afterglow", 250);
+      } else if (current === "tap") {
+        snapshot = { ...snapshot, lastEventAt: at };
+        scheduleHoldTapCleanup(frame.position, "tap", 400);
+      } else {
+        cancelHoldTapCleanup(frame.position);
+        snapshot = applyFrame(snapshot, frame, at);
+      }
+      return;
+    }
+
+    cancelHoldTapCleanup(frame.position);
+    snapshot = applyFrame(snapshot, frame, at);
+  };
+
   return {
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
@@ -144,7 +222,11 @@ export function createMonitorStore(
       return () => listeners.delete(listener);
     },
     push: (frame, at = Date.now()) => {
-      snapshot = applyFrame(snapshot, frame, at);
+      if (frame.kind === "holdTap") {
+        pushHoldTapFrame(frame, at);
+      } else {
+        snapshot = applyFrame(snapshot, frame, at);
+      }
       if (frame.kind === "pointer") {
         notifyPointerFrame();
       } else {
@@ -152,6 +234,10 @@ export function createMonitorStore(
       }
     },
     reset: () => {
+      for (const timer of holdTapCleanupTimers.values()) {
+        clearTimeout(timer);
+      }
+      holdTapCleanupTimers.clear();
       snapshot = initialMonitorSnapshot;
       notifyImmediately();
     },

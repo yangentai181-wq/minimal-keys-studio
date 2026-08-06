@@ -52,6 +52,24 @@ describe("MinimalKeysMonitorLayout", () => {
     );
   });
 
+  it("shows accessible pending, tap, and orange hold decisions on their keys", () => {
+    render(
+      <MinimalKeysMonitorLayout
+        activeLayerIndex={0}
+        pressed={new Set([0, 1, 2])}
+        holdTapStates={{ 0: "pending", 1: "tap", 2: "hold" }}
+      />,
+    );
+
+    expect(screen.getByText("判定中")).toHaveClass("text-primary");
+    expect(screen.getByText("単押し")).toHaveClass("text-success");
+    expect(screen.getByText("長押し")).toHaveClass(
+      "bg-orange-500",
+      "text-white",
+    );
+    expect(screen.getByLabelText("pos 2 E 押下中 長押し")).toBeTruthy();
+  });
+
   it("keeps every static monitor layer aligned to the 43 physical positions", () => {
     expect(MONITOR_KEY_LABELS_BY_LAYER.map((labels) => labels.length)).toEqual(
       Array.from({ length: 8 }, () => 43),

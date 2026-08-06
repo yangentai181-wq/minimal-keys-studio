@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
 import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
+import type { HoldTapDisplayState } from "./monitorStore";
 
 const layoutWidth = MINIMAL_KEYS_POSITIONS.reduce(
   (max, key) => Math.max(max, key.x + key.width),
@@ -28,12 +29,14 @@ function cx(...classes: Array<string | false | null | undefined>) {
 export interface MinimalKeysMonitorLayoutProps {
   activeLayerIndex: number;
   pressed: ReadonlySet<number>;
+  holdTapStates?: Readonly<Record<number, HoldTapDisplayState>>;
   className?: string;
 }
 
 export function MinimalKeysMonitorLayout({
   activeLayerIndex,
   pressed,
+  holdTapStates = {},
   className,
 }: MinimalKeysMonitorLayoutProps) {
   return (
@@ -76,6 +79,16 @@ export function MinimalKeysMonitorLayout({
 
         {MINIMAL_KEYS_POSITIONS.map((position, index) => {
           const isPressed = pressed.has(index);
+          const holdTapState = holdTapStates[index];
+          const decisionLabel =
+            holdTapState === "pending"
+              ? "判定中"
+              : holdTapState === "tap"
+                ? "単押し"
+                : holdTapState === "hold" ||
+                    holdTapState === "hold-afterglow"
+                  ? "長押し"
+                  : null;
           const { label, transparent } = getMonitorKeyLabel(
             index,
             activeLayerIndex,
@@ -86,7 +99,7 @@ export function MinimalKeysMonitorLayout({
             <div
               key={position.id}
               role="gridcell"
-              aria-label={`pos ${index} ${label}${isPressed ? " 押下中" : ""}`}
+              aria-label={`pos ${index} ${label}${isPressed ? " 押下中" : ""}${decisionLabel ? ` ${decisionLabel}` : ""}`}
               aria-pressed={isPressed}
               title={`pos ${index}: ${label}`}
               className="absolute p-0.5"
@@ -94,8 +107,14 @@ export function MinimalKeysMonitorLayout({
             >
               <div
                 className={cx(
-                  "flex h-full w-full min-w-0 items-center justify-center rounded-md border px-1 text-center leading-tight shadow-sm transition",
-                  isPressed
+                  "relative flex h-full w-full min-w-0 items-center justify-center rounded-md border px-1 text-center leading-tight shadow-sm transition",
+                  holdTapState === "hold" || holdTapState === "hold-afterglow"
+                    ? "border-orange-500 bg-orange-100 text-orange-950 ring-2 ring-orange-400/50"
+                    : holdTapState === "tap"
+                      ? "border-success bg-success/10 text-base-content ring-2 ring-success/30"
+                      : holdTapState === "pending"
+                        ? "border-primary bg-primary/10 text-base-content ring-2 ring-primary/30"
+                        : isPressed
                     ? "border-primary bg-primary text-primary-content ring-2 ring-primary/30"
                     : transparent
                       ? "border-base-300 bg-white/60 text-base-content/35"
@@ -107,10 +126,26 @@ export function MinimalKeysMonitorLayout({
                   className={cx(
                     "line-clamp-2 break-words font-bold leading-tight",
                     isLongLabel ? "text-sm" : "text-base",
+                    decisionLabel && "-translate-y-1.5",
                   )}
                 >
                   {label}
                 </span>
+                {decisionLabel && (
+                  <span
+                    className={cx(
+                      "absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-extrabold leading-none shadow-sm",
+                      holdTapState === "hold" ||
+                        holdTapState === "hold-afterglow"
+                        ? "bg-orange-500 text-white"
+                        : holdTapState === "tap"
+                          ? "bg-success/15 text-success"
+                          : "bg-primary/15 text-primary",
+                    )}
+                  >
+                    {decisionLabel}
+                  </span>
+                )}
               </div>
             </div>
           );
