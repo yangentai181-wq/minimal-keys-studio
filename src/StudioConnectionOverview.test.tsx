@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
@@ -42,6 +42,28 @@ vi.mock("./trackball/TrackballPrecisionContext", () => ({
 }));
 
 describe("StudioConnectionOverview", () => {
+  it("shows four compact icon statuses while keeping details available", () => {
+    render(
+      <StudioConnectionOverview
+        monitorStore={monitorStore()}
+        monitorActive
+        editorAvailable
+        connectionTitle="接続中"
+        connectionBody="編集とモニターを利用できます。"
+      />,
+    );
+
+    const summary = screen.getByRole("list", { name: "接続状況の概要" });
+    expect(within(summary).getAllByRole("listitem")).toHaveLength(4);
+    expect(screen.getByLabelText("右手USBモニター: 接続中")).toHaveClass(
+      "h-10",
+      "w-10",
+    );
+    expect(
+      screen.getByRole("button", { name: "接続の詳細" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("keeps connection details collapsed until requested and bounds their scroll surface", () => {
     vi.mocked(useTrackballPrecision).mockReturnValue(precisionContext());
     render(
