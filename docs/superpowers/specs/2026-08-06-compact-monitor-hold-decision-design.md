@@ -2,9 +2,9 @@
 
 **Date:** 2026-08-06
 
-**Status:** Approved direction; written-spec review pending
+**Status:** Approved
 
-**Scope:** `minimal-keys-studio`, the minimal-keys ZMK fork, and the key-position Raw HID notifier
+**Scope:** `minimal-keys-studio`, the minimal-keys ZMK fork, `zmk-input-notifier`, and `minimal-keys-release`
 
 ## Problem
 
@@ -110,13 +110,13 @@ Add a small hold-tap decision event to the minimal-keys ZMK fork. The hold-tap b
 - `HOLD`: ZMK resolves the instance as a hold
 - `RELEASED`: the physical hold-tap lifecycle ends
 
-Each event includes the physical key position. Decision events are emitted exactly once per active instance. `RELEASED` clears live state even if the instance is cancelled or ends through an uncommon path.
+Each event includes the physical key position. `PENDING` and `RELEASED` are emitted once per active instance. Decision events are emitted once per actual state transition. This permits ZMK's retro-tap path to report `HOLD` while the key is held and then report its final `TAP` decision on release. Duplicate notifications for an unchanged state are suppressed. `RELEASED` clears live state even if the instance is cancelled or ends through an uncommon path.
 
 This event is observational only. No listener may change the decision or delay behavior processing.
 
 ### 2. Raw HID report
 
-The key-position notifier subscribes to the event and sends a new report using the existing Raw HID channel:
+The user-managed `zmk-input-notifier` module subscribes to the event and sends a new report using the existing Raw HID channel. The upstream key-position notifier remains unchanged:
 
 | Byte | Meaning |
 |---|---|
@@ -167,7 +167,8 @@ Required automated coverage:
 - tap confirmation and hold afterglow cleanup with fake timers
 - monitor keys expose state through text/ARIA as well as color
 - older report streams retain ordinary press highlighting without false decisions
-- ZMK event emission occurs once for pending and once for the actual decision
+- ZMK event emission occurs once for pending, once per actual decision transition, and once for release
+- retro-tap emits `HOLD`, then final `TAP`, without duplicate unchanged-state events
 - ZMK event cleanup covers tap, hold, cancellation, and release paths
 - notifier serializes the exact versioned `0xF4` byte contract
 
