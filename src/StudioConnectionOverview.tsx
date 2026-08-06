@@ -160,7 +160,10 @@ function MonitorSummary({
           <DeviceStatusIcon key={item.title} {...item} />
         ))}
       </ul>
-      <div className="hidden min-w-0 flex-1 truncate text-xs text-base-content/60 md:block">レイヤー: {layerName} / 最新キー: {latestKey}</div>
+      <div className="hidden min-w-0 flex-1 truncate text-xs text-base-content/60 md:block">
+        <span>レイヤー: {layerName} / 最新キー: {latestKey}</span>
+        <span className="ml-1">{pointerSummary}</span>
+      </div>
       <button type="button" className="shrink-0 rounded border border-base-300 px-2.5 py-1 text-xs font-medium" onClick={() => setDetailsOpen((open) => !open)} aria-expanded={detailsOpen}>接続の詳細</button>
     </div>
     {detailsOpen && <div data-testid="connection-details" className="mt-3 max-h-[min(45dvh,360px)] space-y-3 overflow-y-auto pr-1">
