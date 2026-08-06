@@ -52,9 +52,9 @@ describe("ModifiersTab", () => {
     const applyBtn = screen.getByText("適用する");
     expect(applyBtn).toHaveAttribute("disabled");
     fireEvent.click(screen.getByText("Ctrl (左)"));
-    expect(screen.getByTestId("modifier-tap-key-grid")).not.toHaveClass(
-      "overflow-y-auto",
-    );
+    expect(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+    ).toBeTruthy();
   });
 
   it("mod-tap mode: apply sends correct binding", () => {
@@ -62,12 +62,30 @@ describe("ModifiersTab", () => {
     render(<ModifiersTab behaviors={mockBehaviors} layers={[]} osMode="mac" onApplyBinding={onApply} />);
     fireEvent.click(screen.getByText("Mod-Tap"));
     fireEvent.click(screen.getByText("Ctrl (左)"));
-    fireEvent.click(screen.getByText("A"));
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+      { target: { value: "6" } },
+    );
     fireEvent.click(screen.getByText("適用する"));
     expect(onApply).toHaveBeenCalledWith({
       behaviorId: 20,
       param1: hid_usage_from_page_and_id(7, 224), // Left Ctrl HID usage
       param2: hid_usage_from_page_and_id(7, 4),   // A HID usage
     });
+  });
+
+  it("keeps the modifier choices to two compact rows", () => {
+    render(
+      <ModifiersTab
+        behaviors={mockBehaviors}
+        layers={[]}
+        osMode="mac"
+        onApplyBinding={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("modifier-key-grid")).toHaveClass(
+      "grid-cols-4",
+    );
   });
 });

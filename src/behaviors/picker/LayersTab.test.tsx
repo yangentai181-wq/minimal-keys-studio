@@ -79,9 +79,9 @@ describe("LayersTab", () => {
     const applyBtn = screen.getByText("適用する");
     expect(applyBtn).toHaveAttribute("disabled");
     fireEvent.click(screen.getByText("Symbols"));
-    expect(screen.getByTestId("layer-tap-key-grid")).not.toHaveClass(
-      "overflow-y-auto",
-    );
+    expect(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+    ).toBeTruthy();
   });
 
   it("Layer-Tap: apply button enabled after both params", () => {
@@ -95,7 +95,10 @@ describe("LayersTab", () => {
     );
     fireEvent.click(screen.getByText("レイヤー / タップ"));
     fireEvent.click(screen.getByText("Symbols"));
-    fireEvent.click(screen.getByText("Space"));
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+      { target: { value: "0" } },
+    );
     const applyBtn = screen.getByText("適用する");
     expect(applyBtn).not.toHaveAttribute("disabled");
   });
@@ -111,7 +114,10 @@ describe("LayersTab", () => {
     );
     fireEvent.click(screen.getByText("レイヤー / タップ"));
     fireEvent.click(screen.getByText("Symbols"));
-    fireEvent.click(screen.getByText("Space"));
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+      { target: { value: "0" } },
+    );
     fireEvent.click(screen.getByText("適用する"));
     expect(onApply).toHaveBeenCalledWith({
       behaviorId: 12,

@@ -139,6 +139,21 @@ describe("createMonitorStore", () => {
     expect(store.getSnapshot().holdTapStates[8]).toBeUndefined();
   });
 
+  it("shows retro-tap as tap for 400ms instead of hold afterglow", () => {
+    vi.useFakeTimers();
+    const store = createMonitorStore();
+
+    store.push({ kind: "holdTap", position: 8, phase: "hold" }, 100);
+    store.push({ kind: "holdTap", position: 8, phase: "tap" }, 110);
+    store.push({ kind: "holdTap", position: 8, phase: "released" }, 120);
+
+    expect(store.getSnapshot().holdTapStates[8]).toBe("tap");
+    vi.advanceTimersByTime(399);
+    expect(store.getSnapshot().holdTapStates[8]).toBe("tap");
+    vi.advanceTimersByTime(1);
+    expect(store.getSnapshot().holdTapStates[8]).toBeUndefined();
+  });
+
   it("cancels hold-tap cleanup timers when reset", () => {
     vi.useFakeTimers();
     const store = createMonitorStore();

@@ -82,3 +82,32 @@ export const Default1200x800: Story = {
   ],
   play: openLettersTab,
 };
+
+export const CompactModTap800x600: Story = {
+  args: {
+    ...Example.args,
+    behaviors: [
+      ...(Example.args?.behaviors ?? []),
+      { id: 20, displayName: "Mod-Tap", metadata: [] },
+    ],
+  },
+  parameters: { layout: "fullscreen" },
+  decorators: [
+    (Story) =>
+      createElement(
+        "div",
+        { style: { width: 800, height: 330, overflow: "hidden", padding: 8 } },
+        createElement(Story),
+      ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "修飾キー" }));
+    await userEvent.click(canvas.getByRole("button", { name: /Mod-Tap/ }));
+    await userEvent.click(canvas.getByRole("button", { name: /Ctrl \(左\)/ }));
+    await userEvent.selectOptions(
+      canvas.getByRole("combobox", { name: "タップキーを選択" }),
+      "6",
+    );
+  },
+};

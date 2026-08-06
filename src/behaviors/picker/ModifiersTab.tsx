@@ -42,7 +42,8 @@ function getModifiers(os: import("../use-cases").UserOS): ModifierItem[] {
   }));
 }
 
-import { commonTapKeys, type TapKeyItem } from "./common-tap-keys";
+import type { TapKeyItem } from "./common-tap-keys";
+import { TapKeySelect } from "./TapKeySelect";
 
 type Mode = "standalone" | "mod-tap";
 
@@ -119,13 +120,13 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
   ];
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1.5">
       {/* Mode selection */}
       <div className="flex gap-1 flex-wrap">
         {modes.filter((m) => m.available).map((m) => (
           <button
             key={m.id}
-            className={`flex flex-col items-start px-3 py-2 text-sm rounded-md border ${
+            className={`flex items-center gap-1.5 px-2 py-1 text-sm rounded-md border ${
               mode === m.id
                 ? "bg-primary/10 text-primary border-primary/30 font-medium"
                 : "border-base-300 bg-white hover:bg-base-200 text-base-content"
@@ -133,7 +134,7 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
             onClick={() => handleModeChange(m.id)}
           >
             <span className="font-medium">{m.label}</span>
-            <span className="text-sm text-base-content/50">{m.description}</span>
+            <span className="text-xs text-base-content/50">{m.description}</span>
           </button>
         ))}
       </div>
@@ -143,19 +144,19 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
         <div className="text-sm text-base-content/60 mb-1">
           修飾キーを選択
         </div>
-        <div className="grid grid-cols-2 gap-1">
+        <div data-testid="modifier-key-grid" className="grid grid-cols-4 gap-1">
           {modifiers.map((mod) => (
             <button
               key={mod.hidId}
-              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md border ${
+              className={`min-w-0 flex items-center gap-1 px-2 py-1 text-xs rounded-md border ${
                 selectedModifier?.hidId === mod.hidId
                   ? "bg-primary/10 text-primary border-primary/30 font-medium"
                   : "border-base-300 bg-white hover:bg-base-200 text-base-content"
               }`}
               onClick={() => handleModifierClick(mod)}
             >
-              <span className="text-lg">{mod.symbol}</span>
-              <span>{mod.label}</span>
+              <span className="text-base">{mod.symbol}</span>
+              <span className="truncate" title={mod.label}>{mod.label}</span>
             </button>
           ))}
         </div>
@@ -163,27 +164,7 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
 
       {/* Tap key selection for Mod-Tap */}
       {mode === "mod-tap" && selectedModifier && (
-        <div>
-          <div className="text-sm text-base-content/60 mb-1">タップキーを選択</div>
-          <div
-            data-testid="modifier-tap-key-grid"
-            className="grid grid-cols-8 gap-1 lg:grid-cols-10 xl:grid-cols-13"
-          >
-            {commonTapKeys.map((key) => (
-              <button
-                key={key.modifier ? `s${key.hidId}` : key.hidId}
-                className={`px-2 py-1.5 text-sm rounded-md border text-center ${
-                  selectedTapKey?.hidId === key.hidId && selectedTapKey?.modifier === key.modifier
-                    ? "bg-primary/10 text-primary border-primary/30 font-medium"
-                    : "border-base-300 bg-white hover:bg-base-200 text-base-content"
-                }`}
-                onClick={() => handleTapKeyClick(key)}
-              >
-                {key.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <TapKeySelect selected={selectedTapKey} onChange={handleTapKeyClick} />
       )}
 
       {/* Apply button */}

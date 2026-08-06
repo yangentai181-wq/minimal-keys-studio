@@ -8,7 +8,8 @@ import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "../../keyboard/m
 
 const KB = 7;
 
-import { commonTapKeys, type TapKeyItem } from "./common-tap-keys";
+import type { TapKeyItem } from "./common-tap-keys";
+import { TapKeySelect } from "./TapKeySelect";
 
 const layerBehaviorNames = [
   "Momentary Layer",
@@ -117,7 +118,7 @@ export function LayersTab({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1.5">
       {/* Step 1: Choose behavior type */}
       <div>
         <div className="text-sm text-base-content/60 mb-1">
@@ -169,30 +170,7 @@ export function LayersTab({
 
       {/* Step 3: For Layer-Tap, choose tap key */}
       {needsTapKey && selectedLayer !== null && (
-        <div>
-          <div className="text-sm text-base-content/60 mb-1">
-            タップキーを選択
-          </div>
-          <div
-            data-testid="layer-tap-key-grid"
-            className="grid grid-cols-8 gap-1 lg:grid-cols-10 xl:grid-cols-13"
-          >
-            {commonTapKeys.map((key) => (
-              <button
-                key={key.modifier ? `s${key.hidId}` : key.hidId}
-                className={`px-2 py-1.5 text-sm rounded-md border text-center ${
-                  selectedTapKey?.hidId === key.hidId &&
-                  selectedTapKey?.modifier === key.modifier
-                    ? "bg-primary/10 text-primary border-primary/30 font-medium"
-                    : "border-base-300 bg-white hover:bg-base-200 text-base-content"
-                }`}
-                onClick={() => handleTapKeyClick(key)}
-              >
-                {key.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <TapKeySelect selected={selectedTapKey} onChange={handleTapKeyClick} />
       )}
 
       {/* Step 3: For LAYER_TAP_MKP, choose mouse button */}
