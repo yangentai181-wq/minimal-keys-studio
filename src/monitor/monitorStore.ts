@@ -15,6 +15,8 @@ export type PointerSample = {
   at: number;
 };
 
+export const POINTER_DISPLAY_TIMEOUT_MS = 500;
+
 export type EncoderSample = {
   delta: number;
   at: number;
@@ -28,6 +30,11 @@ export type HoldTapDisplayState =
 
 export type MonitorSnapshot = {
   pressed: ReadonlySet<number>;
+  lastKeyEvent: {
+    position: number;
+    pressed: boolean;
+    at: number;
+  } | null;
   defaultLayer: number;
   activeLayerMask: number;
   /** Highest active layer, i.e. the layer resolving key presses right now. */
@@ -40,6 +47,7 @@ export type MonitorSnapshot = {
 
 export const initialMonitorSnapshot: MonitorSnapshot = {
   pressed: new Set(),
+  lastKeyEvent: null,
   defaultLayer: 0,
   activeLayerMask: 1,
   activeLayerIndex: 0,
@@ -62,7 +70,16 @@ export function applyFrame(
       } else {
         pressed.delete(frame.position);
       }
-      return { ...snapshot, pressed, lastEventAt: at };
+      return {
+        ...snapshot,
+        pressed,
+        lastKeyEvent: {
+          position: frame.position,
+          pressed: frame.pressed,
+          at,
+        },
+        lastEventAt: at,
+      };
     }
     case "layer":
       return {

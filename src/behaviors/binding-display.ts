@@ -7,6 +7,15 @@ import {
 } from "../keyboard/key-descriptions";
 import { modifierSymbols } from "../keyboard/key-label-utils";
 
+type LayerName = {
+  id: number;
+  name: string;
+};
+
+function layerNameForId(layerId: number, layers: readonly LayerName[]): string {
+  return layers.find((layer) => layer.id === layerId)?.name ?? `L${layerId}`;
+}
+
 /**
  * Format a binding's parameters into a human-readable detail string.
  * Returns empty string if no meaningful detail can be shown.
@@ -14,7 +23,7 @@ import { modifierSymbols } from "../keyboard/key-label-utils";
 export function formatBindingDetail(
   displayName: string,
   binding: BehaviorBinding,
-  layers: { id: number; index: number; name: string }[],
+  layers: readonly (LayerName & { index: number })[],
 ): string {
   switch (displayName) {
     case "Key Press": {
@@ -24,15 +33,14 @@ export function formatBindingDetail(
       return getHidKeyDescription(page, id).roleName;
     }
     case "Layer-Tap": {
-      // ZMK layer binding param1 = layer index (0-based position in layers array)
-      const layerName = layers[binding.param1]?.name ?? `L${binding.param1}`;
+      const layerName = layerNameForId(binding.param1, layers);
       const [rawPage, id] = hid_usage_page_and_id_from_usage(binding.param2);
       const page = rawPage & 0xff;
       const keyName = getHidKeyDescription(page, id).roleName;
       return `${layerName} + ${keyName}`;
     }
     case "LAYER_TAP_MKP": {
-      const layerName = layers[binding.param1]?.name ?? `L${binding.param1}`;
+      const layerName = layerNameForId(binding.param1, layers);
       const mouseName = getMouseKeyDescription(binding.param2).roleName;
       return `${layerName} + ${mouseName}`;
     }
@@ -53,8 +61,7 @@ export function formatBindingDetail(
     case "Toggle Layer":
     case "To Layer":
     case "Sticky Layer": {
-      // ZMK layer binding param1 = layer index (0-based position in layers array)
-      return layers[binding.param1]?.name ?? `L${binding.param1}`;
+      return layerNameForId(binding.param1, layers);
     }
     case "Sticky Key": {
       return modifierSymbols(binding.param1);

@@ -20,6 +20,26 @@ describe("buildKeyPresentation", () => {
     expect(result[0]).toMatchObject({ id: "4-0", header: "MLayer", x: 0, y: 0 });
   });
 
+  it("uses persistent layer IDs for layer behavior labels", () => {
+    const result = buildKeyPresentation({
+      layout: layout as never,
+      keymap: {
+        layers: [
+          { id: 42, name: "Nav", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+          { id: 0, name: "Base", bindings: [{ behaviorId: 1, param1: 42, param2: 0 }] },
+        ],
+      } as never,
+      behaviors: behaviors as never,
+      selectedLayerIndex: 1,
+      os: "mac",
+    });
+
+    expect(result[0]).toMatchObject({ header: "MLayer" });
+    expect((result[0].children as { props: { children: string } }).props.children).toBe(
+      "Nav",
+    );
+  });
+
   it("changes presentation when its keymap, behavior, layer, layout, or OS inputs change", () => {
     const input = {
       layout: layout as never,

@@ -84,7 +84,11 @@ export function resolveMonitorBinding({
     }
 
     return {
-      label: getNonTransparentBindingLabel(binding, behavior.displayName),
+      label: getNonTransparentBindingLabel(
+        binding,
+        behavior.displayName,
+        keymap.layers,
+      ),
       sourceLayerId: layer.id,
       sourceLayerIndex: layer.index,
       inherited,

@@ -70,9 +70,8 @@ export function LayersTab({
     setSelectedLayer(layerId);
     if (!is2Param && selectedBehavior) {
       const behaviorId = behaviorIdMap[selectedBehavior];
-      const layerIndex = selectableLayers.find((l) => l.id === layerId)?.index ?? 0;
       if (behaviorId !== undefined) {
-        onApplyBinding({ behaviorId, param1: layerIndex, param2: 0 });
+        onApplyBinding({ behaviorId, param1: layerId, param2: 0 });
       }
     }
   };
@@ -109,10 +108,9 @@ export function LayersTab({
     if (needsMouseButton && selectedMouseButton) {
       param2 = selectedMouseButton.param1;
     }
-    const layerIndex = selectableLayers.find((l) => l.id === selectedLayer)?.index ?? 0;
     onApplyBinding({
       behaviorId,
-      param1: layerIndex,
+      param1: selectedLayer,
       param2,
     });
   };

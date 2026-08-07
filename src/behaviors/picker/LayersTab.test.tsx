@@ -66,6 +66,28 @@ describe("LayersTab", () => {
     });
   });
 
+  it("Momentary Layer: writes the selected persistent layer ID", () => {
+    const onApply = vi.fn();
+    render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={[
+          { id: 42, index: 0, name: "Symbols" },
+          { id: 0, index: 1, name: "Base" },
+        ]}
+        onApplyBinding={onApply}
+      />,
+    );
+    fireEvent.click(screen.getByText("一時レイヤー"));
+    fireEvent.click(screen.getByText("Symbols"));
+
+    expect(onApply).toHaveBeenCalledWith({
+      behaviorId: 10,
+      param1: 42,
+      param2: 0,
+    });
+  });
+
   it("Layer-Tap: shows apply button disabled initially", () => {
     const onApply = vi.fn();
     render(
@@ -206,6 +228,6 @@ describe("LayersTab", () => {
 
     expect(screen.queryByText("Precision")).toBeNull();
     fireEvent.click(screen.getByText("Layer 7（スクロール）"));
-    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 7, param2: 0 });
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 27, param2: 0 });
   });
 });

@@ -1,11 +1,15 @@
 import { Activity, Layers, MousePointer2, Radio } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useBehaviorMap } from "../behaviors/BehaviorsContext";
 import { MinimalKeysMonitorLayout } from "../monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "../monitor/layerNames";
 import { getMonitorKeyLabel } from "../monitor/minimalKeysMonitorLabels";
-import type { MonitorStore } from "../monitor/monitorStore";
+import {
+  POINTER_DISPLAY_TIMEOUT_MS,
+  type MonitorStore,
+  type PointerSample,
+} from "../monitor/monitorStore";
 import { resolveMonitorBinding } from "../monitor/resolveMonitorBindings";
 import { useMonitorSnapshot } from "../monitor/useMonitorSnapshot";
 import { MINIMAL_KEYS_KEY_COUNT } from "./minimal-keys-layout";
@@ -18,6 +22,24 @@ interface KeyboardMonitorSurfaceProps {
 
 function signed(value: number) {
   return `${value >= 0 ? "+" : ""}${value}`;
+}
+
+function usePointerSummary(pointer: PointerSample | null) {
+  const [now, setNow] = useState(() => Date.now());
+  const pointerAt = pointer?.at;
+
+  useEffect(() => {
+    if (pointerAt === undefined) return;
+    setNow(Date.now());
+    const delay = Math.max(0, pointerAt + POINTER_DISPLAY_TIMEOUT_MS - Date.now());
+    const timer = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(timer);
+  }, [pointerAt]);
+
+  if (pointer === null || now - pointer.at >= POINTER_DISPLAY_TIMEOUT_MS) {
+    return "停止中";
+  }
+  return `dx ${signed(pointer.dx)} / dy ${signed(pointer.dy)}`;
 }
 
 export function KeyboardMonitorSurface({
@@ -41,8 +63,7 @@ export function KeyboardMonitorSurface({
         : undefined,
     [behaviors, keymap, monitor.activeLayerMask],
   );
-  const pressedPositions = [...monitor.pressed];
-  const latestPosition = pressedPositions[pressedPositions.length - 1];
+  const latestPosition = monitor.lastKeyEvent?.position;
   const layerName =
     MONITOR_LAYER_NAMES[monitor.activeLayerIndex] ??
     `L${monitor.activeLayerIndex}`;
@@ -50,9 +71,7 @@ export function KeyboardMonitorSurface({
     latestPosition === undefined
       ? "待機中"
       : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
-  const pointer = monitor.pointer
-    ? `dx ${signed(monitor.pointer.dx)} / dy ${signed(monitor.pointer.dy)}`
-    : "待機中";
+  const pointer = usePointerSummary(monitor.pointer);
 
   const summaries = [
     {
@@ -72,7 +91,7 @@ export function KeyboardMonitorSurface({
       icon: <Activity className="h-4 w-4" aria-hidden="true" />,
     },
     {
-      label: "トラックボール",
+      label: "直近の移動",
       value: pointer,
       icon: <MousePointer2 className="h-4 w-4" aria-hidden="true" />,
     },

@@ -120,6 +120,36 @@ describe("KeyboardMonitorSurface", () => {
     expect(screen.getByText("モニター未接続")).toBeInTheDocument();
   });
 
+  it("shows the most recent released key even while another key remains pressed", () => {
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push({ kind: "key", position: 7, pressed: true });
+    store.push({ kind: "key", position: 3, pressed: true });
+    store.push({ kind: "key", position: 7, pressed: false });
+
+    renderMonitorSurface(store, true);
+
+    expect(screen.getByText("#7 I")).toBeInTheDocument();
+  });
+
+  it("labels a pointer sample older than 500ms as stopped", () => {
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push(
+      { kind: "pointer", dx: 4, dy: -2, wheel: 0, hwheel: 0, buttons: 0 },
+      Date.now() - 501,
+    );
+
+    renderMonitorSurface(store, true);
+
+    expect(screen.getByText("直近の移動")).toBeInTheDocument();
+    expect(screen.getByText("停止中")).toBeInTheDocument();
+  });
+
   it("uses the live L4 binding instead of the factory fallback", () => {
     const store = createMonitorStore((notify) => {
       notify();

@@ -24,6 +24,32 @@ describe("applyFrame", () => {
     expect(snapshot.lastEventAt).toBe(120);
   });
 
+  it("keeps the most recent key frame when another key remains pressed", () => {
+    let snapshot = initialMonitorSnapshot;
+    snapshot = applyFrame(
+      snapshot,
+      { kind: "key", position: 7, pressed: true },
+      100,
+    );
+    snapshot = applyFrame(
+      snapshot,
+      { kind: "key", position: 3, pressed: true },
+      110,
+    );
+    snapshot = applyFrame(
+      snapshot,
+      { kind: "key", position: 7, pressed: false },
+      120,
+    );
+
+    expect([...snapshot.pressed]).toEqual([3]);
+    expect(snapshot.lastKeyEvent).toEqual({
+      position: 7,
+      pressed: false,
+      at: 120,
+    });
+  });
+
   it("follows layer frames and resolves the highest active layer", () => {
     const snapshot = applyFrame(
       initialMonitorSnapshot,

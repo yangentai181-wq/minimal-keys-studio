@@ -18,6 +18,11 @@ export type KeyPresentationInput = {
   os: Parameters<typeof resolveTooltipData>[3];
 };
 
+type LayerName = {
+  id: number;
+  name: string;
+};
+
 function hidParamLabel(param: number): string {
   const [rawPage, id] = hid_usage_page_and_id_from_usage(param);
   return getHidKeyDescription(rawPage & 0xff, id).roleName;
@@ -31,6 +36,7 @@ function hidParamLabel(param: number): string {
 export function getNonTransparentBindingLabel(
   binding: BehaviorBinding,
   displayName: string,
+  layers: readonly LayerName[],
 ): string {
   switch (displayName) {
     case "Key Press":
@@ -44,13 +50,13 @@ export function getNonTransparentBindingLabel(
     case "Hold-Tap":
       return hidParamLabel(binding.param2);
     case "Momentary Layer":
-      return `MLayer L${binding.param1}`;
+      return `MLayer ${shortLayerName(binding.param1, layers)}`;
     case "Toggle Layer":
-      return `Toggle L${binding.param1}`;
+      return `Toggle ${shortLayerName(binding.param1, layers)}`;
     case "To Layer":
-      return binding.param1 === 0 ? "通常へ戻る" : `To L${binding.param1}`;
+      return binding.param1 === 0 ? "通常へ戻る" : `To ${shortLayerName(binding.param1, layers)}`;
     case "Sticky Layer":
-      return `Sticky L${binding.param1}`;
+      return `Sticky ${shortLayerName(binding.param1, layers)}`;
     case "Sticky Key":
       return `Sticky ${modifierSymbols(binding.param1)}`;
     case "Mouse Key Press":
@@ -66,25 +72,25 @@ export function getNonTransparentBindingLabel(
   }
 }
 
-function shortLayerName(index: number, names: string[]): string {
-  const name = names[index];
-  if (!name) return `L${index}`;
+function shortLayerName(layerId: number, layers: readonly LayerName[]): string {
+  const name = layers.find((layer) => layer.id === layerId)?.name;
+  if (!name) return `L${layerId}`;
   if (name.length <= 6) return name;
   const first = name.split(/[\s&/]+/)[0];
   return first.length <= 6 ? first : first.substring(0, 5);
 }
 
-function keyDisplay(binding: BehaviorBinding, displayName: string, layerNames: string[]): { header: string; children: ReactNode } {
+function keyDisplay(binding: BehaviorBinding, displayName: string, layers: readonly LayerName[]): { header: string; children: ReactNode } {
   switch (displayName) {
     case "Key Press": return { header: "", children: <HidUsageLabel hid_usage={binding.param1} /> };
-    case "Layer-Tap": return { header: shortLayerName(binding.param1, layerNames), children: <span>{hidParamLabel(binding.param2)}</span> };
-    case "LAYER_TAP_MKP": return { header: shortLayerName(binding.param1, layerNames), children: <span>{getMouseKeyDescription(binding.param2).roleName}</span> };
+    case "Layer-Tap": return { header: shortLayerName(binding.param1, layers), children: <span>{hidParamLabel(binding.param2)}</span> };
+    case "LAYER_TAP_MKP": return { header: shortLayerName(binding.param1, layers), children: <span>{getMouseKeyDescription(binding.param2).roleName}</span> };
     case "Mod-Tap": return { header: modifierSymbols(binding.param1), children: <span>{hidParamLabel(binding.param2)}</span> };
     case "Hold-Tap": return { header: "Hold/Tap", children: <span>{hidParamLabel(binding.param2)}</span> };
-    case "Momentary Layer": return { header: "MLayer", children: <span>{shortLayerName(binding.param1, layerNames)}</span> };
-    case "Toggle Layer": return { header: "Toggle", children: <span>{shortLayerName(binding.param1, layerNames)}</span> };
-    case "To Layer": return { header: "To", children: <span>{shortLayerName(binding.param1, layerNames)}</span> };
-    case "Sticky Layer": return { header: "Sticky", children: <span>{shortLayerName(binding.param1, layerNames)}</span> };
+    case "Momentary Layer": return { header: "MLayer", children: <span>{shortLayerName(binding.param1, layers)}</span> };
+    case "Toggle Layer": return { header: "Toggle", children: <span>{shortLayerName(binding.param1, layers)}</span> };
+    case "To Layer": return { header: "To", children: <span>{shortLayerName(binding.param1, layers)}</span> };
+    case "Sticky Layer": return { header: "Sticky", children: <span>{shortLayerName(binding.param1, layers)}</span> };
     case "Sticky Key": return { header: "Sticky", children: <span>{modifierSymbols(binding.param1)}</span> };
     case "Mouse Key Press": return { header: "", children: <span>{getMouseKeyDescription(binding.param1).roleName}</span> };
     case "Mouse Scroll": return { header: "Scroll", children: <span>{getMouseScrollDescription(binding.param1).roleName}</span> };
@@ -100,7 +106,10 @@ export function buildKeyPresentation({ layout, keymap, behaviors, selectedLayerI
   const layer = keymap.layers[selectedLayerIndex];
   if (!layer) return [];
   const behaviorList = Object.values(behaviors);
-  const layerNames = keymap.layers.map((item, index) => item.name || `L${index}`);
+  const layerNames = keymap.layers.map((item) => ({
+    id: item.id,
+    name: item.name || `L${item.id}`,
+  }));
   return layout.keys.map((key, index) => {
     if (index >= layer.bindings.length) {
       return { id: `${layer.id}-${index}`, header: "Unknown", x: key.x / 100, y: key.y / 100, width: key.width / 100, height: key.height / 100, children: <span />, tooltipData: null };

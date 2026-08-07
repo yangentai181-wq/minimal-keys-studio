@@ -258,6 +258,32 @@ describe("StudioConnectionOverview", () => {
     expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
   });
 
+  it("shows the most recent released key and stops stale pointer copy", () => {
+    const store = monitorStore();
+    store.push({ kind: "key", position: 7, pressed: true });
+    store.push({ kind: "key", position: 3, pressed: true });
+    store.push({ kind: "key", position: 7, pressed: false });
+    store.push(
+      { kind: "pointer", dx: 4, dy: -2, wheel: 0, hwheel: 0, buttons: 0 },
+      Date.now() - 501,
+    );
+
+    render(
+      overviewWithMonitorKeymap({
+        monitorStore: store,
+        monitorActive: true,
+        editorAvailable: true,
+        connectionTitle: "エディター利用可",
+        connectionBody: "Raw HIDとStudio RPCが同じ画面で使えます。",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
+
+    expect(screen.getByText("#7 I")).toBeInTheDocument();
+    expect(screen.getByText("直近の移動")).toBeInTheDocument();
+    expect(screen.getAllByText("停止中").length).toBeGreaterThan(0);
+  });
+
   it("keeps the resolved live key after the keymap publisher unmounts", () => {
     const store = monitorStore();
     store.push({ kind: "layer", defaultLayer: 0, activeLayerMask: 0b10001 });
