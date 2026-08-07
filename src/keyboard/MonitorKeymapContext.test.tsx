@@ -68,6 +68,47 @@ describe("MonitorKeymapProvider", () => {
     expect(screen.getByTestId("published-keymap")).toHaveTextContent("After edit");
   });
 
+  it("retains the last keymap after its current publisher unmounts", () => {
+    const liveKeymap = keymapWithLayerName("Still live");
+    const view = render(
+      <MonitorKeymapProvider>
+        <KeymapPublisher keymap={liveKeymap} />
+        <PublishedKeymap />
+      </MonitorKeymapProvider>,
+    );
+
+    view.rerender(
+      <MonitorKeymapProvider>
+        <PublishedKeymap />
+      </MonitorKeymapProvider>,
+    );
+
+    expect(screen.getByTestId("published-keymap")).toHaveTextContent(
+      "Still live",
+    );
+  });
+
+  it("retains the last keymap while a replacement publisher is loading", () => {
+    const liveKeymap = keymapWithLayerName("Still live");
+    const view = render(
+      <MonitorKeymapProvider>
+        <KeymapPublisher keymap={liveKeymap} />
+        <PublishedKeymap />
+      </MonitorKeymapProvider>,
+    );
+
+    view.rerender(
+      <MonitorKeymapProvider>
+        <KeymapPublisher keymap={undefined} />
+        <PublishedKeymap />
+      </MonitorKeymapProvider>,
+    );
+
+    expect(screen.getByTestId("published-keymap")).toHaveTextContent(
+      "Still live",
+    );
+  });
+
   it("does not clear a newer keymap when an earlier publisher unmounts", () => {
     const firstKeymap = keymapWithLayerName("Earlier");
     const secondKeymap = keymapWithLayerName("Newer");

@@ -3,7 +3,11 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createMonitorStore } from "../monitor/monitorStore";
-import { KeyboardWorkspace } from "./KeyboardWorkspace";
+import {
+  KeyboardWorkspace,
+  type KeyboardWorkspaceProps,
+} from "./KeyboardWorkspace";
+import { MonitorKeymapProvider } from "./MonitorKeymapContext";
 
 function StatefulEditor() {
   const [memo, setMemo] = useState("");
@@ -22,14 +26,22 @@ function StatefulEditor() {
   );
 }
 
+function workspaceWithMonitorKeymap(props: KeyboardWorkspaceProps) {
+  return (
+    <MonitorKeymapProvider>
+      <KeyboardWorkspace {...props} />
+    </MonitorKeymapProvider>
+  );
+}
+
 describe("KeyboardWorkspace", () => {
   it("shows one keyboard and preserves editor state across mode switches", () => {
     render(
-      <KeyboardWorkspace
-        editor={<StatefulEditor />}
-        monitorStore={createMonitorStore()}
-        monitorActive
-      />,
+      workspaceWithMonitorKeymap({
+        editor: <StatefulEditor />,
+        monitorStore: createMonitorStore(),
+        monitorActive: true,
+      }),
     );
 
     const editorButton = screen.getByRole("button", { name: "編集" });
@@ -57,12 +69,12 @@ describe("KeyboardWorkspace", () => {
   it("disables unavailable monitoring and exposes the USB recovery action", () => {
     const onConnectMonitor = vi.fn();
     render(
-      <KeyboardWorkspace
-        editor={<StatefulEditor />}
-        monitorStore={createMonitorStore()}
-        monitorActive={false}
-        onConnectMonitor={onConnectMonitor}
-      />,
+      workspaceWithMonitorKeymap({
+        editor: <StatefulEditor />,
+        monitorStore: createMonitorStore(),
+        monitorActive: false,
+        onConnectMonitor,
+      }),
     );
 
     expect(screen.getByRole("button", { name: "リアルタイム" })).toBeDisabled();
@@ -75,20 +87,20 @@ describe("KeyboardWorkspace", () => {
   it("keeps realtime visible when the monitor disconnects after selection", () => {
     const store = createMonitorStore();
     const { rerender } = render(
-      <KeyboardWorkspace
-        editor={<StatefulEditor />}
-        monitorStore={store}
-        monitorActive
-      />,
+      workspaceWithMonitorKeymap({
+        editor: <StatefulEditor />,
+        monitorStore: store,
+        monitorActive: true,
+      }),
     );
     fireEvent.click(screen.getByRole("button", { name: "リアルタイム" }));
 
     rerender(
-      <KeyboardWorkspace
-        editor={<StatefulEditor />}
-        monitorStore={store}
-        monitorActive={false}
-      />,
+      workspaceWithMonitorKeymap({
+        editor: <StatefulEditor />,
+        monitorStore: store,
+        monitorActive: false,
+      }),
     );
 
     expect(

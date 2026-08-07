@@ -88,10 +88,11 @@ function MonitorKeymapPublisher({ keymap }: { keymap: Keymap | undefined }) {
 function overviewWithMonitorKeymap(
   props: ComponentProps<typeof StudioConnectionOverview>,
   keymap?: Keymap,
+  publish = true,
 ) {
   return (
     <MonitorKeymapProvider>
-      <MonitorKeymapPublisher keymap={keymap} />
+      {publish && <MonitorKeymapPublisher keymap={keymap} />}
       <StudioConnectionOverview {...props} />
     </MonitorKeymapProvider>
   );
@@ -253,6 +254,29 @@ describe("StudioConnectionOverview", () => {
       ),
     );
     fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
+
+    expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
+  });
+
+  it("keeps the resolved live key after the keymap publisher unmounts", () => {
+    const store = monitorStore();
+    store.push({ kind: "layer", defaultLayer: 0, activeLayerMask: 0b10001 });
+    store.push({ kind: "key", position: 0, pressed: true });
+    const props = {
+      monitorStore: store,
+      monitorActive: true,
+      editorAvailable: true,
+      connectionTitle: "エディター利用可",
+      connectionBody: "Raw HIDとStudio RPCが同じ画面で使えます。",
+    };
+    const view = render(
+      overviewWithMonitorKeymap(props, keymapWithL4ReturnBinding()),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
+
+    expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
+
+    view.rerender(overviewWithMonitorKeymap(props, undefined, false));
 
     expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
   });

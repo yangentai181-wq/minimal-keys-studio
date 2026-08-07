@@ -13,6 +13,7 @@ const { behaviorMap } = vi.hoisted(() => ({
   behaviorMap: {
     1: { id: 1, displayName: "Key Press", metadata: [] },
     2: { id: 2, displayName: "To Layer", metadata: [] },
+    3: { id: 3, displayName: "Transparent", metadata: [] },
   },
 }));
 
@@ -35,6 +36,27 @@ function keymapWithL4ReturnBinding(): Keymap {
     layers: [
       { id: 0, name: "Base", bindings: bindings() },
       { id: 4, name: "Auto Mouse", bindings: bindings(binding(2, 0)) },
+    ],
+    availableLayers: 9,
+    maxLayerNameLength: 16,
+  };
+}
+
+function keymapWithTransparentL3Binding(): Keymap {
+  const binding = (behaviorId: number, param1 = 0, param2 = 0) => ({
+    behaviorId,
+    param1,
+    param2,
+  });
+  const bindings = (first = binding(1, (7 << 16) + 4)) =>
+    Array.from({ length: 43 }, (_, position) =>
+      position === 0 ? first : binding(1, (7 << 16) + 4),
+    );
+
+  return {
+    layers: [
+      { id: 0, name: "Base", bindings: bindings() },
+      { id: 3, name: "Symbols", bindings: bindings(binding(3)) },
     ],
     availableLayers: 9,
     maxLayerNameLength: 16,
@@ -112,5 +134,26 @@ describe("KeyboardMonitorSurface", () => {
       "通常へ戻る",
     );
     expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
+  });
+
+  it("resolves a Transparent binding to its inherited live label", () => {
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push({ kind: "layer", defaultLayer: 0, activeLayerMask: 0b1001 });
+    store.push({ kind: "key", position: 0, pressed: true });
+
+    renderMonitorSurface(store, true, keymapWithTransparentL3Binding());
+
+    expect(screen.getByTestId("monitor-key-label-0")).toHaveTextContent("A");
+    expect(
+      screen.getByRole("gridcell", {
+        name: "pos 0 A 押下中",
+        description: "下位レイヤーから継承",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Trans")).not.toBeInTheDocument();
+    expect(screen.getByText("#0 A")).toBeInTheDocument();
   });
 });

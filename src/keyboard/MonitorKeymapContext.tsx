@@ -4,7 +4,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -12,7 +11,7 @@ import type { Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 
 type MonitorKeymapContextValue = {
   keymap: Keymap | undefined;
-  publish: (keymap: Keymap | undefined) => () => void;
+  publish: (keymap: Keymap | undefined) => void;
 };
 
 const MonitorKeymapContext = createContext<MonitorKeymapContextValue | undefined>(
@@ -21,16 +20,10 @@ const MonitorKeymapContext = createContext<MonitorKeymapContextValue | undefined
 
 export function MonitorKeymapProvider({ children }: { children: ReactNode }) {
   const [keymap, setKeymap] = useState<Keymap | undefined>(undefined);
-  const publicationRef = useRef(0);
   const publish = useCallback((nextKeymap: Keymap | undefined) => {
-    const publication = ++publicationRef.current;
-    setKeymap(nextKeymap);
-
-    return () => {
-      if (publication === publicationRef.current) {
-        setKeymap(undefined);
-      }
-    };
+    if (nextKeymap) {
+      setKeymap(nextKeymap);
+    }
   }, []);
 
   return (
@@ -54,5 +47,7 @@ export function useMonitorKeymap(): Keymap | undefined {
 
 export function usePublishMonitorKeymap(keymap: Keymap | undefined): void {
   const { publish } = useMonitorKeymapContext();
-  useEffect(() => publish(keymap), [keymap, publish]);
+  useEffect(() => {
+    publish(keymap);
+  }, [keymap, publish]);
 }
