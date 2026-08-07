@@ -23,6 +23,49 @@ function hidParamLabel(param: number): string {
   return getHidKeyDescription(rawPage & 0xff, id).roleName;
 }
 
+/**
+ * Text label for a binding that has already been determined not to be
+ * Transparent. Transparency is editor state and must be resolved by the
+ * realtime monitor before it asks for a label.
+ */
+export function getNonTransparentBindingLabel(
+  binding: BehaviorBinding,
+  displayName: string,
+): string {
+  switch (displayName) {
+    case "Key Press":
+      return hidParamLabel(binding.param1);
+    case "Layer-Tap":
+      return hidParamLabel(binding.param2);
+    case "LAYER_TAP_MKP":
+      return getMouseKeyDescription(binding.param2).roleName;
+    case "Mod-Tap":
+      return `${modifierSymbols(binding.param1)}+${hidParamLabel(binding.param2)}`;
+    case "Hold-Tap":
+      return hidParamLabel(binding.param2);
+    case "Momentary Layer":
+      return `MLayer L${binding.param1}`;
+    case "Toggle Layer":
+      return `Toggle L${binding.param1}`;
+    case "To Layer":
+      return binding.param1 === 0 ? "通常へ戻る" : `To L${binding.param1}`;
+    case "Sticky Layer":
+      return `Sticky L${binding.param1}`;
+    case "Sticky Key":
+      return `Sticky ${modifierSymbols(binding.param1)}`;
+    case "Mouse Key Press":
+      return getMouseKeyDescription(binding.param1).roleName;
+    case "Mouse Scroll":
+      return getMouseScrollDescription(binding.param1).roleName;
+    case "Bluetooth":
+      return `BT ${binding.param1}`;
+    case "None":
+      return "無効";
+    default:
+      return displayName;
+  }
+}
+
 function shortLayerName(index: number, names: string[]): string {
   const name = names[index];
   if (!name) return `L${index}`;
