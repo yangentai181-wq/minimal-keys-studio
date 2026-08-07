@@ -40,6 +40,26 @@ describe("buildKeyPresentation", () => {
     );
   });
 
+  it("uses persistent layer IDs for Conditional Layer labels", () => {
+    const result = buildKeyPresentation({
+      layout: layout as never,
+      keymap: {
+        layers: [
+          { id: 42, name: "Nav", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+          { id: 0, name: "Base", bindings: [{ behaviorId: 1, param1: 42, param2: 0 }] },
+        ],
+      } as never,
+      behaviors: { 1: { id: 1, displayName: "Conditional Layer" } } as never,
+      selectedLayerIndex: 1,
+      os: "mac",
+    });
+
+    expect(result[0]).toMatchObject({ header: "Conditional" });
+    expect((result[0].children as { props: { children: string } }).props.children).toBe(
+      "Nav",
+    );
+  });
+
   it("changes presentation when its keymap, behavior, layer, layout, or OS inputs change", () => {
     const input = {
       layout: layout as never,

@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import type { Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMonitorStore, type MonitorStore } from "../monitor/monitorStore";
 import { KeyboardMonitorSurface } from "./KeyboardMonitorSurface";
@@ -85,6 +85,10 @@ function renderMonitorSurface(
 }
 
 describe("KeyboardMonitorSurface", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows the live keyboard, active layer, latest key, and pointer movement", () => {
     const store = createMonitorStore((notify) => {
       notify();
@@ -148,6 +152,26 @@ describe("KeyboardMonitorSurface", () => {
 
     expect(screen.getByText("直近の移動")).toBeInTheDocument();
     expect(screen.getByText("停止中")).toBeInTheDocument();
+  });
+
+  it("updates a fresh pointer sample to stopped after 500ms", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-07T00:00:00Z"));
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push({ kind: "pointer", dx: 4, dy: -2, wheel: 0, hwheel: 0, buttons: 0 });
+
+    const view = renderMonitorSurface(store, true);
+    expect(screen.getByText("dx +4 / dy -2")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(screen.getByText("停止中")).toBeInTheDocument();
+    view.unmount();
   });
 
   it("uses the live L4 binding instead of the factory fallback", () => {

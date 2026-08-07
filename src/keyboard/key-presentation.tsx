@@ -57,6 +57,8 @@ export function getNonTransparentBindingLabel(
       return binding.param1 === 0 ? "通常へ戻る" : `To ${shortLayerName(binding.param1, layers)}`;
     case "Sticky Layer":
       return `Sticky ${shortLayerName(binding.param1, layers)}`;
+    case "Conditional Layer":
+      return `Conditional ${shortLayerName(binding.param1, layers)}`;
     case "Sticky Key":
       return `Sticky ${modifierSymbols(binding.param1)}`;
     case "Mouse Key Press":
@@ -91,6 +93,7 @@ function keyDisplay(binding: BehaviorBinding, displayName: string, layers: reado
     case "Toggle Layer": return { header: "Toggle", children: <span>{shortLayerName(binding.param1, layers)}</span> };
     case "To Layer": return { header: "To", children: <span>{shortLayerName(binding.param1, layers)}</span> };
     case "Sticky Layer": return { header: "Sticky", children: <span>{shortLayerName(binding.param1, layers)}</span> };
+    case "Conditional Layer": return { header: "Conditional", children: <span>{shortLayerName(binding.param1, layers)}</span> };
     case "Sticky Key": return { header: "Sticky", children: <span>{modifierSymbols(binding.param1)}</span> };
     case "Mouse Key Press": return { header: "", children: <span>{getMouseKeyDescription(binding.param1).roleName}</span> };
     case "Mouse Scroll": return { header: "Scroll", children: <span>{getMouseScrollDescription(binding.param1).roleName}</span> };

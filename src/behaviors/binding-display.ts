@@ -60,7 +60,8 @@ export function formatBindingDetail(
     case "Momentary Layer":
     case "Toggle Layer":
     case "To Layer":
-    case "Sticky Layer": {
+    case "Sticky Layer":
+    case "Conditional Layer": {
       return layerNameForId(binding.param1, layers);
     }
     case "Sticky Key": {

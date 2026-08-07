@@ -88,6 +88,19 @@ describe("formatBindingDetail", () => {
     expect(result).toBe("Symbols");
   });
 
+  it("looks up the Conditional Layer target by persistent ID", () => {
+    const result = formatBindingDetail(
+      "Conditional Layer",
+      { behaviorId: 5, param1: 42, param2: 0 },
+      [
+        { id: 42, index: 0, name: "Symbols" },
+        { id: 0, index: 1, name: "Base" },
+      ],
+    );
+
+    expect(result).toBe("Symbols");
+  });
+
   it("shows modifier symbols for Sticky Key", () => {
     const result = formatBindingDetail(
       "Sticky Key",
