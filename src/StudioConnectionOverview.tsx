@@ -1,11 +1,15 @@
 import { Cable, Keyboard, Link2, MousePointer2, Usb } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
+import { useBehaviorMap } from "./behaviors/BehaviorsContext";
 import { isLayerActive } from "./connection/rawHidFrames";
+import { useMonitorKeymap } from "./keyboard/MonitorKeymapContext";
+import { MINIMAL_KEYS_KEY_COUNT } from "./keyboard/minimal-keys-layout";
 import { AUTO_MOUSE_LAYER_INDEX } from "./keyboard/minimal-keys-layers";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { getMonitorKeyLabel } from "./monitor/minimalKeysMonitorLabels";
 import type { MonitorStore } from "./monitor/monitorStore";
+import { resolveMonitorBinding } from "./monitor/resolveMonitorBindings";
 import { useMonitorSnapshot } from "./monitor/useMonitorSnapshot";
 import { TrackballPrecisionStatus } from "./monitor/TrackballPrecisionStatus";
 
@@ -101,10 +105,26 @@ function MonitorSummary({
   deviceName?: string;
 }) {
   const monitor = useMonitorSnapshot(store);
+  const keymap = useMonitorKeymap();
+  const behaviors = useBehaviorMap();
+  const resolvedBindings = useMemo(
+    () =>
+      keymap
+        ? Array.from({ length: MINIMAL_KEYS_KEY_COUNT }, (_, position) =>
+            resolveMonitorBinding({
+              keymap,
+              behaviors,
+              activeLayerMask: monitor.activeLayerMask,
+              position,
+            }),
+          )
+        : undefined,
+    [behaviors, keymap, monitor.activeLayerMask],
+  );
   const [detailsOpen, setDetailsOpen] = useState(false);
   const pressedList = [...monitor.pressed].sort((a, b) => a - b);
   const latestPosition = pressedList[pressedList.length - 1];
-  const latestKey = latestPosition === undefined ? "待機中" : `#${latestPosition} ${getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
+  const latestKey = latestPosition === undefined ? "待機中" : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
   const layerName = MONITOR_LAYER_NAMES[monitor.activeLayerIndex] ?? `L${monitor.activeLayerIndex}`;
   const pointerSummary = monitor.pointer ? `dx ${monitor.pointer.dx >= 0 ? "+" : ""}${monitor.pointer.dx} / dy ${monitor.pointer.dy >= 0 ? "+" : ""}${monitor.pointer.dy}` : "待機中";
   const autoMouseActive = isLayerActive(monitor.activeLayerMask, AUTO_MOUSE_LAYER_INDEX);

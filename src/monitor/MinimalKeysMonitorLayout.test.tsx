@@ -2,10 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MinimalKeysMonitorLayout } from "./MinimalKeysMonitorLayout";
+import { MonitorPanel } from "./MonitorPanel";
 import {
   getMonitorKeyLabel,
   MONITOR_KEY_LABELS_BY_LAYER,
 } from "./minimalKeysMonitorLabels";
+import { createMonitorStore } from "./monitorStore";
 
 describe("MinimalKeysMonitorLayout", () => {
   it("renders the physical minimal-keys positions and highlights pressed keys", () => {
@@ -74,5 +76,48 @@ describe("MinimalKeysMonitorLayout", () => {
     expect(MONITOR_KEY_LABELS_BY_LAYER.map((labels) => labels.length)).toEqual(
       Array.from({ length: 8 }, () => 43),
     );
+  });
+
+  it("renders resolved live labels and describes inherited keys", () => {
+    render(
+      <MinimalKeysMonitorLayout
+        activeLayerIndex={7}
+        pressed={new Set()}
+        resolvedBindings={[
+          {
+            label: "A",
+            sourceLayerId: 0,
+            sourceLayerIndex: 0,
+            inherited: true,
+            unknown: false,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("monitor-key-label-0")).toHaveTextContent("A");
+    expect(
+      screen.getByRole("gridcell", {
+        name: "pos 0 A",
+        description: "下位レイヤーから継承",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("identifies monitor-only labels as factory-setting guidance", () => {
+    render(
+      <MonitorPanel
+        monitorStore={createMonitorStore()}
+        description={{
+          title: "Raw HIDで監視中",
+          body: "編集接続は利用できません。",
+          monitorAvailable: true,
+          editorAvailable: false,
+        }}
+        editorAvailable={false}
+      />,
+    );
+
+    expect(screen.getByText("出荷時設定の目安")).toBeInTheDocument();
   });
 });

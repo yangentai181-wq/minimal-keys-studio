@@ -1,8 +1,66 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
+import { describe, expect, it, vi } from "vitest";
 
-import { createMonitorStore } from "../monitor/monitorStore";
+import { createMonitorStore, type MonitorStore } from "../monitor/monitorStore";
 import { KeyboardMonitorSurface } from "./KeyboardMonitorSurface";
+import {
+  MonitorKeymapProvider,
+  usePublishMonitorKeymap,
+} from "./MonitorKeymapContext";
+
+const { behaviorMap } = vi.hoisted(() => ({
+  behaviorMap: {
+    1: { id: 1, displayName: "Key Press", metadata: [] },
+    2: { id: 2, displayName: "To Layer", metadata: [] },
+  },
+}));
+
+vi.mock("../behaviors/BehaviorsContext", () => ({
+  useBehaviorMap: () => behaviorMap,
+}));
+
+function keymapWithL4ReturnBinding(): Keymap {
+  const binding = (behaviorId: number, param1 = 0, param2 = 0) => ({
+    behaviorId,
+    param1,
+    param2,
+  });
+  const bindings = (first = binding(1, (7 << 16) + 4)) =>
+    Array.from({ length: 43 }, (_, position) =>
+      position === 0 ? first : binding(1, (7 << 16) + 4),
+    );
+
+  return {
+    layers: [
+      { id: 0, name: "Base", bindings: bindings() },
+      { id: 4, name: "Auto Mouse", bindings: bindings(binding(2, 0)) },
+    ],
+    availableLayers: 9,
+    maxLayerNameLength: 16,
+  };
+}
+
+function MonitorKeymapPublisher({ keymap }: { keymap: Keymap | undefined }) {
+  usePublishMonitorKeymap(keymap);
+  return null;
+}
+
+function renderMonitorSurface(
+  monitorStore: MonitorStore,
+  monitorActive: boolean,
+  keymap?: Keymap,
+) {
+  return render(
+    <MonitorKeymapProvider>
+      <MonitorKeymapPublisher keymap={keymap} />
+      <KeyboardMonitorSurface
+        monitorStore={monitorStore}
+        monitorActive={monitorActive}
+      />
+    </MonitorKeymapProvider>,
+  );
+}
 
 describe("KeyboardMonitorSurface", () => {
   it("shows the live keyboard, active layer, latest key, and pointer movement", () => {
@@ -22,7 +80,7 @@ describe("KeyboardMonitorSurface", () => {
       buttons: 0,
     });
 
-    render(<KeyboardMonitorSurface monitorStore={store} monitorActive />);
+    renderMonitorSurface(store, true);
 
     expect(
       screen.getByRole("grid", { name: "minimal-keys 実配列モニター" }),
@@ -35,13 +93,24 @@ describe("KeyboardMonitorSurface", () => {
   });
 
   it("clearly identifies a disconnected monitor", () => {
-    render(
-      <KeyboardMonitorSurface
-        monitorStore={createMonitorStore()}
-        monitorActive={false}
-      />,
-    );
+    renderMonitorSurface(createMonitorStore(), false);
 
     expect(screen.getByText("モニター未接続")).toBeInTheDocument();
+  });
+
+  it("uses the live L4 binding instead of the factory fallback", () => {
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push({ kind: "layer", defaultLayer: 0, activeLayerMask: 0b10001 });
+    store.push({ kind: "key", position: 0, pressed: true });
+
+    renderMonitorSurface(store, true, keymapWithL4ReturnBinding());
+
+    expect(screen.getByTestId("monitor-key-label-0")).toHaveTextContent(
+      "通常へ戻る",
+    );
+    expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
   });
 });

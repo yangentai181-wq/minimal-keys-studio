@@ -1,5 +1,6 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { MonitorKeymapProvider } from "../keyboard/MonitorKeymapContext";
 import { createMonitorStore } from "../monitor/monitorStore";
 import { RightUsbEditorShell } from "./RightUsbEditorShell";
 
@@ -13,7 +14,11 @@ describe("RightUsbEditorShell", () => {
     const renders = { header: 0, editor: 0 };
     function Header() { renders.header += 1; return <header>production header</header>; }
     function ActiveEditor() { renders.editor += 1; return <main>production active editor</main>; }
-    render(<RightUsbEditorShell header={<Header />} editor={<ActiveEditor />} footer={<footer />} monitorStore={store} monitorActive editorAvailable connectionTitle="接続" connectionBody="接続中" />);
+    render(
+      <MonitorKeymapProvider>
+        <RightUsbEditorShell header={<Header />} editor={<ActiveEditor />} footer={<footer />} monitorStore={store} monitorActive editorAvailable connectionTitle="接続" connectionBody="接続中" />
+      </MonitorKeymapProvider>,
+    );
     renders.header = 0;
     renders.editor = 0;
     act(() => store.push({ kind: "pointer", dx: 4, dy: 0, wheel: 0, hwheel: 0, buttons: 0 }));

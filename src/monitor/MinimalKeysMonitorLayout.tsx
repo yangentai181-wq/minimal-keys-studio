@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
 import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import type { HoldTapDisplayState } from "./monitorStore";
+import type { ResolvedMonitorBinding } from "./resolveMonitorBindings";
 
 const layoutWidth = MINIMAL_KEYS_POSITIONS.reduce(
   (max, key) => Math.max(max, key.x + key.width),
@@ -30,6 +31,7 @@ export interface MinimalKeysMonitorLayoutProps {
   activeLayerIndex: number;
   pressed: ReadonlySet<number>;
   holdTapStates?: Readonly<Record<number, HoldTapDisplayState>>;
+  resolvedBindings?: readonly ResolvedMonitorBinding[];
   className?: string;
 }
 
@@ -37,6 +39,7 @@ export function MinimalKeysMonitorLayout({
   activeLayerIndex,
   pressed,
   holdTapStates = {},
+  resolvedBindings,
   className,
 }: MinimalKeysMonitorLayoutProps) {
   return (
@@ -89,10 +92,16 @@ export function MinimalKeysMonitorLayout({
                     holdTapState === "hold-afterglow"
                   ? "長押し"
                   : null;
-          const { label, transparent } = getMonitorKeyLabel(
-            index,
-            activeLayerIndex,
-          );
+          const resolvedBinding = resolvedBindings?.[index];
+          const { label, transparent } = resolvedBinding
+            ? { label: resolvedBinding.label, transparent: false }
+            : getMonitorKeyLabel(index, activeLayerIndex);
+          const inheritedDescription = resolvedBinding?.inherited
+            ? "下位レイヤーから継承"
+            : undefined;
+          const descriptionId = inheritedDescription
+            ? `monitor-key-description-${index}`
+            : undefined;
           const isLongLabel = label.length > 4 || label.includes(" / ");
 
           return (
@@ -100,6 +109,7 @@ export function MinimalKeysMonitorLayout({
               key={position.id}
               role="gridcell"
               aria-label={`pos ${index} ${label}${isPressed ? " 押下中" : ""}${decisionLabel ? ` ${decisionLabel}` : ""}`}
+              aria-describedby={descriptionId}
               aria-pressed={isPressed}
               title={`pos ${index}: ${label}`}
               className="absolute p-0.5"
@@ -131,6 +141,11 @@ export function MinimalKeysMonitorLayout({
                 >
                   {label}
                 </span>
+                {inheritedDescription && (
+                  <span id={descriptionId} className="sr-only">
+                    {inheritedDescription}
+                  </span>
+                )}
                 {decisionLabel && (
                   <span
                     className={cx(

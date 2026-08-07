@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
+import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
 import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { createMonitorStore } from "./monitor/monitorStore";
@@ -222,7 +223,8 @@ function EditorPanel() {
 
 export function UnifiedStudioPreview() {
   return (
-    <div className="min-h-dvh bg-base-200 text-base-content">
+    <MonitorKeymapProvider>
+      <div className="min-h-dvh bg-base-200 text-base-content">
       <header className="border-b border-base-300 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 lg:px-6">
           <div className="flex items-center gap-3">
@@ -324,6 +326,7 @@ export function UnifiedStudioPreview() {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </MonitorKeymapProvider>
   );
 }

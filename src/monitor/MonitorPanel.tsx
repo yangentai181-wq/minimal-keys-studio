@@ -113,7 +113,10 @@ export function MonitorPanel({
         )}
       </section>
 
-      <MonitorLiveContent monitorStore={monitorStore} />
+      <div className="space-y-2">
+        <p className="text-xs text-base-content/60">出荷時設定の目安</p>
+        <MonitorLiveContent monitorStore={monitorStore} />
+      </div>
     </div>
   );
 }

@@ -1,10 +1,15 @@
 import { Activity, Layers, MousePointer2, Radio } from "lucide-react";
+import { useMemo } from "react";
 
+import { useBehaviorMap } from "../behaviors/BehaviorsContext";
 import { MinimalKeysMonitorLayout } from "../monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "../monitor/layerNames";
 import { getMonitorKeyLabel } from "../monitor/minimalKeysMonitorLabels";
 import type { MonitorStore } from "../monitor/monitorStore";
+import { resolveMonitorBinding } from "../monitor/resolveMonitorBindings";
 import { useMonitorSnapshot } from "../monitor/useMonitorSnapshot";
+import { MINIMAL_KEYS_KEY_COUNT } from "./minimal-keys-layout";
+import { useMonitorKeymap } from "./MonitorKeymapContext";
 
 interface KeyboardMonitorSurfaceProps {
   monitorStore: MonitorStore;
@@ -20,6 +25,22 @@ export function KeyboardMonitorSurface({
   monitorActive,
 }: KeyboardMonitorSurfaceProps) {
   const monitor = useMonitorSnapshot(monitorStore);
+  const keymap = useMonitorKeymap();
+  const behaviors = useBehaviorMap();
+  const resolvedBindings = useMemo(
+    () =>
+      keymap
+        ? Array.from({ length: MINIMAL_KEYS_KEY_COUNT }, (_, position) =>
+            resolveMonitorBinding({
+              keymap,
+              behaviors,
+              activeLayerMask: monitor.activeLayerMask,
+              position,
+            }),
+          )
+        : undefined,
+    [behaviors, keymap, monitor.activeLayerMask],
+  );
   const pressedPositions = [...monitor.pressed];
   const latestPosition = pressedPositions[pressedPositions.length - 1];
   const layerName =
@@ -28,7 +49,7 @@ export function KeyboardMonitorSurface({
   const latestKey =
     latestPosition === undefined
       ? "待機中"
-      : `#${latestPosition} ${getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
+      : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
   const pointer = monitor.pointer
     ? `dx ${signed(monitor.pointer.dx)} / dy ${signed(monitor.pointer.dy)}`
     : "待機中";
@@ -66,6 +87,7 @@ export function KeyboardMonitorSurface({
         activeLayerIndex={monitor.activeLayerIndex}
         pressed={monitor.pressed}
         holdTapStates={monitor.holdTapStates}
+        resolvedBindings={resolvedBindings}
         className="min-h-0 flex-1 bg-base-200"
       />
 
