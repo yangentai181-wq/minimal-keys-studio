@@ -53,6 +53,7 @@ import { StudioTabView } from "./navigation/StudioTabView";
 import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
 import { handleNotificationEnd } from "./notificationEnd";
 import { RightUsbEditorShell } from "./connection/RightUsbEditorShell";
+import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
 
 declare global {
   interface Window {
@@ -422,7 +423,8 @@ function AppInner() {
                 onClose={() => setShowLicenseNotice(false)}
               />
                 {conn.conn && (
-                <RightUsbEditorShell
+                <MonitorKeymapProvider>
+                  <RightUsbEditorShell
                   header={<AppHeader
                     connectedDeviceLabel={connectedDeviceName}
                     canUndo={canUndo}
@@ -472,7 +474,8 @@ function AppInner() {
                     onShowAbout={() => setShowAbout(true)}
                     onShowLicenseNotice={() => setShowLicenseNotice(true)}
                   />}
-                />
+                  />
+                </MonitorKeymapProvider>
                 )}
               </TrackballPrecisionProvider>
             </CustomSubsystemsProvider>

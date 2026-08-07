@@ -2,8 +2,12 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Keyboard from "./Keyboard";
+import { MonitorKeymapProvider } from "./MonitorKeymapContext";
 
-const rpc = vi.hoisted(() => ({ call: vi.fn() }));
+const rpc = vi.hoisted(() => ({
+  call: vi.fn(),
+  keymap: { layers: [], availableLayers: 0 },
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -23,7 +27,7 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/keymap", () => ({
 
 vi.mock("../rpc/logging", () => ({ call_rpc: rpc.call }));
 vi.mock("../rpc/useConnectedDeviceData", () => ({
-  useConnectedDeviceData: () => [{ layers: [], availableLayers: 0 }, vi.fn()],
+  useConnectedDeviceData: () => [rpc.keymap, vi.fn()],
 }));
 vi.mock("../rpc/ConnectionContext", async () => {
   const { createContext } = await import("react");
@@ -63,6 +67,14 @@ function layoutResponse(layouts: unknown[], activeLayoutIndex = 0) {
   return { keymap: { getPhysicalLayouts: { layouts, activeLayoutIndex } } };
 }
 
+function renderKeyboard() {
+  return render(
+    <MonitorKeymapProvider>
+      <Keyboard />
+    </MonitorKeymapProvider>,
+  );
+}
+
 describe("Keyboard loading", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -74,7 +86,7 @@ describe("Keyboard loading", () => {
   it("shows the keyboard immediately when required data resolves within 100ms", async () => {
     const request = deferred<ReturnType<typeof layoutResponse>>();
     rpc.call.mockReturnValue(request.promise);
-    render(<Keyboard />);
+    renderKeyboard();
 
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(screen.getByText("キーマップを読み込んでいます...")).toBeInTheDocument();
@@ -94,7 +106,7 @@ describe("Keyboard loading", () => {
   it("keeps the spinner visible while the physical-layout request remains unresolved", async () => {
     const request = deferred<ReturnType<typeof layoutResponse>>();
     rpc.call.mockReturnValue(request.promise);
-    render(<Keyboard />);
+    renderKeyboard();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(600);
@@ -107,7 +119,7 @@ describe("Keyboard loading", () => {
 
   it("keeps loading when the device returns no usable physical layout", async () => {
     rpc.call.mockResolvedValue(layoutResponse([]));
-    render(<Keyboard />);
+    renderKeyboard();
 
     await act(async () => { await Promise.resolve(); });
 
@@ -117,7 +129,7 @@ describe("Keyboard loading", () => {
 
   it("keeps loading when the active physical-layout index does not exist", async () => {
     rpc.call.mockResolvedValue(layoutResponse([{ keys: [] }], 1));
-    render(<Keyboard />);
+    renderKeyboard();
 
     await act(async () => { await Promise.resolve(); });
 

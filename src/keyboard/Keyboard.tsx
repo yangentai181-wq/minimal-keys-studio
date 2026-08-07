@@ -49,6 +49,7 @@ import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPre
 import { publishKeymapChanged } from "./keymap-events";
 import { runGuardedKeymapWrite } from "./keymap-operation-guards";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { usePublishMonitorKeymap } from "./MonitorKeymapContext";
 
 // Separate component for keyboard area — measures container and computes oneU.
 // Isolated so ResizeObserver doesn't cause feedback loops with the keyboard rendering.
@@ -196,6 +197,7 @@ export default function Keyboard() {
     (keymap) => keymap?.keymap?.getKeymap,
     true
   );
+  usePublishMonitorKeymap(keymap);
 
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
   const [selectedKeyPosition, setSelectedKeyPosition] = useState<
