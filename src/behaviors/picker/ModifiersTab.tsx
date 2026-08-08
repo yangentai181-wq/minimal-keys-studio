@@ -51,10 +51,16 @@ interface ModifiersTabProps {
   behaviors: GetBehaviorDetailsResponse[];
   layers: { id: number; name: string }[];
   osMode: import("../use-cases").UserOS;
+  currentTapKey?: TapKeyItem;
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
-export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTabProps) {
+export function ModifiersTab({
+  behaviors,
+  osMode,
+  currentTapKey,
+  onApplyBinding,
+}: ModifiersTabProps) {
   const [mode, setMode] = useState<Mode>("standalone");
   const [selectedModifier, setSelectedModifier] = useState<ModifierItem | null>(null);
   const [selectedTapKey, setSelectedTapKey] = useState<TapKeyItem | null>(null);
@@ -167,6 +173,7 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
         <TapKeySelect
           osMode={osMode}
           selected={selectedTapKey}
+          currentExternal={currentTapKey}
           onChange={handleTapKeyClick}
         />
       )}

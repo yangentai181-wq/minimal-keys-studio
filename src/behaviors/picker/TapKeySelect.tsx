@@ -1,4 +1,4 @@
-import { getCommonTapKeys, type TapKeyItem } from "./common-tap-keys";
+import { encodeTapKey, getCommonTapKeys, type TapKeyItem } from "./common-tap-keys";
 import type { UserOS } from "../use-cases";
 
 interface TapKeySelectProps {
@@ -9,7 +9,7 @@ interface TapKeySelectProps {
 }
 
 function sameTapKey(a: TapKeyItem, b: TapKeyItem): boolean {
-  return a.hidId === b.hidId && a.modifier === b.modifier;
+  return encodeTapKey(a) === encodeTapKey(b);
 }
 
 function selectedIndex(selected: TapKeyItem | null, items: TapKeyItem[]): string {
@@ -29,6 +29,7 @@ export function TapKeySelect({
     currentExternal && !catalog.some((item) => sameTapKey(item, currentExternal))
       ? [currentExternal, ...catalog]
       : catalog;
+  const displayedSelection = selected ?? currentExternal ?? null;
 
   return (
     <label className="block min-w-0 flex-1">
@@ -38,7 +39,7 @@ export function TapKeySelect({
       <select
         aria-label="タップキーを選択"
         className="h-9 w-full rounded-md border border-base-300 bg-white px-2 text-sm text-base-content"
-        value={selectedIndex(selected, items)}
+        value={selectedIndex(displayedSelection, items)}
         onChange={(event) => {
           if (event.target.value === "") return;
           const item = items[Number(event.target.value)];

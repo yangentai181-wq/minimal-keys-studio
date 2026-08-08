@@ -22,6 +22,7 @@ interface LayersTabProps {
   behaviors: GetBehaviorDetailsResponse[];
   layers: { id: number; index: number; name: string }[];
   osMode: import("../use-cases").UserOS;
+  currentTapKey?: TapKeyItem;
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
@@ -29,6 +30,7 @@ export function LayersTab({
   behaviors,
   layers,
   osMode,
+  currentTapKey,
   onApplyBinding,
 }: LayersTabProps) {
   const [selectedBehavior, setSelectedBehavior] = useState<string | null>(null);
@@ -171,6 +173,7 @@ export function LayersTab({
         <TapKeySelect
           osMode={osMode}
           selected={selectedTapKey}
+          currentExternal={currentTapKey}
           onChange={handleTapKeyClick}
         />
       )}

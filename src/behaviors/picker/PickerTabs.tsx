@@ -8,6 +8,7 @@ import { LayersTab } from "./LayersTab";
 import { ModifiersTab } from "./ModifiersTab";
 import { SystemTab } from "./SystemTab";
 import { JapaneseTab } from "./JapaneseTab";
+import type { TapKeyItem } from "./common-tap-keys";
 
 type TabId = "actions" | "letters" | "layers" | "modifiers" | "japanese" | "system";
 
@@ -15,6 +16,7 @@ interface PickerTabsProps {
   keyPosition: number;
   behaviors: GetBehaviorDetailsResponse[];
   layers: { id: number; index: number; name: string }[];
+  currentTapKey?: TapKeyItem;
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
@@ -31,6 +33,7 @@ export function PickerTabs({
   keyPosition,
   behaviors,
   layers,
+  currentTapKey,
   onApplyBinding,
 }: PickerTabsProps) {
   const { osMode } = useOsMode();
@@ -74,11 +77,18 @@ export function PickerTabs({
             behaviors={behaviors}
             layers={layers}
             osMode={osMode}
+            currentTapKey={currentTapKey}
             onApplyBinding={onApplyBinding}
           />
         )}
         {activeTab === "modifiers" && (
-          <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />
+          <ModifiersTab
+            behaviors={behaviors}
+            layers={layers}
+            osMode={osMode}
+            currentTapKey={currentTapKey}
+            onApplyBinding={onApplyBinding}
+          />
         )}
         {activeTab === "japanese" && (
           <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />

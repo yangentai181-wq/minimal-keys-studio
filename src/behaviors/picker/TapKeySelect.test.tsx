@@ -40,4 +40,19 @@ describe("TapKeySelect", () => {
     expect(screen.getByRole("option", { name: "Consumer" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "タップキーを選択" })).toHaveValue("0");
   });
+
+  it("treats a zero modifier as the same catalog value", () => {
+    const currentExternal = { label: "A", hidId: 4, modifier: 0 };
+    render(
+      <TapKeySelect
+        osMode="mac"
+        selected={currentExternal}
+        currentExternal={currentExternal}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole("option", { name: "A" })).toHaveLength(1);
+    expect(screen.getByRole("combobox", { name: "タップキーを選択" })).toHaveValue("20");
+  });
 });
