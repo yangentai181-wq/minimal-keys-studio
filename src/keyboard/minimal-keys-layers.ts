@@ -1,6 +1,7 @@
 export const AUTO_MOUSE_LAYER_INDEX = 4;
 export const SCROLL_LAYER_INDEX = 7;
 export const PRECISION_LAYER_INDEX = 8;
+export const MINIMAL_KEYS_LAYER_COUNT = PRECISION_LAYER_INDEX + 1;
 
 export type MinimalKeysLayerRole = "autoMouse" | "scroll" | "precision";
 
@@ -21,7 +22,7 @@ export function isPrecisionLayerIndex(index: number): boolean {
 }
 
 export function hasPrecisionLayer(layers: unknown[]): boolean {
-  return layers.length > PRECISION_LAYER_INDEX;
+  return layers.length >= MINIMAL_KEYS_LAYER_COUNT;
 }
 
 export function canEditUserLayer(index: number): boolean {

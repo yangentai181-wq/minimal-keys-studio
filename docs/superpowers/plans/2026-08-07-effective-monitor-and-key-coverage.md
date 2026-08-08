@@ -167,7 +167,7 @@ Run the command from Step 2; expected exit 0.
 
 - [ ] **Step 1: Write the failing config coverage test**
 
-Parse each layer's \`bindings\` block and assert 43 entries. Assert L2 positions 10/21, L3 positions 28/29, L5 positions 4–9/22, L1 main-number HID aliases, and all-transparent protected L8.
+Parse each layer's \`bindings\` block and assert 43 entries. Assert L2 positions 10/21, L3 positions 28/29, L5 positions 4–9/33, preserve F7–F12 at positions 22–27, L1 main-number HID aliases, and all-transparent protected L8.
 
 - [ ] **Step 2: Run test and confirm RED**
 

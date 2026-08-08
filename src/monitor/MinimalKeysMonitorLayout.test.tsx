@@ -7,6 +7,7 @@ import {
   getMonitorKeyLabel,
   MONITOR_KEY_LABELS_BY_LAYER,
 } from "./minimalKeysMonitorLabels";
+import { MONITOR_LAYER_NAMES } from "./layerNames";
 import { createMonitorStore } from "./monitorStore";
 
 describe("MinimalKeysMonitorLayout", () => {
@@ -72,9 +73,57 @@ describe("MinimalKeysMonitorLayout", () => {
     expect(screen.getByLabelText("pos 2 E 押下中 長押し")).toBeTruthy();
   });
 
-  it("keeps every static monitor layer aligned to the 43 physical positions", () => {
+  it("mirrors the factory fallback labels for standard controls and layer returns", () => {
+    expect(MONITOR_LAYER_NAMES[1]).toBe("数字");
+    expect(MONITOR_LAYER_NAMES[8]).toBe("精密モード");
+
+    for (const [position, layerIndex, label] of [
+      [10, 2, "Insert"],
+      [21, 2, "Delete"],
+      [28, 3, "["],
+      [29, 3, "]"],
+      [4, 5, "Cmd+Shift+3"],
+      [5, 5, "Cmd+Shift+4"],
+      [6, 5, "Brightness -"],
+      [7, 5, "Brightness +"],
+      [8, 5, "Volume -"],
+      [9, 5, "Volume +"],
+      [33, 5, "Caps Lock"],
+    ] as const) {
+      expect(getMonitorKeyLabel(position, layerIndex)).toEqual({
+        label,
+        transparent: false,
+      });
+    }
+
+    for (const position of [
+      0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 20, 21,
+      22, 23, 24, 25, 26, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      40, 41, 42,
+    ]) {
+      expect(getMonitorKeyLabel(position, 4)).toEqual({
+        label: "通常へ戻る",
+        transparent: false,
+      });
+    }
+
+    expect(
+      [22, 23, 24, 25, 26, 27].map((position) =>
+        getMonitorKeyLabel(position, 5),
+      ),
+    ).toEqual([
+      { label: "F7", transparent: false },
+      { label: "F8", transparent: false },
+      { label: "F9", transparent: false },
+      { label: "F10", transparent: false },
+      { label: "F11", transparent: false },
+      { label: "F12", transparent: false },
+    ]);
+  });
+
+  it("keeps all nine factory fallback layers aligned to the 43 physical positions", () => {
     expect(MONITOR_KEY_LABELS_BY_LAYER.map((labels) => labels.length)).toEqual(
-      Array.from({ length: 8 }, () => 43),
+      Array.from({ length: 9 }, () => 43),
     );
   });
 

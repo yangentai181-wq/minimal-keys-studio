@@ -78,6 +78,7 @@ vi.mock("./misc/Toast", () => ({
 }));
 vi.mock("./behaviors/BehaviorsContext", () => ({
   BehaviorsProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useBehaviorMap: () => ({}),
 }));
 vi.mock("./rpc/CustomSubsystemsProvider", () => ({
   CustomSubsystemsProvider: ({ children }: { children: ReactNode }) => <>{children}</>,

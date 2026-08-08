@@ -39,7 +39,7 @@
 | L2 / 21（Backspace位置） | \`&kp DELETE\` | ナビlayer＋Backspaceで前方削除 |
 | L2 / 10（A位置） | \`&kp INSERT\` | ナビゲーション群へ集約 |
 | L3 / 28, 29（N, M位置） | \`&kp LBKT\`, \`&kp RBKT\` | 未修飾の \`[\` \`]\` が欠落。現状のカンマ・ピリオド重複を置換 |
-| L5 / 22（Shift位置） | \`&kp CAPSLOCK\` | 機能layerへ低頻度ロックキーを配置 |
+| L5 / 33（/位置） | \`&kp CAPSLOCK\` | 機能layerへ低頻度ロックキーを配置。F7〜F12はL5 / 22〜27に維持する |
 | L5 / 4, 5 | \`&kp LG(LS(N3))\`, \`&kp LG(LS(N4))\` | macOSの全画面・選択範囲スクリーンショット |
 | L5 / 6, 7 | \`&kp C_BRI_DN\`, \`&kp C_BRI_UP\` | macOSで使用頻度の高い輝度操作 |
 | L5 / 8, 9 | \`&kp C_VOL_DN\`, \`&kp C_VOL_UP\` | エンコーダ以外にも確実な音量操作を用意 |
@@ -60,4 +60,3 @@ PrintScreen、Scroll Lock、Pause、Menu/Application、F13-F24、右側のCtrl/A
 - 接続中表示に \`Trans\` が残らず、モニター単体には出荷時注記が出ることを画面テストする。
 - Firmware configは43 binding数、追加position、L1が主数字HIDであること、L8全透過を自動検査する。
 - Studioのtest/build/lint、Tauri build、firmware buildを終了コード0まで確認する。
-

@@ -45,6 +45,7 @@ vi.mock("../rpc/logging", () => ({
 
 vi.mock("../behaviors/BehaviorsContext", () => ({
   useBehaviorList: () => [{ id: 1, displayName: "Key Press" }],
+  useBehaviorMap: () => ({}),
 }));
 
 vi.mock("../navigation/DirtyStateContext", () => ({
