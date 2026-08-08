@@ -3,6 +3,7 @@ import { userEvent, within } from "@storybook/test";
 
 import { MinimalKeysMonitorLayout } from "../monitor/MinimalKeysMonitorLayout";
 import { createMonitorStore } from "../monitor/monitorStore";
+import { MonitorKeymapProvider } from "./MonitorKeymapContext";
 import { KeyboardWorkspace } from "./KeyboardWorkspace";
 
 const monitorStore = createMonitorStore((notify) => {
@@ -66,9 +67,11 @@ const meta = {
   parameters: { layout: "fullscreen" },
   decorators: [
     (Story) => (
-      <div className="h-screen min-h-0 bg-[#F8FAFC]">
-        <Story />
-      </div>
+      <MonitorKeymapProvider>
+        <div className="h-screen min-h-0 bg-[#F8FAFC]">
+          <Story />
+        </div>
+      </MonitorKeymapProvider>
     ),
   ],
   args: {
