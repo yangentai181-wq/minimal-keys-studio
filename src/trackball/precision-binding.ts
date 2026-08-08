@@ -2,7 +2,7 @@ import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-clie
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_page_and_id_from_usage } from "../hid-usages";
 import { getHidKeyDescription, getMouseKeyDescription } from "../keyboard/key-descriptions";
-import { PRECISION_LAYER_ID } from "../keyboard/minimal-keys-layers";
+import { PRECISION_LAYER_ID, SCROLL_LAYER_ID } from "../keyboard/minimal-keys-layers";
 
 export type PrecisionBindingAnalysis =
   | { supported: true; tapLabel: string; holdLabel: string }
@@ -33,6 +33,9 @@ export function analyzePrecisionBinding(
   const displayName = behaviors.find((behavior) => behavior.id === binding.behaviorId)?.displayName;
   if (displayName === "Transparent" || displayName === "&trans") {
     return { supported: false, reason: "透明キーは選択できません" };
+  }
+  if ((displayName === "Layer-Tap" || displayName === "LAYER_TAP_MKP" || displayName === "&lt" || displayName === "&lt_mkp") && binding.param1 === SCROLL_LAYER_ID) {
+    return { supported: false, reason: "スクロール用レイヤーは選択できません" };
   }
   if ((displayName === "Layer-Tap" || displayName === "LAYER_TAP_MKP" || displayName === "&lt" || displayName === "&lt_mkp") && binding.param1 === PRECISION_LAYER_ID) {
     return { supported: false, reason: "精密モード用レイヤーは選択できません" };

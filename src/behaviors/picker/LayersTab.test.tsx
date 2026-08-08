@@ -32,6 +32,27 @@ describe("LayersTab", () => {
     expect(screen.getByText("一時レイヤー")).toBeTruthy();
     expect(screen.getByText("レイヤー切替")).toBeTruthy();
     expect(screen.getByText("レイヤー / タップ")).toBeTruthy();
+    expect(screen.getByText("押している間スクロール")).toBeTruthy();
+    expect(screen.getByText("押している間ポインター精密")).toBeTruthy();
+  });
+
+  it("applies scroll hold action with the selected tap key", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={[...layers, { id: 7, index: 3, name: "Scroll" }]} osMode="mac" onApplyBinding={onApply} />);
+
+    fireEvent.click(screen.getByText("押している間スクロール"));
+    fireEvent.change(screen.getByRole("combobox", { name: "タップキーを選択" }), { target: { value: "0" } });
+    fireEvent.click(screen.getByText("適用する"));
+
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 12, param1: 7, param2: (7 << 16) + 44 });
+  });
+
+  it("disables a missing fixed functional layer with a Japanese reason", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={layers} osMode="mac" onApplyBinding={onApply} />);
+
+    expect(screen.getByText("ポインター精密用レイヤーがありません")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "押している間ポインター精密" })).toHaveAttribute("disabled");
   });
 
   it("shows layer selection after behavior click", () => {

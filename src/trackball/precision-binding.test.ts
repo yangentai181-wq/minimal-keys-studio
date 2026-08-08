@@ -40,6 +40,7 @@ describe("analyzePrecisionBinding", () => {
 
   it.each([
     [{ behaviorId: 5, param1: 0, param2: 0 }, 1, "透明キーは選択できません"],
+    [{ behaviorId: 2, param1: 7, param2: key(4) }, 1, "スクロール用レイヤーは選択できません"],
     [{ behaviorId: 2, param1: 8, param2: key(4) }, 1, "精密モード用レイヤーは選択できません"],
     [{ behaviorId: 1, param1: key(4), param2: 0 }, 1, "エンコーダーは選択できません", true],
     [{ behaviorId: 99, param1: 0, param2: 0 }, 1, "このキーの動作は精密モードに対応していません"],

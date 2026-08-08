@@ -5,7 +5,8 @@ import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
 import { getMinimalKeysLayerRole, isPrecisionLayerId } from "../../keyboard/minimal-keys-layers";
 
-import { encodeTapKey, type TapKeyItem } from "./common-tap-keys";
+import { encodeTapKey, getCommonTapKeys, type TapKeyItem } from "./common-tap-keys";
+import { buildFunctionalLayerTapBinding, type FunctionalLayerAction } from "./functional-layer-actions";
 import { TapKeySelect } from "./TapKeySelect";
 
 const layerBehaviorNames = [
@@ -34,6 +35,7 @@ export function LayersTab({
   onApplyBinding,
 }: LayersTabProps) {
   const [selectedBehavior, setSelectedBehavior] = useState<string | null>(null);
+  const [selectedFunctionalAction, setSelectedFunctionalAction] = useState<FunctionalLayerAction | null>(null);
   const [selectedLayer, setSelectedLayer] = useState<number | null>(null);
   const [selectedTapKey, setSelectedTapKey] = useState<TapKeyItem | null>(null);
   const [selectedMouseButton, setSelectedMouseButton] =
@@ -61,11 +63,32 @@ export function LayersTab({
   }, [availableBehaviors]);
 
   const needsTapKey = selectedBehavior === "Layer-Tap";
+  const isFunctionalAction = selectedFunctionalAction !== null;
+  const functionalAvailability = useMemo(() => {
+    const tapKey = selectedTapKey ?? getCommonTapKeys(osMode)[0];
+    return {
+      scroll: buildFunctionalLayerTapBinding({ action: "scroll", tapKey, behaviors, layers }),
+      precision: buildFunctionalLayerTapBinding({ action: "precision", tapKey, behaviors, layers }),
+    };
+  }, [behaviors, layers, osMode, selectedTapKey]);
+  const functionalReason = selectedFunctionalAction
+    ? (functionalAvailability[selectedFunctionalAction].ok ? null : functionalAvailability[selectedFunctionalAction].reason)
+    : null;
+  const needsFunctionalTapKey = needsTapKey || isFunctionalAction;
   const needsMouseButton = selectedBehavior === "LAYER_TAP_MKP";
-  const is2Param = needsTapKey || needsMouseButton;
+  const is2Param = needsFunctionalTapKey || needsMouseButton;
 
   const handleBehaviorClick = (displayName: string) => {
     setSelectedBehavior(displayName);
+    setSelectedFunctionalAction(null);
+    setSelectedLayer(null);
+    setSelectedTapKey(null);
+    setSelectedMouseButton(null);
+  };
+
+  const handleFunctionalActionClick = (action: FunctionalLayerAction) => {
+    setSelectedFunctionalAction(action);
+    setSelectedBehavior(null);
     setSelectedLayer(null);
     setSelectedTapKey(null);
     setSelectedMouseButton(null);
@@ -98,6 +121,17 @@ export function LayersTab({
   };
 
   const handleApply = () => {
+    if (selectedFunctionalAction) {
+      if (!selectedTapKey) return;
+      const result = buildFunctionalLayerTapBinding({
+        action: selectedFunctionalAction,
+        tapKey: selectedTapKey,
+        behaviors,
+        layers,
+      });
+      if (result.ok) onApplyBinding(result.binding);
+      return;
+    }
     if (!selectedBehavior || selectedLayer === null) return;
     const behaviorId = behaviorIdMap[selectedBehavior];
     if (behaviorId === undefined) return;
@@ -144,6 +178,33 @@ export function LayersTab({
         </div>
       </div>
 
+      <div>
+        <div className="text-sm text-base-content/60 mb-1">機能レイヤー</div>
+        <div className="flex flex-wrap gap-1">
+          {(["scroll", "precision"] as const).map((action) => {
+            const availability = functionalAvailability[action];
+            return (
+              <div key={action}>
+                <button
+                  className={`px-3 py-1.5 text-sm rounded-md border disabled:opacity-40 disabled:cursor-not-allowed ${
+                    selectedFunctionalAction === action
+                      ? "bg-primary/10 text-primary border-primary/30 font-medium"
+                      : "border-base-300 bg-white hover:bg-base-200 text-base-content"
+                  }`}
+                  disabled={!availability.ok}
+                  onClick={() => handleFunctionalActionClick(action)}
+                >
+                  {action === "scroll" ? "押している間スクロール" : "押している間ポインター精密"}
+                </button>
+                {!availability.ok && (
+                  <div className="mt-1 text-xs text-error">{availability.reason}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Step 2: Choose layer */}
       {selectedBehavior && (
         <div>
@@ -169,7 +230,7 @@ export function LayersTab({
       )}
 
       {/* Step 3: For Layer-Tap, choose tap key */}
-      {needsTapKey && selectedLayer !== null && (
+      {needsFunctionalTapKey && (selectedLayer !== null || isFunctionalAction) && (
         <TapKeySelect
           osMode={osMode}
           selected={selectedTapKey}
@@ -207,8 +268,9 @@ export function LayersTab({
         <button
           className="self-start px-4 py-2 text-sm rounded-md bg-primary text-primary-content font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           disabled={
-            selectedLayer === null ||
-            (needsTapKey && selectedTapKey === null) ||
+            (!isFunctionalAction && selectedLayer === null) ||
+            (needsFunctionalTapKey && selectedTapKey === null) ||
+            functionalReason !== null ||
             (needsMouseButton && selectedMouseButton === null)
           }
           onClick={handleApply}
