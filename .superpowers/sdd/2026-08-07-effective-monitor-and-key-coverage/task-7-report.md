@@ -97,8 +97,21 @@ Transparent 解決は `KeyboardMonitorSurface.test.tsx` が、継承元の `A` �
 | DMG | `src-tauri/target/release/bundle/dmg/minimal-keys カスタマイズ_0.1.0_aarch64.dmg` |
 | DMG SHA-256 | `bd9a66a6c6ade99ffdbb14241667df1d672501aee0b44c99c0b12e95c3260267` |
 
-この最終レビュー修正waveでは`/Applications`を変更していない。上の新しいbundle
-をインストール済みアプリへ置換するのは、再レビュー後に親担当が実施する。
+## 最終レビュー修正後のアプリ置換
+
+再レビュー承認後、実行中プロセスがないことを確認してから、修正後bundleを
+`/Applications/minimal-keys カスタマイズ.app` へ配置した。置換前のアプリは
+削除せず、次のTrash内へ復元可能な状態で移動した。
+
+| 確認 | 結果 |
+| --- | --- |
+| backup | `/Users/iwanedaijun/.Trash/minimal-keys-customize-backup-20260808-170705/minimal-keys カスタマイズ.app` |
+| backup存在確認 | 成功 |
+| `mv` + `ditto` | exit 0 |
+| installed executable SHA-256 | `34b52534b89ffae2f00765dfbb3f9794c385a164d698743ffdaf560754f005fb` |
+| build executable SHA-256 | `34b52534b89ffae2f00765dfbb3f9794c385a164d698743ffdaf560754f005fb` |
+| installed version / build | `0.1.0` / `0.1.0` |
+| 実行中プロセス | なし |
 
 ## 懸念
 
