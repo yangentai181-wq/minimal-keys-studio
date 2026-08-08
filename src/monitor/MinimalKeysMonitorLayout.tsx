@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
-import { getMonitorKeyLabel } from "./minimalKeysMonitorLabels";
+import { resolveFactoryMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import type { HoldTapDisplayState } from "./monitorStore";
 import type { ResolvedMonitorBinding } from "./resolveMonitorBindings";
 
@@ -28,7 +28,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 export interface MinimalKeysMonitorLayoutProps {
-  activeLayerIndex: number;
+  activeLayerMask: number;
   pressed: ReadonlySet<number>;
   holdTapStates?: Readonly<Record<number, HoldTapDisplayState>>;
   resolvedBindings?: readonly ResolvedMonitorBinding[];
@@ -36,7 +36,7 @@ export interface MinimalKeysMonitorLayoutProps {
 }
 
 export function MinimalKeysMonitorLayout({
-  activeLayerIndex,
+  activeLayerMask,
   pressed,
   holdTapStates = {},
   resolvedBindings,
@@ -95,7 +95,7 @@ export function MinimalKeysMonitorLayout({
           const resolvedBinding = resolvedBindings?.[index];
           const { label, transparent } = resolvedBinding
             ? { label: resolvedBinding.label, transparent: false }
-            : getMonitorKeyLabel(index, activeLayerIndex);
+            : resolveFactoryMonitorKeyLabel(index, activeLayerMask);
           const inheritedDescription = resolvedBinding?.inherited
             ? "下位レイヤーから継承"
             : undefined;

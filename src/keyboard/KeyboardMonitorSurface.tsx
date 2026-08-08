@@ -1,45 +1,23 @@
 import { Activity, Layers, MousePointer2, Radio } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { useBehaviorMap } from "../behaviors/BehaviorsContext";
 import { MinimalKeysMonitorLayout } from "../monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "../monitor/layerNames";
-import { getMonitorKeyLabel } from "../monitor/minimalKeysMonitorLabels";
+import { resolveFactoryMonitorKeyLabel } from "../monitor/minimalKeysMonitorLabels";
+import { type MonitorStore } from "../monitor/monitorStore";
 import {
-  POINTER_DISPLAY_TIMEOUT_MS,
-  type MonitorStore,
-  type PointerSample,
-} from "../monitor/monitorStore";
-import { resolveMonitorBinding } from "../monitor/resolveMonitorBindings";
+  resolveMonitorBinding,
+  resolveMonitorLayer,
+} from "../monitor/resolveMonitorBindings";
 import { useMonitorSnapshot } from "../monitor/useMonitorSnapshot";
+import { usePointerSummary } from "../monitor/usePointerSummary";
 import { MINIMAL_KEYS_KEY_COUNT } from "./minimal-keys-layout";
 import { useMonitorKeymap } from "./MonitorKeymapContext";
 
 interface KeyboardMonitorSurfaceProps {
   monitorStore: MonitorStore;
   monitorActive: boolean;
-}
-
-function signed(value: number) {
-  return `${value >= 0 ? "+" : ""}${value}`;
-}
-
-function usePointerSummary(pointer: PointerSample | null) {
-  const [now, setNow] = useState(() => Date.now());
-  const pointerAt = pointer?.at;
-
-  useEffect(() => {
-    if (pointerAt === undefined) return;
-    setNow(Date.now());
-    const delay = Math.max(0, pointerAt + POINTER_DISPLAY_TIMEOUT_MS - Date.now());
-    const timer = setTimeout(() => setNow(Date.now()), delay);
-    return () => clearTimeout(timer);
-  }, [pointerAt]);
-
-  if (pointer === null || now - pointer.at >= POINTER_DISPLAY_TIMEOUT_MS) {
-    return "停止中";
-  }
-  return `dx ${signed(pointer.dx)} / dy ${signed(pointer.dy)}`;
 }
 
 export function KeyboardMonitorSurface({
@@ -64,13 +42,18 @@ export function KeyboardMonitorSurface({
     [behaviors, keymap, monitor.activeLayerMask],
   );
   const latestPosition = monitor.lastKeyEvent?.position;
-  const layerName =
-    MONITOR_LAYER_NAMES[monitor.activeLayerIndex] ??
-    `L${monitor.activeLayerIndex}`;
+  const resolvedLayer = keymap
+    ? resolveMonitorLayer(keymap, monitor.activeLayerMask)
+    : null;
+  const layerId = resolvedLayer?.id ?? monitor.activeLayerIndex;
+  const liveLayerName = resolvedLayer
+    ? keymap?.layers[resolvedLayer.index]?.name
+    : undefined;
+  const layerName = liveLayerName || MONITOR_LAYER_NAMES[layerId] || `L${layerId}`;
   const latestKey =
     latestPosition === undefined
       ? "待機中"
-      : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
+      : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? resolveFactoryMonitorKeyLabel(latestPosition, monitor.activeLayerMask).label}`;
   const pointer = usePointerSummary(monitor.pointer);
 
   const summaries = [
@@ -103,7 +86,7 @@ export function KeyboardMonitorSurface({
       className="flex min-h-0 flex-1 flex-col gap-3 rounded-lg border border-base-300 bg-white p-3 shadow-sm"
     >
       <MinimalKeysMonitorLayout
-        activeLayerIndex={monitor.activeLayerIndex}
+        activeLayerMask={monitor.activeLayerMask}
         pressed={monitor.pressed}
         holdTapStates={monitor.holdTapStates}
         resolvedBindings={resolvedBindings}

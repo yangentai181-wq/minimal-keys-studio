@@ -14,7 +14,7 @@ describe("MinimalKeysMonitorLayout", () => {
   it("renders the physical minimal-keys positions and highlights pressed keys", () => {
     render(
       <MinimalKeysMonitorLayout
-        activeLayerIndex={0}
+        activeLayerMask={1}
         pressed={new Set([40])}
       />,
     );
@@ -40,9 +40,22 @@ describe("MinimalKeysMonitorLayout", () => {
     });
   });
 
+  it("resolves monitor-only labels through every active factory layer", () => {
+    render(
+      <MinimalKeysMonitorLayout
+        activeLayerMask={(1 << 0) | (1 << 3) | (1 << 8)}
+        pressed={new Set()}
+      />,
+    );
+
+    expect(screen.getByTestId("monitor-key-label-0")).toHaveTextContent(
+      "Cmd+0",
+    );
+  });
+
   it("uses readable type sizes for short and dual-function labels", () => {
     render(
-      <MinimalKeysMonitorLayout activeLayerIndex={0} pressed={new Set()} />,
+      <MinimalKeysMonitorLayout activeLayerMask={1} pressed={new Set()} />,
     );
 
     expect(screen.getByTestId("monitor-key-label-0")).toHaveClass(
@@ -58,7 +71,7 @@ describe("MinimalKeysMonitorLayout", () => {
   it("shows accessible pending, tap, and orange hold decisions on their keys", () => {
     render(
       <MinimalKeysMonitorLayout
-        activeLayerIndex={0}
+        activeLayerMask={1}
         pressed={new Set([0, 1, 2])}
         holdTapStates={{ 0: "pending", 1: "tap", 2: "hold" }}
       />,
@@ -130,7 +143,7 @@ describe("MinimalKeysMonitorLayout", () => {
   it("renders resolved live labels and describes inherited keys", () => {
     render(
       <MinimalKeysMonitorLayout
-        activeLayerIndex={7}
+        activeLayerMask={1 << 7}
         pressed={new Set()}
         resolvedBindings={[
           {
@@ -168,5 +181,33 @@ describe("MinimalKeysMonitorLayout", () => {
     );
 
     expect(screen.getByText("出荷時設定の目安")).toBeInTheDocument();
+  });
+
+  it("uses factory-mask resolution for monitor-only pressed-key labels", () => {
+    const monitorStore = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    monitorStore.push({
+      kind: "layer",
+      defaultLayer: 0,
+      activeLayerMask: (1 << 0) | (1 << 3) | (1 << 8),
+    });
+    monitorStore.push({ kind: "key", position: 0, pressed: true });
+
+    render(
+      <MonitorPanel
+        monitorStore={monitorStore}
+        description={{
+          title: "Raw HIDで監視中",
+          body: "編集接続は利用できません。",
+          monitorAvailable: true,
+          editorAvailable: false,
+        }}
+        editorAvailable={false}
+      />,
+    );
+
+    expect(screen.getByText("#0 Cmd+0")).toBeInTheDocument();
   });
 });

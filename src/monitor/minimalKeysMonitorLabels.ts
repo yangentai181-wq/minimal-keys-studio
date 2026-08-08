@@ -330,6 +330,32 @@ export interface MonitorKeyLabel {
   transparent: boolean;
 }
 
+/**
+ * Resolves the factory fallback table with the same active-layer mask that
+ * Raw HID reports. Factory layer IDs are their L0..L8 indexes, so walk from
+ * the highest-priority active layer down and only fall through empty entries.
+ */
+export function resolveFactoryMonitorKeyLabel(
+  position: number,
+  activeLayerMask: number,
+): MonitorKeyLabel {
+  for (
+    let layerIndex = MONITOR_KEY_LABELS_BY_LAYER.length - 1;
+    layerIndex >= 0;
+    layerIndex -= 1
+  ) {
+    if ((activeLayerMask & (1 << layerIndex)) === 0) continue;
+
+    const label = MONITOR_KEY_LABELS_BY_LAYER[layerIndex]?.[position];
+    if (label) return { label, transparent: false };
+  }
+
+  return {
+    label: DEFAULT_LAYER_LABELS[position] ?? `#${position}`,
+    transparent: true,
+  };
+}
+
 export function getMonitorKeyLabel(
   position: number,
   layerIndex: number,

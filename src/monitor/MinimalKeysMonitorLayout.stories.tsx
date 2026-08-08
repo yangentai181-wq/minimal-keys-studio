@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>;
 
 export const HoldTapDecisions: Story = {
   args: {
-    activeLayerIndex: 0,
+    activeLayerMask: 1,
     pressed: new Set([0, 1, 2]),
     holdTapStates: {
       0: "pending",

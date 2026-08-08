@@ -91,7 +91,7 @@ function KeyboardCanvas() {
       </div>
 
       <MinimalKeysMonitorLayout
-        activeLayerIndex={previewActiveLayer}
+        activeLayerMask={1 << previewActiveLayer}
         pressed={previewPressedKeys}
       />
 

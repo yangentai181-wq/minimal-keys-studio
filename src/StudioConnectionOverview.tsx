@@ -1,5 +1,5 @@
 import { Cable, Keyboard, Link2, MousePointer2, Usb } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { useBehaviorMap } from "./behaviors/BehaviorsContext";
 import { isLayerActive } from "./connection/rawHidFrames";
@@ -7,14 +7,14 @@ import { useMonitorKeymap } from "./keyboard/MonitorKeymapContext";
 import { MINIMAL_KEYS_KEY_COUNT } from "./keyboard/minimal-keys-layout";
 import { AUTO_MOUSE_LAYER_INDEX } from "./keyboard/minimal-keys-layers";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
-import { getMonitorKeyLabel } from "./monitor/minimalKeysMonitorLabels";
+import { resolveFactoryMonitorKeyLabel } from "./monitor/minimalKeysMonitorLabels";
+import { type MonitorStore } from "./monitor/monitorStore";
 import {
-  POINTER_DISPLAY_TIMEOUT_MS,
-  type MonitorStore,
-  type PointerSample,
-} from "./monitor/monitorStore";
-import { resolveMonitorBinding } from "./monitor/resolveMonitorBindings";
+  resolveMonitorBinding,
+  resolveMonitorLayer,
+} from "./monitor/resolveMonitorBindings";
 import { useMonitorSnapshot } from "./monitor/useMonitorSnapshot";
+import { usePointerSummary } from "./monitor/usePointerSummary";
 import { TrackballPrecisionStatus } from "./monitor/TrackballPrecisionStatus";
 
 interface StudioConnectionOverviewProps {
@@ -29,24 +29,6 @@ interface StudioConnectionOverviewProps {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function usePointerSummary(pointer: PointerSample | null) {
-  const [now, setNow] = useState(() => Date.now());
-  const pointerAt = pointer?.at;
-
-  useEffect(() => {
-    if (pointerAt === undefined) return;
-    setNow(Date.now());
-    const delay = Math.max(0, pointerAt + POINTER_DISPLAY_TIMEOUT_MS - Date.now());
-    const timer = setTimeout(() => setNow(Date.now()), delay);
-    return () => clearTimeout(timer);
-  }, [pointerAt]);
-
-  if (pointer === null || now - pointer.at >= POINTER_DISPLAY_TIMEOUT_MS) {
-    return "停止中";
-  }
-  return `dx ${pointer.dx >= 0 ? "+" : ""}${pointer.dx} / dy ${pointer.dy >= 0 ? "+" : ""}${pointer.dy}`;
 }
 
 function DeviceStatusIcon({
@@ -145,8 +127,15 @@ function MonitorSummary({
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
   const latestPosition = monitor.lastKeyEvent?.position;
-  const latestKey = latestPosition === undefined ? "待機中" : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? getMonitorKeyLabel(latestPosition, monitor.activeLayerIndex).label}`;
-  const layerName = MONITOR_LAYER_NAMES[monitor.activeLayerIndex] ?? `L${monitor.activeLayerIndex}`;
+  const latestKey = latestPosition === undefined ? "待機中" : `#${latestPosition} ${resolvedBindings?.[latestPosition]?.label ?? resolveFactoryMonitorKeyLabel(latestPosition, monitor.activeLayerMask).label}`;
+  const resolvedLayer = keymap
+    ? resolveMonitorLayer(keymap, monitor.activeLayerMask)
+    : null;
+  const layerId = resolvedLayer?.id ?? monitor.activeLayerIndex;
+  const liveLayerName = resolvedLayer
+    ? keymap?.layers[resolvedLayer.index]?.name
+    : undefined;
+  const layerName = liveLayerName || MONITOR_LAYER_NAMES[layerId] || `L${layerId}`;
   const pointerSummary = usePointerSummary(monitor.pointer);
   const autoMouseActive = isLayerActive(monitor.activeLayerMask, AUTO_MOUSE_LAYER_INDEX);
   const statusItems = [

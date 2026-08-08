@@ -26,7 +26,7 @@ function MockEditor() {
   return (
     <div className="grid h-full min-h-0 grid-rows-[minmax(165px,52fr)_minmax(155px,48fr)] gap-2 bg-base-300 p-2">
       <MinimalKeysMonitorLayout
-        activeLayerIndex={0}
+        activeLayerMask={1}
         pressed={new Set([16])}
         className="h-full min-h-0 bg-white [&_[role=grid]]:!h-full [&_[role=grid]]:!min-w-0 [&_[role=grid]]:!aspect-auto"
       />

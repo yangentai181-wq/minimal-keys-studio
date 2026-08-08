@@ -63,6 +63,27 @@ function keymapWithTransparentL3Binding(): Keymap {
   };
 }
 
+function keymapWithReorderedCustomLayerNames(): Keymap {
+  const binding = (behaviorId: number, param1 = 0, param2 = 0) => ({
+    behaviorId,
+    param1,
+    param2,
+  });
+  const bindings = Array.from({ length: 43 }, () =>
+    binding(1, (7 << 16) + 4),
+  );
+
+  return {
+    layers: [
+      { id: 0, name: "Base", bindings },
+      { id: 8, name: "精密カスタム", bindings },
+      { id: 3, name: "記号カスタム", bindings },
+    ],
+    availableLayers: 9,
+    maxLayerNameLength: 16,
+  };
+}
+
 function MonitorKeymapPublisher({ keymap }: { keymap: Keymap | undefined }) {
   usePublishMonitorKeymap(keymap);
   return null;
@@ -209,5 +230,38 @@ describe("KeyboardMonitorSurface", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Trans")).not.toBeInTheDocument();
     expect(screen.getByText("#0 A")).toBeInTheDocument();
+  });
+
+  it("uses the array-priority live name for reordered active layer IDs", () => {
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push({
+      kind: "layer",
+      defaultLayer: 0,
+      activeLayerMask: (1 << 0) | (1 << 3) | (1 << 8),
+    });
+
+    renderMonitorSurface(store, true, keymapWithReorderedCustomLayerNames());
+
+    expect(screen.getByText("記号カスタム")).toBeInTheDocument();
+  });
+
+  it("uses factory-mask resolution for the static latest-key fallback", () => {
+    const store = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    store.push({
+      kind: "layer",
+      defaultLayer: 0,
+      activeLayerMask: (1 << 0) | (1 << 3) | (1 << 8),
+    });
+    store.push({ kind: "key", position: 0, pressed: true });
+
+    renderMonitorSurface(store, true);
+
+    expect(screen.getByText("#0 Cmd+0")).toBeInTheDocument();
   });
 });

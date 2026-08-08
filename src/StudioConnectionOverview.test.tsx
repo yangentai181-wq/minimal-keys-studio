@@ -80,6 +80,27 @@ function keymapWithL4ReturnBinding(): Keymap {
   };
 }
 
+function keymapWithReorderedCustomLayerNames(): Keymap {
+  const binding = (behaviorId: number, param1 = 0, param2 = 0) => ({
+    behaviorId,
+    param1,
+    param2,
+  });
+  const bindings = Array.from({ length: 43 }, () =>
+    binding(1, (7 << 16) + 4),
+  );
+
+  return {
+    layers: [
+      { id: 0, name: "Base", bindings },
+      { id: 8, name: "精密カスタム", bindings },
+      { id: 3, name: "記号カスタム", bindings },
+    ],
+    availableLayers: 9,
+    maxLayerNameLength: 16,
+  };
+}
+
 function MonitorKeymapPublisher({ keymap }: { keymap: Keymap | undefined }) {
   usePublishMonitorKeymap(keymap);
   return null;
@@ -305,6 +326,58 @@ describe("StudioConnectionOverview", () => {
     view.rerender(overviewWithMonitorKeymap(props, undefined, false));
 
     expect(screen.getByText("#0 通常へ戻る")).toBeInTheDocument();
+  });
+
+  it("uses the array-priority live name for reordered active layer IDs", () => {
+    const store = monitorStore();
+    store.push({
+      kind: "layer",
+      defaultLayer: 0,
+      activeLayerMask: (1 << 0) | (1 << 3) | (1 << 8),
+    });
+
+    render(
+      overviewWithMonitorKeymap(
+        {
+          monitorStore: store,
+          monitorActive: true,
+          editorAvailable: true,
+          connectionTitle: "エディター利用可",
+          connectionBody: "Raw HIDとStudio RPCが同じ画面で使えます。",
+        },
+        keymapWithReorderedCustomLayerNames(),
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
+
+    expect(screen.getByText("現在レイヤー").parentElement).toHaveTextContent(
+      "記号カスタム",
+    );
+  });
+
+  it("uses factory-mask resolution for the static latest-key fallback", () => {
+    const store = monitorStore();
+    store.push({
+      kind: "layer",
+      defaultLayer: 0,
+      activeLayerMask: (1 << 0) | (1 << 3) | (1 << 8),
+    });
+    store.push({ kind: "key", position: 0, pressed: true });
+
+    render(
+      overviewWithMonitorKeymap({
+        monitorStore: store,
+        monitorActive: true,
+        editorAvailable: false,
+        connectionTitle: "Raw HIDで監視中",
+        connectionBody: "編集接続は利用できません。",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "接続の詳細" }));
+
+    expect(screen.getByText("最新キー").parentElement).toHaveTextContent(
+      "#0 Cmd+0",
+    );
   });
 
   it("keeps the integrated preview renderable without an editor keymap", () => {

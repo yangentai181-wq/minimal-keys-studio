@@ -3,25 +3,54 @@
 対象コミット: `4a2bc6c` を起点に、検証中に見つけた Storybook fixture の
 context 不足を最小修正した状態。
 
-`/Applications/minimal-keys カスタマイズ.app` のバックアップ・置換は、この
-担当の範囲外として実行していない。
-
 ## Studio gates
 
 | コマンド | 終了コード | 新規実行の結果 |
 | --- | ---: | --- |
-| `npm test` | 0 | 115 files / 733 tests passed |
+| `npm test` | 0 | 117 files / 742 tests passed |
 | `npm run build` | 0 | TypeScript、Vite、`verify:local-fonts` 成功 |
 | `npm run lint` | 0 | warnings 0 |
 | `npm run tauri build` | 0 | macOS `.app` と DMG を生成 |
 
-Storybook fixture の修正後にも `npm test`（115 / 733）、`npm run build`、
-`npm run lint` をそれぞれ exit 0 で再実行した。修正対象は
-`*.stories.tsx` だけで production Vite/Tauri bundle の入力ではないため、
-Tauri build は先の成功済み成果物を再作成していない。
+最終レビュー修正後に `npm test`（117 / 742）、`npm run build`、
+`npm run lint`、`npm run tauri build` をそれぞれ exit 0 で再実行した。
+今回はproduction Studioコードを変更したため、Tauri bundleも新規に再生成した。
 
 `npx storybook build --output-dir <temporary directory>` も修正前・修正後とも
 exit 0。no-MDX と third-party `eval` の既知 advisory は出たが失敗ではない。
+
+## Firmware config 検証記録（Task 5 からの転記）
+
+Task 5で用いたfocused config testは次のとおり。
+
+```bash
+cd /Users/iwanedaijun/repos/minimal-keys-zmk-workspace/config
+python3 -m unittest tests/test_standard_key_coverage.py
+```
+
+全config suiteのコマンドは次のとおり。
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
+右手側firmwareの既存ビルドコマンドは次のとおり。
+
+```bash
+cd /Users/iwanedaijun/repos/minimal-keys-zmk-workspace
+PATH="/tmp/minimal-keys-zmk-venv/bin:$PATH" \
+  /tmp/minimal-keys-zmk-venv/bin/west build \
+  -d /Users/iwanedaijun/repos/minimal-keys-zmk-workspace/build/right-persistent-base-red
+```
+
+Task 5の最終記録では、focused testは10件成功・終了コード0、全config suiteは
+16件成功・終了コード0、右手firmware buildは336工程・終了コード0で
+`zmk.uf2`を生成した。生成物は599,040 bytesだった。
+
+最終レビュー修正後にも、firmwareソースを変更せず上記のfocused test（10件）、
+全config suite（16件）、右手firmware build（今回のincremental buildは8工程）を
+再実行し、すべて終了コード0を確認した。右手buildは599,040 bytesの`zmk.uf2`を
+再生成した。
 
 ## 独立レビューと修正
 
@@ -64,9 +93,12 @@ Transparent 解決は `KeyboardMonitorSurface.test.tsx` が、継承元の `A` �
 | --- | --- |
 | app | `src-tauri/target/release/bundle/macos/minimal-keys カスタマイズ.app` |
 | version / build | `0.1.0` / `0.1.0` |
-| app executable SHA-256 | `2c041dab23cf7c98cd100d1d3ebf7d6f658d18de79c43c108a0d175d57388b38` |
+| app executable SHA-256 | `34b52534b89ffae2f00765dfbb3f9794c385a164d698743ffdaf560754f005fb` |
 | DMG | `src-tauri/target/release/bundle/dmg/minimal-keys カスタマイズ_0.1.0_aarch64.dmg` |
-| DMG SHA-256 | `859b66e88bd7834e9606cc0ecc504aedebfb2f2eb29d3c2e9c6b61e3d5559962` |
+| DMG SHA-256 | `bd9a66a6c6ade99ffdbb14241667df1d672501aee0b44c99c0b12e95c3260267` |
+
+この最終レビュー修正waveでは`/Applications`を変更していない。上の新しいbundle
+をインストール済みアプリへ置換するのは、再レビュー後に親担当が実施する。
 
 ## 懸念
 
@@ -74,10 +106,13 @@ Transparent 解決は `KeyboardMonitorSurface.test.tsx` が、継承元の `A` �
   `Space / Scr`）が二行制限で省略表示になる。主要なキー・状態は読めるが、
   「全キー名を省略なしで表示」を厳密な受入条件にする場合は、別途 typography の
   調整が必要。
-- firmware の新規ビルドは Task 5 の範囲で既に記録済みで、今回の Storybook-only
-  修正では firmware/RPC/proto を変更していない。
+- firmware/RPC/proto は変更していない。Task 5の記録に加え、今回もfocused/full config
+  suiteと右手firmware buildを終了コード0で再実行した。
 
-## Step 4: インストール済みアプリの置換
+## Step 4: 以前のインストール済みアプリ置換記録
+
+以下は以前のTask 7で実施した置換の履歴であり、上記の最終レビュー修正waveで
+生成したbundleを指すものではない。
 
 ユーザー承認済みの置換として、GUI を開かずに実施した。開始前の read-only
 確認では `/Applications/minimal-keys カスタマイズ.app` と build bundle の両方が
