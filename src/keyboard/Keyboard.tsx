@@ -197,6 +197,8 @@ export default function Keyboard() {
     (keymap) => keymap?.keymap?.getKeymap,
     true
   );
+  const keymapRef = useRef<Keymap | undefined>(keymap);
+  keymapRef.current = keymap;
   usePublishMonitorKeymap(keymap);
 
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
@@ -364,18 +366,17 @@ export default function Keyboard() {
   );
 
   const moveLayer = useCallback(
-    (start: number, end: number) => {
-      const startLayerId = keymap?.layers[start]?.id;
-      const endLayerId = keymap?.layers[end]?.id;
-      if (startLayerId === undefined || endLayerId === undefined || !canMoveUserLayer(startLayerId, endLayerId)) return;
-      const doMove = async (startIndex: number, destIndex: number) => {
-        if (!conn.conn || !keymap) {
+    (startLayerId: number, destinationLayerId: number) => {
+      if (!canMoveUserLayer(startLayerId, destinationLayerId)) return;
+      const doMove = async (movingLayerId: number, targetLayerId: number) => {
+        const currentKeymap = keymapRef.current;
+        if (!conn.conn || !currentKeymap) {
           return;
         }
 
-        const startLayerId = keymap.layers[startIndex]?.id;
-        const destLayerId = keymap.layers[destIndex]?.id;
-        const canMove = startLayerId !== undefined && destLayerId !== undefined && canMoveUserLayer(startLayerId, destLayerId);
+        const startIndex = currentKeymap.layers.findIndex((layer) => layer.id === movingLayerId);
+        const destIndex = currentKeymap.layers.findIndex((layer) => layer.id === targetLayerId);
+        const canMove = startIndex >= 0 && destIndex >= 0 && canMoveUserLayer(movingLayerId, targetLayerId);
         const resp = await runGuardedKeymapWrite(canMove, () => call_rpc(conn.conn!, {
           keymap: { moveLayer: { startIndex, destIndex } },
         }));
@@ -390,11 +391,11 @@ export default function Keyboard() {
       };
 
       undoRedo?.(async () => {
-        await doMove(start, end);
-        return () => doMove(end, start);
+        await doMove(startLayerId, destinationLayerId);
+        return () => doMove(destinationLayerId, startLayerId);
       });
     },
-    [undoRedo, conn.conn, keymap, setKeymap]
+    [undoRedo, conn.conn, setKeymap]
   );
 
   const addLayer = useCallback(() => {

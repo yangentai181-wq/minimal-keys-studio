@@ -18,7 +18,7 @@ interface Layer {
 }
 
 export type LayerClickCallback = (index: number) => void;
-export type LayerMovedCallback = (index: number, destination: number) => void;
+export type LayerMovedCallback = (layerId: number, destinationLayerId: number) => void;
 
 interface LayerPickerProps {
   layers: Array<Layer>;
@@ -196,7 +196,7 @@ export const LayerPicker = ({
       const startItem = layer_items.find((l) => e.keys.has(l.id));
       const endItem = layer_items.find((l) => l.id === e.target.key);
       if (startItem && endItem) {
-        onLayerMoved?.(startItem.index, endItem.index);
+        onLayerMoved?.(startItem.id, endItem.id);
       }
     },
   });
