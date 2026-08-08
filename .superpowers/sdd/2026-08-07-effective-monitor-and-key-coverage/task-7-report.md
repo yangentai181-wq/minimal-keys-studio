@@ -76,3 +76,30 @@ Transparent 解決は `KeyboardMonitorSurface.test.tsx` が、継承元の `A` �
   調整が必要。
 - firmware の新規ビルドは Task 5 の範囲で既に記録済みで、今回の Storybook-only
   修正では firmware/RPC/proto を変更していない。
+
+## Step 4: インストール済みアプリの置換
+
+ユーザー承認済みの置換として、GUI を開かずに実施した。開始前の read-only
+確認では `/Applications/minimal-keys カスタマイズ.app` と build bundle の両方が
+存在し、`minimal-keys-customize` の実行プロセスは見つからなかった。
+
+実行内容:
+
+```text
+mkdir "/Users/iwanedaijun/.Trash/minimal-keys-customize-backup-20260808-163356"
+mv "/Applications/minimal-keys カスタマイズ.app" \
+  "/Users/iwanedaijun/.Trash/minimal-keys-customize-backup-20260808-163356/minimal-keys カスタマイズ.app"
+ditto "src-tauri/target/release/bundle/macos/minimal-keys カスタマイズ.app" \
+  "/Applications/minimal-keys カスタマイズ.app"
+```
+
+| 確認 | 結果 |
+| --- | --- |
+| backup | `/Users/iwanedaijun/.Trash/minimal-keys-customize-backup-20260808-163356/minimal-keys カスタマイズ.app` |
+| `ditto` | exit 0 |
+| installed executable SHA-256 | `2c041dab23cf7c98cd100d1d3ebf7d6f658d18de79c43c108a0d175d57388b38` |
+| build executable SHA-256 | `2c041dab23cf7c98cd100d1d3ebf7d6f658d18de79c43c108a0d175d57388b38` |
+| installed version / build | `0.1.0` / `0.1.0` |
+| build version / build | `0.1.0` / `0.1.0` |
+
+旧アプリは削除せず、上記 Trash backup 内に recoverable な状態で残した。
