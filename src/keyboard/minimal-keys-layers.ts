@@ -1,45 +1,48 @@
-export const AUTO_MOUSE_LAYER_INDEX = 4;
-export const SCROLL_LAYER_INDEX = 7;
-export const PRECISION_LAYER_INDEX = 8;
-export const MINIMAL_KEYS_LAYER_COUNT = PRECISION_LAYER_INDEX + 1;
+export const AUTO_MOUSE_LAYER_ID = 4;
+export const SCROLL_LAYER_ID = 7;
+export const PRECISION_LAYER_ID = 8;
 
 export type MinimalKeysLayerRole = "autoMouse" | "scroll" | "precision";
 
 export interface MinimalKeysLayerMetadata {
-  autoMouseLayerIndex: number | null;
-  scrollLayerIndex: number | null;
+  autoMouseLayerId: number | null;
+  scrollLayerId: number | null;
 }
 
-export function getMinimalKeysLayerRole(index: number): MinimalKeysLayerRole | null {
-  if (index === AUTO_MOUSE_LAYER_INDEX) return "autoMouse";
-  if (index === SCROLL_LAYER_INDEX) return "scroll";
-  if (index === PRECISION_LAYER_INDEX) return "precision";
+export function getMinimalKeysLayerRole(layerId: number): MinimalKeysLayerRole | null {
+  if (layerId === AUTO_MOUSE_LAYER_ID) return "autoMouse";
+  if (layerId === SCROLL_LAYER_ID) return "scroll";
+  if (layerId === PRECISION_LAYER_ID) return "precision";
   return null;
 }
 
-export function isPrecisionLayerIndex(index: number): boolean {
-  return index === PRECISION_LAYER_INDEX;
+export function isPrecisionLayerId(layerId: number): boolean {
+  return layerId === PRECISION_LAYER_ID;
 }
 
-export function hasPrecisionLayer(layers: unknown[]): boolean {
-  return layers.length >= MINIMAL_KEYS_LAYER_COUNT;
+export function hasPrecisionLayer(layers: ReadonlyArray<{ id: number }>): boolean {
+  return layers.some((layer) => isPrecisionLayerId(layer.id));
 }
 
-export function canEditUserLayer(index: number): boolean {
-  return index >= 0 && index < PRECISION_LAYER_INDEX;
+export function canEditUserLayer(layerId: number): boolean {
+  return layerId >= 0 && !isPrecisionLayerId(layerId);
 }
 
-export function canMoveUserLayer(start: number, end: number): boolean {
-  return canEditUserLayer(start) && canEditUserLayer(end);
+export function canMoveUserLayer(startLayerId: number, endLayerId: number): boolean {
+  return canEditUserLayer(startLayerId) && canEditUserLayer(endLayerId);
 }
 
-export function canChangeUserLayerStructure(layers: unknown[]): boolean {
+export function canChangeUserLayerStructure(layers: ReadonlyArray<{ id: number }>): boolean {
   return !hasPrecisionLayer(layers);
 }
 
-export function getMinimalKeysLayerMetadata(layers: unknown[]): MinimalKeysLayerMetadata {
+export function getMinimalKeysLayerMetadata(layers: ReadonlyArray<{ id: number }>): MinimalKeysLayerMetadata {
   return {
-    autoMouseLayerIndex: layers.length > AUTO_MOUSE_LAYER_INDEX ? AUTO_MOUSE_LAYER_INDEX : null,
-    scrollLayerIndex: layers.length > SCROLL_LAYER_INDEX ? SCROLL_LAYER_INDEX : null,
+    autoMouseLayerId: layers.some((layer) => layer.id === AUTO_MOUSE_LAYER_ID)
+      ? AUTO_MOUSE_LAYER_ID
+      : null,
+    scrollLayerId: layers.some((layer) => layer.id === SCROLL_LAYER_ID)
+      ? SCROLL_LAYER_ID
+      : null,
   };
 }

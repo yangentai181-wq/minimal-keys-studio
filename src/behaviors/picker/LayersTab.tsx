@@ -3,7 +3,7 @@ import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-clie
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
-import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "../../keyboard/minimal-keys-layers";
+import { getMinimalKeysLayerRole, isPrecisionLayerId } from "../../keyboard/minimal-keys-layers";
 
 import { encodeTapKey, type TapKeyItem } from "./common-tap-keys";
 import { TapKeySelect } from "./TapKeySelect";
@@ -48,7 +48,7 @@ export function LayersTab({
     [behaviors],
   );
   const selectableLayers = useMemo(
-    () => layers.filter((_layer, index) => !isPrecisionLayerIndex(index)),
+    () => layers.filter((layer) => !isPrecisionLayerId(layer.id)),
     [layers],
   );
 
@@ -89,9 +89,9 @@ export function LayersTab({
     setSelectedMouseButton(item);
   };
 
-  const layerButtonLabel = (layer: { name: string; index: number }): string => {
+  const layerButtonLabel = (layer: { id: number; name: string; index: number }): string => {
     const base = layer.name || `Layer ${layer.index}`;
-    const role = getMinimalKeysLayerRole(layer.index);
+    const role = getMinimalKeysLayerRole(layer.id);
     if (role === "scroll") return `${base}（スクロール）`;
     if (role === "autoMouse") return `${base}（自動マウス）`;
     return base;

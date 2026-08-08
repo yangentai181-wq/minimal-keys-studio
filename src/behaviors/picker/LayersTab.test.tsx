@@ -209,12 +209,12 @@ describe("LayersTab", () => {
 
   describe("layer role labels", () => {
     const layersWithRoles = [
-      { id: 0, index: 0, name: "Base" },
-      { id: 4, index: 4, name: "AutoMouse" },
-      { id: 7, index: 7, name: "Scroll" },
+      { id: 7, index: 0, name: "Scroll" },
+      { id: 0, index: 1, name: "Base" },
+      { id: 4, index: 2, name: "AutoMouse" },
     ];
 
-    it("shows （スクロール） suffix for scroll layer (index 7)", () => {
+    it("shows （スクロール） suffix for scroll layer ID 7", () => {
       const onApply = vi.fn();
       render(
         <LayersTab
@@ -228,7 +228,7 @@ describe("LayersTab", () => {
       expect(screen.getByText("Scroll（スクロール）")).toBeTruthy();
     });
 
-    it("shows （自動マウス） suffix for auto mouse layer (index 4)", () => {
+    it("shows （自動マウス） suffix for auto mouse layer ID 4", () => {
       const onApply = vi.fn();
       render(
         <LayersTab
@@ -242,7 +242,7 @@ describe("LayersTab", () => {
       expect(screen.getByText("AutoMouse（自動マウス）")).toBeTruthy();
     });
 
-    it("shows no role suffix for plain layer (index 0)", () => {
+    it("shows no role suffix for plain layer ID 0", () => {
       const onApply = vi.fn();
       render(
         <LayersTab
@@ -257,19 +257,19 @@ describe("LayersTab", () => {
     });
   });
 
-  it("omits the internal precision layer by array index for every layer behavior", () => {
+  it("omits the internal precision layer ID for every layer behavior", () => {
     const onApply = vi.fn();
-    const layersWithInternal = Array.from({ length: 9 }, (_, index) => ({
-      id: index === 8 ? 91 : index + 20,
-      index,
-      name: index === 8 ? "Precision" : `Layer ${index}`,
-    }));
+    const layersWithInternal = [
+      { id: 7, index: 0, name: "Scroll" },
+      { id: 8, index: 1, name: "Precision" },
+      { id: 0, index: 2, name: "Base" },
+    ];
     render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} osMode="mac" onApplyBinding={onApply} />);
 
     fireEvent.click(screen.getByText("レイヤー切替"));
 
     expect(screen.queryByText("Precision")).toBeNull();
-    fireEvent.click(screen.getByText("Layer 7（スクロール）"));
-    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 27, param2: 0 });
+    fireEvent.click(screen.getByText("Scroll（スクロール）"));
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 7, param2: 0 });
   });
 });
