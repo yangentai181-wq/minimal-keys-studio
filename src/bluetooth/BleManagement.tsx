@@ -5,6 +5,7 @@ import { useCustomSubsystem } from "../rpc/useCustomSubsystem";
 import { useToast } from "../misc/Toast";
 import * as BLE from "../proto/ble";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { presentSplitConnection } from "./splitConnectionPresentation";
 
 function rpcWithTimeout(label: string, promise: Promise<Uint8Array>, timeoutMs = 5000): Promise<Uint8Array> {
   const timeout = new Promise<never>((_, reject) =>
@@ -22,6 +23,7 @@ export function BleManagement() {
   const [editingName, setEditingName] = useState<number | null>(null);
   const [nameValue, setNameValue] = useState("");
   const [loading, setLoading] = useState(false);
+  const splitConnection = splitInfo ? presentSplitConnection(splitInfo) : null;
 
   // Load profiles, split info, output priority
   useEffect(() => {
@@ -287,16 +289,19 @@ export function BleManagement() {
               左手 (L):{" "}
               <span
                 className={
-                  splitInfo.peripheralConnected
+                  splitConnection?.state === "connected"
                     ? "text-success"
-                    : "text-error"
+                    : "text-warning"
                 }
               >
-                {splitInfo.peripheralConnected
-                  ? "接続中"
-                  : "未接続"}
+                {splitConnection?.label}
               </span>
             </p>
+            {splitConnection && (
+              <p className="mt-1 text-xs text-base-content/60">
+                {splitConnection.detail}
+              </p>
+            )}
           </div>
         </section>
       )}
