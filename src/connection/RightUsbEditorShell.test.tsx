@@ -8,6 +8,10 @@ vi.mock("../trackball/TrackballPrecisionContext", () => ({
   useTrackballPrecision: () => ({ availability: "disconnected" }),
 }));
 
+vi.mock("../behaviors/BehaviorsContext", () => ({
+  useBehaviorMap: () => ({}),
+}));
+
 describe("RightUsbEditorShell", () => {
   it("keeps the production header and active editor boundary stable for pointer frames", async () => {
     const store = createMonitorStore((notify) => { notify(); return () => {}; });

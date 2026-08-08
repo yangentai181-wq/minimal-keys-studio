@@ -9,6 +9,10 @@ import {
 } from "./KeyboardWorkspace";
 import { MonitorKeymapProvider } from "./MonitorKeymapContext";
 
+vi.mock("../behaviors/BehaviorsContext", () => ({
+  useBehaviorMap: () => ({}),
+}));
+
 function StatefulEditor() {
   const [memo, setMemo] = useState("");
 

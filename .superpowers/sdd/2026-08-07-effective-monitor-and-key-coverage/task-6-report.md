@@ -58,3 +58,16 @@
 
 - `npm test` の全体実行は終了コード1だった。Task 6の対象と、今回修正した結合テストは成功している。
 - 既存の意図的な例外表示が大量に出る全体実行の最終失敗は、このTaskでは追跡しない。親担当の全体検証で扱う。
+
+## 5. 全体テスト隔離の追加修正
+
+- ファイル: `src/keyboard/KeyboardWorkspace.test.tsx` と `src/connection/RightUsbEditorShell.test.tsx`
+- リアルタイム画面が読む動作一覧を、2つの画面単体テストにも空の対応表として渡した。
+- これにより、テスト中に本番用のprotobufjs読み込みへ入らず、画面だけを確認できる。
+
+| 確認 | 結果 |
+| --- | --- |
+| `npm test -- --run src/keyboard/KeyboardWorkspace.test.tsx src/connection/RightUsbEditorShell.test.tsx` | 終了コード0、2ファイル・4テスト成功 |
+| `npm test` | 終了コード1、115ファイル中114成功、733テスト中732成功 |
+
+- 全体テストの残り1件は`src/encoder/EncoderSettings.test.tsx:161`で、`binding-1`を待つ既存確認が`binding-0`だけの画面で失敗した。今回の2つの隔離モックとは別の失敗として扱う。
