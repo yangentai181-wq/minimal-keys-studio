@@ -15,6 +15,7 @@ export type KeyPosition = PropsWithChildren<{
   r?: number;
   rx?: number;
   ry?: number;
+  hasHoldAction?: boolean;
   tooltipData?: import("./tooltip-data").TooltipData | null;
 }>;
 

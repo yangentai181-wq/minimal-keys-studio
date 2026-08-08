@@ -16,6 +16,7 @@ interface KeyProps {
   onMoreClick?: () => void;
   disabled?: boolean;
   describedBy?: string;
+  hasHoldAction?: boolean;
 }
 
 interface BehaviorShortName {
@@ -57,6 +58,7 @@ export const Key = ({
   onMoreClick,
   disabled = false,
   describedBy,
+  hasHoldAction = false,
   children,
 }: PropsWithChildren<KeyProps>) => {
   const pixelWidth = width * oneU - 4;
@@ -111,12 +113,12 @@ export const Key = ({
     <>
       <button
         ref={buttonRef}
-        className={`keycap group relative flex flex-col justify-center items-center transition-all duration-150 text-sm border ${
+        className={`keycap group relative flex flex-col justify-center items-center transition-all duration-150 text-sm border ${hasHoldAction ? "border-2 border-orange-500 " : ""}${
           disabled ? "cursor-not-allowed opacity-50 " : "cursor-pointer "
         }${
           selected
-            ? "bg-primary text-primary-content border-primary/30 shadow-[0_1px_2px_rgba(0,0,0,0.2)] scale-[0.97] ring-2 ring-primary/40"
-            : "bg-white text-base-content border-gray-300 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:scale-105 hover:-translate-y-0.5"
+            ? "bg-primary text-primary-content shadow-[0_1px_2px_rgba(0,0,0,0.2)] scale-[0.97] ring-2 ring-primary/40"
+            : `bg-white text-base-content ${hasHoldAction ? "" : "border-gray-300 "}shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:scale-105 hover:-translate-y-0.5`
         }`}
         style={{
           width: `${pixelWidth}px`,
@@ -140,6 +142,7 @@ export const Key = ({
         <div className="overflow-hidden text-ellipsis max-w-full px-0.5 leading-tight">
           {children}
         </div>
+        {hasHoldAction && <span className="sr-only">長押し動作あり</span>}
       </button>
       {showTooltip && !selected && tooltipData && (
         <KeyTooltip
