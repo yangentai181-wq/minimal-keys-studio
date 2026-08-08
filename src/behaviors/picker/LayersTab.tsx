@@ -1,14 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
-import { hid_usage_from_page_and_id } from "../../hid-usages";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
 import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "../../keyboard/minimal-keys-layers";
 
-const KB = 7;
-
-import type { TapKeyItem } from "./common-tap-keys";
+import { encodeTapKey, type TapKeyItem } from "./common-tap-keys";
 import { TapKeySelect } from "./TapKeySelect";
 
 const layerBehaviorNames = [
@@ -24,12 +21,14 @@ const layerBehaviorNames = [
 interface LayersTabProps {
   behaviors: GetBehaviorDetailsResponse[];
   layers: { id: number; index: number; name: string }[];
+  osMode: import("../use-cases").UserOS;
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
 export function LayersTab({
   behaviors,
   layers,
+  osMode,
   onApplyBinding,
 }: LayersTabProps) {
   const [selectedBehavior, setSelectedBehavior] = useState<string | null>(null);
@@ -37,6 +36,10 @@ export function LayersTab({
   const [selectedTapKey, setSelectedTapKey] = useState<TapKeyItem | null>(null);
   const [selectedMouseButton, setSelectedMouseButton] =
     useState<ActionItem | null>(null);
+
+  useEffect(() => {
+    setSelectedTapKey(null);
+  }, [osMode]);
 
   const availableBehaviors = useMemo(
     () => behaviors.filter((b) => layerBehaviorNames.includes(b.displayName)),
@@ -100,10 +103,7 @@ export function LayersTab({
     if (needsMouseButton && selectedMouseButton === null) return;
     let param2 = 0;
     if (needsTapKey && selectedTapKey) {
-      param2 = hid_usage_from_page_and_id(KB, selectedTapKey.hidId);
-      if (selectedTapKey.modifier) {
-        param2 = (selectedTapKey.modifier << 24) | param2;
-      }
+      param2 = encodeTapKey(selectedTapKey);
     }
     if (needsMouseButton && selectedMouseButton) {
       param2 = selectedMouseButton.param1;
@@ -168,7 +168,11 @@ export function LayersTab({
 
       {/* Step 3: For Layer-Tap, choose tap key */}
       {needsTapKey && selectedLayer !== null && (
-        <TapKeySelect selected={selectedTapKey} onChange={handleTapKeyClick} />
+        <TapKeySelect
+          osMode={osMode}
+          selected={selectedTapKey}
+          onChange={handleTapKeyClick}
+        />
       )}
 
       {/* Step 3: For LAYER_TAP_MKP, choose mouse button */}

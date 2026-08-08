@@ -1,20 +1,35 @@
-import { commonTapKeys, type TapKeyItem } from "./common-tap-keys";
+import { getCommonTapKeys, type TapKeyItem } from "./common-tap-keys";
+import type { UserOS } from "../use-cases";
 
 interface TapKeySelectProps {
+  osMode: UserOS;
   selected: TapKeyItem | null;
+  currentExternal?: TapKeyItem;
   onChange: (item: TapKeyItem) => void;
 }
 
-function selectedIndex(selected: TapKeyItem | null): string {
+function sameTapKey(a: TapKeyItem, b: TapKeyItem): boolean {
+  return a.hidId === b.hidId && a.modifier === b.modifier;
+}
+
+function selectedIndex(selected: TapKeyItem | null, items: TapKeyItem[]): string {
   if (!selected) return "";
-  const index = commonTapKeys.findIndex(
-    (item) =>
-      item.hidId === selected.hidId && item.modifier === selected.modifier,
-  );
+  const index = items.findIndex((item) => sameTapKey(item, selected));
   return index < 0 ? "" : String(index);
 }
 
-export function TapKeySelect({ selected, onChange }: TapKeySelectProps) {
+export function TapKeySelect({
+  osMode,
+  selected,
+  currentExternal,
+  onChange,
+}: TapKeySelectProps) {
+  const catalog = getCommonTapKeys(osMode);
+  const items =
+    currentExternal && !catalog.some((item) => sameTapKey(item, currentExternal))
+      ? [currentExternal, ...catalog]
+      : catalog;
+
   return (
     <label className="block min-w-0 flex-1">
       <span className="mb-1 block text-xs text-base-content/60">
@@ -23,15 +38,15 @@ export function TapKeySelect({ selected, onChange }: TapKeySelectProps) {
       <select
         aria-label="タップキーを選択"
         className="h-9 w-full rounded-md border border-base-300 bg-white px-2 text-sm text-base-content"
-        value={selectedIndex(selected)}
+        value={selectedIndex(selected, items)}
         onChange={(event) => {
           if (event.target.value === "") return;
-          const item = commonTapKeys[Number(event.target.value)];
+          const item = items[Number(event.target.value)];
           if (item) onChange(item);
         }}
       >
         <option value="">選択してください</option>
-        {commonTapKeys.map((item, index) => (
+        {items.map((item, index) => (
           <option
             key={`${item.hidId}:${item.modifier ?? 0}`}
             value={index}

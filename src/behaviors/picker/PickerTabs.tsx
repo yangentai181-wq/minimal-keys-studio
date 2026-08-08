@@ -70,7 +70,12 @@ export function PickerTabs({
           <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
         )}
         {activeTab === "layers" && (
-          <LayersTab behaviors={behaviors} layers={layers} onApplyBinding={onApplyBinding} />
+          <LayersTab
+            behaviors={behaviors}
+            layers={layers}
+            osMode={osMode}
+            onApplyBinding={onApplyBinding}
+          />
         )}
         {activeTab === "modifiers" && (
           <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />

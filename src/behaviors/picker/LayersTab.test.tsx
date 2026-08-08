@@ -25,6 +25,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -39,6 +40,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -54,6 +56,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -75,6 +78,7 @@ describe("LayersTab", () => {
           { id: 42, index: 0, name: "Symbols" },
           { id: 0, index: 1, name: "Base" },
         ]}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -94,6 +98,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -112,6 +117,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -131,6 +137,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -148,12 +155,44 @@ describe("LayersTab", () => {
     });
   });
 
+  it("Layer-Tap: clears an unapplied tap key when OS mode changes", () => {
+    const onApply = vi.fn();
+    const { rerender } = render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        osMode="mac"
+        onApplyBinding={onApply}
+      />,
+    );
+    fireEvent.click(screen.getByText("レイヤー / タップ"));
+    fireEvent.click(screen.getByText("Symbols"));
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+      { target: { value: "20" } },
+    );
+    expect(screen.getByText("適用する")).not.toHaveAttribute("disabled");
+
+    rerender(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        osMode="windows"
+        onApplyBinding={onApply}
+      />,
+    );
+
+    expect(screen.getByText("適用する")).toHaveAttribute("disabled");
+    expect(screen.getByRole("option", { name: "Win (左)" })).toBeTruthy();
+  });
+
   it("LAYER_TAP_MKP: applies selected layer plus mouse button", () => {
     const onApply = vi.fn();
     render(
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -181,6 +220,7 @@ describe("LayersTab", () => {
         <LayersTab
           behaviors={mockBehaviors}
           layers={layersWithRoles}
+          osMode="mac"
           onApplyBinding={onApply}
         />,
       );
@@ -194,6 +234,7 @@ describe("LayersTab", () => {
         <LayersTab
           behaviors={mockBehaviors}
           layers={layersWithRoles}
+          osMode="mac"
           onApplyBinding={onApply}
         />,
       );
@@ -207,6 +248,7 @@ describe("LayersTab", () => {
         <LayersTab
           behaviors={mockBehaviors}
           layers={layersWithRoles}
+          osMode="mac"
           onApplyBinding={onApply}
         />,
       );
@@ -222,7 +264,7 @@ describe("LayersTab", () => {
       index,
       name: index === 8 ? "Precision" : `Layer ${index}`,
     }));
-    render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} onApplyBinding={onApply} />);
+    render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} osMode="mac" onApplyBinding={onApply} />);
 
     fireEvent.click(screen.getByText("レイヤー切替"));
 

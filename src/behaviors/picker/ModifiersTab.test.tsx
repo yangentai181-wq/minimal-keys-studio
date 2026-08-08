@@ -62,9 +62,12 @@ describe("ModifiersTab", () => {
     render(<ModifiersTab behaviors={mockBehaviors} layers={[]} osMode="mac" onApplyBinding={onApply} />);
     fireEvent.click(screen.getByText("Mod-Tap"));
     fireEvent.click(screen.getByText("Ctrl (左)"));
+    const tapKeySelect = screen.getByRole("combobox", {
+      name: "タップキーを選択",
+    });
     fireEvent.change(
-      screen.getByRole("combobox", { name: "タップキーを選択" }),
-      { target: { value: "6" } },
+      tapKeySelect,
+      { target: { value: screen.getByRole("option", { name: "A" }).getAttribute("value")! } },
     );
     fireEvent.click(screen.getByText("適用する"));
     expect(onApply).toHaveBeenCalledWith({
