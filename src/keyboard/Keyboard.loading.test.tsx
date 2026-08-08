@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Keyboard from "./Keyboard";
@@ -6,7 +6,10 @@ import { MonitorKeymapProvider } from "./MonitorKeymapContext";
 
 const rpc = vi.hoisted(() => ({
   call: vi.fn(),
-  keymap: { layers: [], availableLayers: 0 },
+  keymap: {
+    layers: [] as Array<{ id: number; name: string; bindings: unknown[] }>,
+    availableLayers: 0,
+  },
 }));
 
 class ResizeObserverStub {
@@ -49,10 +52,33 @@ vi.mock("../behaviors/BehaviorsContext", () => ({
   useBehaviorsLoading: () => false,
 }));
 vi.mock("./Keymap", () => ({
-  Keymap: ({ layout }: { layout: unknown }) => <div>キーマップ本体: {layout ? "表示可能" : "不正"}</div>,
+  Keymap: ({ layout, selectedLayerIndex }: { layout: unknown; selectedLayerIndex: number }) => (
+    <div>
+      キーマップ本体: {layout ? "表示可能" : "不正"}
+      <output data-testid="selected-layer-index">{selectedLayerIndex}</output>
+    </div>
+  ),
 }));
 vi.mock("./PhysicalLayoutPicker", () => ({ PhysicalLayoutPicker: () => <div>レイアウト</div> }));
-vi.mock("./LayerPicker", () => ({ LayerPicker: () => <div>レイヤー</div> }));
+vi.mock("./LayerPicker", () => ({
+  LayerPicker: ({
+    onLayerClicked,
+    selectionLocked,
+  }: {
+    onLayerClicked?: (index: number) => void;
+    selectionLocked?: boolean;
+  }) => (
+    <div>
+      <span>レイヤー</span>
+      <button type="button" onClick={() => onLayerClicked?.(2)}>
+        Layer 2
+      </button>
+      <output data-testid="layer-selection-locked">
+        {selectionLocked ? "locked" : "editable"}
+      </output>
+    </div>
+  ),
+}));
 vi.mock("./ModifierPanel", () => ({ ModifierPanel: () => null }));
 vi.mock("../behaviors/BehaviorBindingPicker", () => ({ BehaviorBindingPicker: () => null }));
 vi.mock("./useEncoderBindings", () => ({ useEncoderBindings: () => undefined }));
@@ -79,6 +105,7 @@ describe("Keyboard loading", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     rpc.call.mockReset();
+    rpc.keymap.layers = [];
   });
 
   afterEach(() => vi.useRealTimers());
@@ -135,5 +162,21 @@ describe("Keyboard loading", () => {
 
     expect(screen.getByText("キーマップを読み込んでいます...")).toBeInTheDocument();
     expect(screen.queryByText(/キーマップ本体/)).not.toBeInTheDocument();
+  });
+
+  it("allows selecting a nonzero layer for editing", async () => {
+    rpc.keymap.layers = Array.from({ length: 3 }, (_, index) => ({
+      id: index,
+      name: `Layer ${index}`,
+      bindings: [],
+    }));
+    rpc.call.mockResolvedValue(layoutResponse([{ keys: [] }]));
+    renderKeyboard();
+
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByTestId("layer-selection-locked")).toHaveTextContent("editable");
+    fireEvent.click(screen.getByRole("button", { name: "Layer 2" }));
+    expect(screen.getByTestId("selected-layer-index")).toHaveTextContent("2");
   });
 });
