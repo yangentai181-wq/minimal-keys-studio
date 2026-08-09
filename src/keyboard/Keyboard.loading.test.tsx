@@ -11,6 +11,10 @@ const rpc = vi.hoisted(() => ({
     availableLayers: 0,
   },
 }));
+const keymapIO = vi.hoisted(() => ({
+  openFilePicker: vi.fn(),
+  deserializeKeymap: vi.fn(),
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -29,6 +33,12 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/keymap", () => ({
 }));
 
 vi.mock("../rpc/logging", () => ({ call_rpc: rpc.call }));
+vi.mock("./keymap-io", () => ({
+  downloadJson: vi.fn(),
+  openFilePicker: keymapIO.openFilePicker,
+  serializeKeymap: vi.fn(),
+  deserializeKeymap: keymapIO.deserializeKeymap,
+}));
 vi.mock("../rpc/useConnectedDeviceData", () => ({
   useConnectedDeviceData: () => [rpc.keymap, vi.fn()],
 }));
@@ -110,6 +120,8 @@ describe("Keyboard loading", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     rpc.call.mockReset();
+    keymapIO.openFilePicker.mockReset();
+    keymapIO.deserializeKeymap.mockReset();
     rpc.keymap.layers = [];
   });
 
@@ -212,5 +224,37 @@ describe("Keyboard loading", () => {
     expect(rpc.call).toHaveBeenCalledWith(expect.anything(), {
       keymap: { moveLayer: { startIndex: 2, destIndex: 0 } },
     });
+  });
+
+  it("imports user layers into reordered non-Precision runtime layers", async () => {
+    rpc.keymap.layers = [
+      { id: 0, name: "Base", bindings: [] },
+      { id: 8, name: "Precision", bindings: [] },
+      { id: 4, name: "Auto Mouse", bindings: [] },
+      { id: 7, name: "Scroll", bindings: [] },
+    ];
+    rpc.call.mockResolvedValue(layoutResponse([{ keys: [{}] }]));
+    keymapIO.openFilePicker.mockResolvedValue("{} ");
+    keymapIO.deserializeKeymap.mockReturnValue({
+      ok: true,
+      layers: [
+        { name: "Base", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+        { name: "Auto Mouse", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+        { name: "Scroll", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+      ],
+    });
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    renderKeyboard();
+
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "読込" }));
+    await act(async () => { await Promise.resolve(); });
+
+    const writes = rpc.call.mock.calls
+      .map(([, request]) => request)
+      .filter((request) => "keymap" in request && "setLayerBinding" in request.keymap)
+      .map((request) => request.keymap.setLayerBinding.layerId);
+    expect(writes).toEqual([0, 4, 7]);
+    expect(writes).not.toContain(8);
   });
 });

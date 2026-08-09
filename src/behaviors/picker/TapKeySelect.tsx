@@ -18,6 +18,12 @@ function selectedIndex(selected: TapKeyItem | null, items: TapKeyItem[]): string
   return index < 0 ? "" : String(index);
 }
 
+function displayTapKeyLabel(item: TapKeyItem, osMode: UserOS): string {
+  if (item.label === "ABC") return `ABC (${osMode === "mac" ? "LANG2" : "NonConvert"})`;
+  if (item.label === "あいう") return `あいう (${osMode === "mac" ? "LANG1" : "Convert"})`;
+  return item.label;
+}
+
 export function TapKeySelect({
   osMode,
   selected,
@@ -52,7 +58,7 @@ export function TapKeySelect({
             key={`${item.hidId}:${item.modifier ?? 0}`}
             value={index}
           >
-            {item.label}
+            {displayTapKeyLabel(item, osMode)}
           </option>
         ))}
       </select>

@@ -55,6 +55,25 @@ describe("LayersTab", () => {
     expect(screen.getByRole("button", { name: "押している間ポインター精密" })).toHaveAttribute("disabled");
   });
 
+  it("associates a disabled functional action with its reason", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={layers} osMode="mac" onApplyBinding={onApply} />);
+
+    const button = screen.getByRole("button", { name: "押している間ポインター精密" });
+    const reason = screen.getByText("ポインター精密用レイヤーがありません");
+    expect(button).toHaveAttribute("aria-describedby", reason.id);
+  });
+
+  it("disables functional actions when Layer-Tap is unavailable", () => {
+    const onApply = vi.fn();
+    const behaviorsWithoutLayerTap = mockBehaviors.filter((behavior) => behavior.displayName !== "Layer-Tap");
+    render(<LayersTab behaviors={behaviorsWithoutLayerTap} layers={[...layers, { id: 7, index: 3, name: "Scroll" }, { id: 8, index: 4, name: "Precision" }]} osMode="mac" onApplyBinding={onApply} />);
+
+    expect(screen.getByRole("button", { name: "押している間スクロール" })).toHaveAttribute("disabled");
+    expect(screen.getByRole("button", { name: "押している間ポインター精密" })).toHaveAttribute("disabled");
+    expect(screen.getAllByText("Layer-Tap が利用できません")).toHaveLength(2);
+  });
+
   it("shows layer selection after behavior click", () => {
     const onApply = vi.fn();
     render(

@@ -183,6 +183,7 @@ export function LayersTab({
         <div className="flex flex-wrap gap-1">
           {(["scroll", "precision"] as const).map((action) => {
             const availability = functionalAvailability[action];
+            const reasonId = `functional-layer-${action}-reason`;
             return (
               <div key={action}>
                 <button
@@ -192,12 +193,13 @@ export function LayersTab({
                       : "border-base-300 bg-white hover:bg-base-200 text-base-content"
                   }`}
                   disabled={!availability.ok}
+                  aria-describedby={!availability.ok ? reasonId : undefined}
                   onClick={() => handleFunctionalActionClick(action)}
                 >
                   {action === "scroll" ? "押している間スクロール" : "押している間ポインター精密"}
                 </button>
                 {!availability.ok && (
-                  <div className="mt-1 text-xs text-error">{availability.reason}</div>
+                  <div id={reasonId} className="mt-1 text-xs text-error">{availability.reason}</div>
                 )}
               </div>
             );

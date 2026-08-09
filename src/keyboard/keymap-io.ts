@@ -102,6 +102,7 @@ export function deserializeKeymap(
   deviceBehaviors: GetBehaviorDetailsResponse[],
   deviceKeyCount: number,
   maxLayers: number,
+  validLayerIds?: Iterable<number>,
 ): ImportResult {
   let data: unknown;
   try {
@@ -131,6 +132,7 @@ export function deserializeKeymap(
   }
 
   const exportLayers = km.layers as unknown[];
+  const validLayerIdSet = validLayerIds ? new Set(validLayerIds) : undefined;
 
   const maxUserLayers = maxLayers > PRECISION_LAYER_ID ? maxLayers - 1 : maxLayers;
   if (exportLayers.length > maxUserLayers) {
@@ -192,7 +194,10 @@ export function deserializeKeymap(
         continue;
       }
 
-      if (LAYER_BEHAVIOR_NAMES.includes(b.behaviorName) && b.param1 >= exportLayers.length) {
+      if (
+        LAYER_BEHAVIOR_NAMES.includes(b.behaviorName) &&
+        !(validLayerIdSet ? validLayerIdSet.has(b.param1) : b.param1 < exportLayers.length)
+      ) {
         return {
           ok: false,
           error: {

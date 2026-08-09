@@ -45,7 +45,7 @@ import {
   downloadJson,
   openFilePicker,
 } from "./keymap-io";
-import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer } from "./minimal-keys-layers";
+import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer, isPrecisionLayerId } from "./minimal-keys-layers";
 import { publishKeymapChanged } from "./keymap-events";
 import { runGuardedKeymapWrite } from "./keymap-operation-guards";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
@@ -605,7 +605,14 @@ export default function Keyboard() {
     const behaviorList = Object.values(behaviors);
     const keyCount = layouts[selectedPhysicalLayoutIndex]?.keys?.length ?? 0;
     const maxLayers = keymap.layers.length + (keymap.availableLayers ?? 0);
-    const result = deserializeKeymap(json, behaviorList, keyCount, maxLayers);
+    const runtimeUserLayers = keymap.layers.filter((layer) => !isPrecisionLayerId(layer.id));
+    const result = deserializeKeymap(
+      json,
+      behaviorList,
+      keyCount,
+      maxLayers,
+      keymap.layers.map((layer) => layer.id),
+    );
 
     if (!result.ok) {
       const err = result.error;
@@ -632,9 +639,10 @@ export default function Keyboard() {
     try {
       for (let li = 0; li < result.layers.length; li++) {
         const importedLayer = result.layers[li];
-        if (li < keymap.layers.length) {
-          const layerId = keymap.layers[li].id;
-          if (importedLayer.name !== keymap.layers[li].name) {
+        if (li < runtimeUserLayers.length) {
+          const runtimeLayer = runtimeUserLayers[li];
+          const layerId = runtimeLayer.id;
+          if (importedLayer.name !== runtimeLayer.name) {
             await call_rpc(conn.conn, {
               keymap: { setLayerProps: { layerId, name: importedLayer.name } },
             });

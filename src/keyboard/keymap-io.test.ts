@@ -124,6 +124,35 @@ describe("deserializeKeymap", () => {
     expect(result.layers[0].bindings[1]).toEqual({ behaviorId: 2, param1: 1, param2: 0x7002c });
   });
 
+  it("round-trips a Precision Layer-Tap reference using its persistent layer ID", () => {
+    const keymapWithPrecisionLayer = {
+      ...sampleKeymap,
+      layers: [0, 1, 2, 3, 4, 5, 6, 7, 8].map((id) => ({
+        id,
+        name: id === 8 ? "Precision" : `Layer ${id}`,
+        bindings: [{ behaviorId: 2, param1: 8, param2: 0x7002c }],
+      })),
+    };
+
+    const exported = serializeKeymap(keymapWithPrecisionLayer, mockBehaviors, "1.0.0");
+    const result = deserializeKeymap(
+      JSON.stringify(exported),
+      mockBehaviors,
+      1,
+      9,
+      keymapWithPrecisionLayer.layers.map((layer) => layer.id),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      layers: expect.arrayContaining([
+        expect.objectContaining({
+          bindings: [{ behaviorId: 2, param1: 8, param2: 0x7002c }],
+        }),
+      ]),
+    });
+  });
+
   it("rejects invalid JSON", () => {
     const result = deserializeKeymap("{bad json", mockBehaviors, 2, 5);
     expect(result.ok).toBe(false);

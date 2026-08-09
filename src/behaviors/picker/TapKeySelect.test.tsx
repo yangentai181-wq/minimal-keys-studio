@@ -26,6 +26,18 @@ describe("TapKeySelect", () => {
     expect(screen.queryByRole("option", { name: "Cmd (左)" })).toBeNull();
   });
 
+  it("shows OS-specific Japanese IME key details while retaining the main labels", () => {
+    const { rerender } = render(<TapKeySelect osMode="mac" selected={null} onChange={vi.fn()} />);
+
+    expect(screen.getByRole("option", { name: "ABC (LANG2)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "あいう (LANG1)" })).toBeTruthy();
+
+    rerender(<TapKeySelect osMode="windows" selected={null} onChange={vi.fn()} />);
+
+    expect(screen.getByRole("option", { name: "ABC (NonConvert)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "あいう (Convert)" })).toBeTruthy();
+  });
+
   it("keeps a current tap key outside the catalog visible", () => {
     const currentExternal = { label: "Consumer", hidId: 238 };
     render(
