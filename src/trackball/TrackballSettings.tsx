@@ -263,11 +263,12 @@ export function TrackballSettings() {
       if (confirmed.scaleMultiplier !== multiplier || confirmed.scaleDivisor !== divisor || confirmed.rotationDegrees !== rotation || confirmed.xInvert !== xInvert || confirmed.yInvert !== yInvert || confirmed.xySwapEnabled !== xySwap || confirmed.xyToScrollEnabled !== xyToScroll || confirmed.axisSnapMode !== axisSnapMode || confirmed.axisSnapThreshold !== axisSnapThreshold || confirmed.axisSnapTimeoutMs !== axisSnapTimeout || confirmed.scrollLayers !== nextScrollMask || confirmed.tempLayerEnabled !== autoMouseEnabled || confirmed.tempLayerLayer !== autoMouseLayer || confirmed.tempLayerDeactivationDelayMs !== normalizedDelay) throw new Error("Readback did not match draft");
       if (generation !== requestGeneration.current || id !== selectedId) return false;
       setProcessors((previous) => previous.map((processor) => processor.id === confirmed.id ? confirmed : processor));
-      if (submittedDraft && draftRef.current && sameDraft(submittedDraft, draftRef.current)) {
+      const draftUnchanged = submittedDraft !== null && draftRef.current !== null && sameDraft(submittedDraft, draftRef.current);
+      if (draftUnchanged) {
         applyProcessorInfo(confirmed);
         formDirty.current = false;
       }
-      return true;
+      return draftUnchanged;
     } catch (e) {
       if (generation === requestGeneration.current) {
         try {
@@ -312,15 +313,19 @@ export function TrackballSettings() {
   const handleReset = useCallback(async () => {
     if (!subsystem || selectedId === null || saving) return;
     const generation = ++requestGeneration.current;
+    const id = selectedId;
+    const submittedDraft = draftRef.current;
     setSaving(true);
     try {
-      await callWithTimeout("resetInputProcessor", RIP.encodeResetInputProcessor(selectedId), "resetInputProcessor");
-      const readback = await callWithTimeout("getInputProcessor", RIP.encodeGetInputProcessor(selectedId), "getInputProcessor");
-      if (!readback.getInputProcessor || readback.getInputProcessor.id !== selectedId) throw new Error("Invalid readback");
+      await callWithTimeout("resetInputProcessor", RIP.encodeResetInputProcessor(id), "resetInputProcessor");
+      const readback = await callWithTimeout("getInputProcessor", RIP.encodeGetInputProcessor(id), "getInputProcessor");
+      if (!readback.getInputProcessor || readback.getInputProcessor.id !== id) throw new Error("Invalid readback");
       if (generation !== requestGeneration.current) return;
-      setProcessors((previous) => previous.map((processor) => processor.id === selectedId ? readback.getInputProcessor! : processor));
-      applyProcessorInfo(readback.getInputProcessor);
-      formDirty.current = false;
+      setProcessors((previous) => previous.map((processor) => processor.id === id ? readback.getInputProcessor! : processor));
+      if (submittedDraft && draftRef.current && sameDraft(submittedDraft, draftRef.current)) {
+        applyProcessorInfo(readback.getInputProcessor);
+        formDirty.current = false;
+      }
     } catch (e) {
       console.error("Failed to reset trackball config:", e);
       toast(ERROR_MESSAGES["trackball.reset"], "error");

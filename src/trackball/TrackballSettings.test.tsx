@@ -69,7 +69,6 @@ describe("TrackballSettings", () => {
     mocks.subsystem!.callRPC.mockResolvedValue(new Uint8Array([1]));
     vi.spyOn(RIP, "decodeResponse")
       .mockReturnValueOnce({ responseType: "setRotation" })
-      .mockReturnValueOnce({ responseType: "setScrollLayers" })
       .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, rotationDegrees: 45 } });
     render(<TrackballSettings />);
     act(() => mocks.notification?.(new Uint8Array()));
@@ -78,8 +77,14 @@ describe("TrackballSettings", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "度" }), { target: { value: "45" } });
     fireEvent.click(screen.getByRole("button", { name: "適用" }));
 
-    await waitFor(() => expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeGetInputProcessor(1)));
-    expect(mocks.subsystem?.callRPC).not.toHaveBeenCalledWith(RIP.encodeSetScrollLayers(1, 0));
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    expect(mocks.dirtyRegistration?.dirty).toBe(false);
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(mocks.subsystem?.callRPC.mock.calls).toEqual([
+      [RIP.encodeListInputProcessors()],
+      [RIP.encodeSetRotation(1, 45)],
+      [RIP.encodeGetInputProcessor(1)],
+    ]);
   });
 
   it("snapshots and restores every Trackball draft field including the selected processor", () => {
@@ -129,7 +134,72 @@ describe("TrackballSettings", () => {
     await waitFor(() => expect(deferred).toHaveLength(1));
     deferred.shift()?.(new Uint8Array([1]));
 
-    await waitFor(() => expect(rotation).toHaveValue(90));
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    expect(screen.getByRole("spinbutton", { name: "度" })).toHaveValue(90);
+    expect(mocks.dirtyRegistration?.dirty).toBe(true);
+  });
+
+  it("keeps a newer draft when deferred Reset readback completes", async () => {
+    const processor: RIP.InputProcessorInfo = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+    };
+    const deferred: Array<(value: Uint8Array) => void> = [];
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "resetInputProcessor" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: processor });
+    mocks.subsystem!.callRPC.mockImplementation((() => {
+      let call = 0;
+      return () => ++call === 1 ? Promise.resolve(new Uint8Array()) : new Promise<Uint8Array>((resolve) => deferred.push(resolve));
+    })());
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    const rotation = screen.getByRole("spinbutton", { name: "度" });
+    fireEvent.change(rotation, { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "初期値に戻す" }));
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    deferred.shift()?.(new Uint8Array([1]));
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    fireEvent.change(rotation, { target: { value: "90" } });
+    deferred.shift()?.(new Uint8Array([1]));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "初期値に戻す" })).toBeEnabled());
+    expect(rotation).toHaveValue(90);
+    expect(mocks.dirtyRegistration?.dirty).toBe(true);
+  });
+
+  it("returns false from dirty-navigation save when a newer draft appears during Apply", async () => {
+    const processor: RIP.InputProcessorInfo = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+    };
+    const deferred: Array<(value: Uint8Array) => void> = [];
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "setRotation" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, rotationDegrees: 45 } });
+    mocks.subsystem!.callRPC.mockImplementation((() => {
+      let call = 0;
+      return () => ++call === 1 ? Promise.resolve(new Uint8Array()) : new Promise<Uint8Array>((resolve) => deferred.push(resolve));
+    })());
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    const rotation = screen.getByRole("spinbutton", { name: "度" });
+    fireEvent.change(rotation, { target: { value: "45" } });
+    const save = mocks.dirtyRegistration!.save();
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    deferred.shift()?.(new Uint8Array([1]));
+    await waitFor(() => expect(deferred).toHaveLength(1));
+    fireEvent.change(rotation, { target: { value: "90" } });
+    deferred.shift()?.(new Uint8Array([1]));
+
+    await expect(save).resolves.toBe(false);
+    expect(rotation).toHaveValue(90);
     expect(mocks.dirtyRegistration?.dirty).toBe(true);
   });
 
@@ -175,6 +245,32 @@ describe("TrackballSettings", () => {
     expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeSetScrollLayers(1, 16));
   });
 
+  it.each([
+    ["legacy error", { error: "Failed to process request" }, true],
+    ["empty response", {}, true],
+    ["wrong oneof", { responseType: "setRotation" }, true],
+    ["other explicit error", { error: "denied" }, false],
+  ])("classifies Scroll %s firmware guidance as %s", async (_name, response, firmwareRequired) => {
+    const processor = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 0,
+    } satisfies RIP.InputProcessorInfo;
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce(response as RIP.RipResponse)
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: processor });
+    mocks.subsystem!.callRPC.mockResolvedValue(new Uint8Array([1]));
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    fireEvent.change(screen.getByLabelText("スクロールするレイヤー"), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("トラックボール設定を保存できませんでした。接続を確認して、もう一度お試しください。", "error"));
+    expect(mocks.toast.mock.calls.some(([message]) => message === "スクロールレイヤーを変更するには、キーボードのFirmware更新が必要です。")).toBe(firmwareRequired);
+  });
+
   it("sends only changed Auto Mouse and Scroll setters with their distinct layer values", async () => {
     const processor = {
       id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
@@ -199,12 +295,17 @@ describe("TrackballSettings", () => {
     fireEvent.change(screen.getByLabelText("ボール停止後に戻るまで"), { target: { value: "125" } });
     fireEvent.click(screen.getByRole("button", { name: "適用" }));
 
-    await waitFor(() => expect(mocks.dirtyRegistration?.dirty).toBe(false));
-    expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeSetScrollLayers(1, 16));
-    expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeSetTempLayerEnabled(1, true));
-    expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeSetTempLayerLayer(1, 40));
-    expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeSetTempLayerDeactivationDelay(1, 150));
-    expect(mocks.subsystem?.callRPC).not.toHaveBeenCalledWith(RIP.encodeSetTempLayerActivationDelay(1, expect.any(Number)));
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    expect(mocks.dirtyRegistration?.dirty).toBe(false);
+    expect(mocks.subsystem?.callRPC.mock.calls.map(([payload]) => [...payload as Uint8Array])).toEqual([
+      [10, 0],
+      [162, 1, 4, 8, 1, 16, 16],
+      [58, 4, 8, 1, 16, 1],
+      [66, 4, 8, 1, 16, 40],
+      [82, 5, 8, 1, 16, 150, 1],
+      [18, 2, 8, 1],
+    ]);
+    expect(mocks.subsystem?.callRPC.mock.calls.some(([payload]) => (payload as Uint8Array)[0] === 74)).toBe(false);
   });
 
   it.each([
@@ -235,13 +336,13 @@ describe("TrackballSettings", () => {
     expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeGetInputProcessor(1));
   });
 
-  it("retains the draft after an RPC timeout", async () => {
+  it("retains the Scroll draft after a timeout without firmware guidance", async () => {
     vi.useFakeTimers();
     const processor = {
       id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
       tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
       activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
-      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 0,
     } satisfies RIP.InputProcessorInfo;
     vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
     vi.spyOn(RIP, "decodeResponse").mockReturnValue({ responseType: "getInputProcessor", getInputProcessor: processor });
@@ -252,13 +353,14 @@ describe("TrackballSettings", () => {
     });
     render(<TrackballSettings />);
     act(() => mocks.notification?.(new Uint8Array()));
-    const rotation = screen.getByRole("spinbutton", { name: "度" });
-    fireEvent.change(rotation, { target: { value: "45" } });
+    const scroll = screen.getByLabelText("スクロールするレイヤー");
+    fireEvent.change(scroll, { target: { value: "40" } });
     fireEvent.click(screen.getByRole("button", { name: "適用" }));
 
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
     expect(mocks.toast).toHaveBeenCalledWith("トラックボール設定を保存できませんでした。接続を確認して、もう一度お試しください。", "error");
-    expect(rotation).toHaveValue(45);
+    expect(mocks.toast).not.toHaveBeenCalledWith("スクロールレイヤーを変更するには、キーボードのFirmware更新が必要です。", "error");
+    expect(scroll).toHaveValue("40");
     expect(mocks.dirtyRegistration?.dirty).toBe(true);
     vi.useRealTimers();
   });
@@ -295,6 +397,7 @@ describe("TrackballSettings", () => {
     } satisfies RIP.InputProcessorInfo;
     vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
     vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "setRotation" })
       .mockReturnValueOnce({ error: "denied" })
       .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, rotationDegrees: 30 } });
     mocks.subsystem!.callRPC.mockResolvedValue(new Uint8Array([1]));
@@ -302,11 +405,33 @@ describe("TrackballSettings", () => {
     act(() => mocks.notification?.(new Uint8Array()));
     const rotation = screen.getByRole("spinbutton", { name: "度" });
     fireEvent.change(rotation, { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "X軸を反転" }));
     fireEvent.click(screen.getByRole("button", { name: "適用" }));
 
     await waitFor(() => expect(mocks.dirtyRegistration?.dirty).toBe(true));
     expect(rotation).toHaveValue(45);
-    expect(mocks.dirtyRegistration?.snapshot?.()).toMatchObject({ rotation: 45 });
+    expect(screen.getByRole("checkbox", { name: "X軸を反転" })).toBeChecked();
+    await mocks.dirtyRegistration?.discard();
+    expect(rotation).toHaveValue(30);
+    expect(screen.getByRole("checkbox", { name: "X軸を反転" })).not.toBeChecked();
+  });
+
+  it("does not let a notification replace a dirty draft", () => {
+    const processor = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+    } satisfies RIP.InputProcessorInfo;
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    const rotation = screen.getByRole("spinbutton", { name: "度" });
+    fireEvent.change(rotation, { target: { value: "45" } });
+    act(() => mocks.notification?.(new Uint8Array()));
+
+    expect(rotation).toHaveValue(45);
+    expect(mocks.dirtyRegistration?.dirty).toBe(true);
   });
 
   it.each([
