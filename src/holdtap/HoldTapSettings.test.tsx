@@ -56,11 +56,11 @@ function listResponse(tappingTermMs = 200): Uint8Array {
   return Writer.create().uint32(18).bytes(list).finish();
 }
 
-function namedHoldTapInfo(id: number, name: string): Uint8Array {
+function namedHoldTapInfo(id: number, name: string, tappingTermMs = 200): Uint8Array {
   return Writer.create()
     .uint32(8).uint32(id)
     .uint32(18).string(name)
-    .uint32(24).uint32(200)
+    .uint32(24).uint32(tappingTermMs)
     .uint32(32).uint32(100)
     .uint32(40).uint32(120)
     .uint32(48).uint32(1)
@@ -81,8 +81,8 @@ function multiListResponse(): Uint8Array {
 
 function twoKnownHoldTapsResponse(): Uint8Array {
   const list = Writer.create()
-    .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap"))
-    .uint32(10).bytes(namedHoldTapInfo(2, "layer_tap"))
+    .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap", 210))
+    .uint32(10).bytes(namedHoldTapInfo(2, "layer_tap", 330))
     .finish();
   return Writer.create().uint32(18).bytes(list).finish();
 }
@@ -222,7 +222,10 @@ describe("HoldTapSettings presentation", () => {
     mocks.behaviors = [{ id: 20, displayName: "Layer-Tap", metadata: [] }];
     view.rerender(<HoldTapSettings />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Layer-Tap.*1キー/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: /長押し設定.*Layer-Tap/ })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Layer-Tap.*1キー/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("slider")[0]).toHaveValue("330");
+    expect(screen.getByText(/1キーで使用中.*Base \/ A/)).toBeInTheDocument();
   });
 
   it("saves only the selected unused instance after an edit", async () => {
