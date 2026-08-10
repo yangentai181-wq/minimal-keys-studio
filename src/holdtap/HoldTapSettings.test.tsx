@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   subsystem: null as { callRPC: ReturnType<typeof vi.fn> } | null,
   registration: undefined as unknown,
   toast: vi.fn(),
+  layers: [] as Array<{ id: number; index: number; name: string; bindings: Array<{ behaviorId: number; param1: number; param2: number }> }>,
+  behaviors: [] as Array<{ id: number; displayName: string; metadata: [] }>,
 }));
 
 vi.mock("../rpc/useCustomSubsystem", () => ({
@@ -23,6 +25,14 @@ vi.mock("../navigation/DirtyStateContext", () => ({
 
 vi.mock("../misc/Toast", () => ({
   useToast: () => ({ toast: mocks.toast }),
+}));
+
+vi.mock("../keyboard/useStudioKeymap", () => ({
+  useStudioKeymap: () => ({ layers: mocks.layers, loading: false }),
+}));
+
+vi.mock("../behaviors/BehaviorsContext", () => ({
+  useBehaviorList: () => mocks.behaviors,
 }));
 
 function holdTapInfo(tappingTermMs = 200): Uint8Array {
@@ -42,6 +52,29 @@ function holdTapInfo(tappingTermMs = 200): Uint8Array {
 
 function listResponse(tappingTermMs = 200): Uint8Array {
   const list = Writer.create().uint32(10).bytes(holdTapInfo(tappingTermMs)).finish();
+  return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function namedHoldTapInfo(id: number, name: string): Uint8Array {
+  return Writer.create()
+    .uint32(8).uint32(id)
+    .uint32(18).string(name)
+    .uint32(24).uint32(200)
+    .uint32(32).uint32(100)
+    .uint32(40).uint32(120)
+    .uint32(48).uint32(1)
+    .uint32(56).uint32(200)
+    .uint32(64).uint32(100)
+    .uint32(72).uint32(120)
+    .uint32(80).uint32(1)
+    .finish();
+}
+
+function multiListResponse(): Uint8Array {
+  const list = Writer.create()
+    .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap"))
+    .uint32(10).bytes(namedHoldTapInfo(2, "my_custom_hold_tap"))
+    .finish();
   return Writer.create().uint32(18).bytes(list).finish();
 }
 
@@ -65,6 +98,8 @@ describe("HoldTapSettings dirty drafts", () => {
     mocks.registration = undefined;
     mocks.toast.mockReset();
     mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(listResponse()) };
+    mocks.layers = [];
+    mocks.behaviors = [];
   });
 
   it("registers dirty after editing and discard restores confirmed timing values", async () => {
@@ -114,5 +149,44 @@ describe("HoldTapSettings dirty drafts", () => {
     await waitFor(() => expect(screen.getAllByRole("slider")[0]).toHaveValue("330"));
     expect(registration().dirty).toBe(true);
     expect(screen.getByRole("combobox")).toHaveValue("3");
+  });
+});
+
+describe("HoldTapSettings presentation", () => {
+  beforeEach(() => {
+    mocks.registration = undefined;
+    mocks.toast.mockReset();
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(multiListResponse()) };
+    mocks.layers = [{
+      id: 4,
+      index: 0,
+      name: "Base",
+      bindings: [{ behaviorId: 10, param1: 0, param2: 0x00070004 }],
+    }];
+    mocks.behaviors = [{ id: 10, displayName: "Mod-Tap", metadata: [] }];
+  });
+
+  it("shows used settings with affected keys and beginner-facing headings", async () => {
+    render(<HoldTapSettings />);
+
+    expect(await screen.findByRole("button", { name: /Mod-Tap.*1キー/ })).toBeInTheDocument();
+    expect(screen.getByText(/1キーで使用中/)).toBeInTheDocument();
+    expect(screen.getByText(/Base \/ A/)).toBeInTheDocument();
+    expect(screen.queryByText("My Custom Hold Tap")).not.toBeInTheDocument();
+    expect(screen.getByText("長押し判定までの時間")).toBeInTheDocument();
+    expect(screen.getByText("連打を単押しにする時間")).toBeInTheDocument();
+    expect(screen.getByText("直前の入力を待つ時間")).toBeInTheDocument();
+    expect(screen.getByText("判定方法")).toBeInTheDocument();
+    expect(screen.getAllByRole("slider")).toHaveLength(3);
+    for (const slider of screen.getAllByRole("slider")) expect(slider).toHaveAttribute("step", "10");
+  });
+
+  it("reveals unused settings only on request and does not save another instance", async () => {
+    render(<HoldTapSettings />);
+    fireEvent.click(await screen.findByRole("button", { name: "未使用の設定を表示" }));
+    fireEvent.click(screen.getByRole("button", { name: /My Custom Hold Tap/ }));
+    fireEvent.change(screen.getAllByRole("slider")[0], { target: { value: "250" } });
+
+    expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(1);
   });
 });

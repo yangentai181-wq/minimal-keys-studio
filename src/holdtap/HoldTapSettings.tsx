@@ -8,6 +8,9 @@ import { LoadingSkeleton } from "../misc/LoadingSkeleton";
 import * as HT from "../proto/holdtap";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { useStudioKeymap } from "../keyboard/useStudioKeymap";
+import { useBehaviorList } from "../behaviors/BehaviorsContext";
+import { findHoldTapUsages, presentHoldTap } from "./holdtap-presentation";
 
 // -1 as uint32 in protobuf = "not configured in device tree" = effectively 0ms
 const SENTINEL = 0xFFFFFFFF;
@@ -40,11 +43,14 @@ type HoldTapDraft = {
 
 export function HoldTapSettings() {
   const subsystem = useCustomSubsystem(HT.SUBSYSTEM_ID);
+  const { layers } = useStudioKeymap();
+  const behaviors = useBehaviorList();
   const { toast } = useToast();
   const [holdTaps, setHoldTaps] = useState<HT.HoldTapInfo[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showUnused, setShowUnused] = useState(false);
 
   // Local form state
   const [tappingTerm, setTappingTerm] = useState(200);
@@ -52,6 +58,7 @@ export function HoldTapSettings() {
   const [requirePriorIdle, setRequirePriorIdle] = useState(0);
   const [flavor, setFlavor] = useState<HT.HoldTapFlavor>(0);
   const pendingRestoredDraftRef = useRef<HoldTapDraft | null>(null);
+  const automaticallySelectedRef = useRef(false);
 
   const applyDraft = useCallback((draft: HoldTapDraft) => {
     setSelectedId(draft.selectedId);
@@ -106,14 +113,10 @@ export function HoldTapSettings() {
         const list = resp.listHoldTaps?.holdTaps ?? [];
         setHoldTaps(list);
 
-        if (list.length > 0) {
-          setSelectedId(list[0].id);
-          applyInfo(list[0]);
-          const restored = pendingRestoredDraftRef.current;
-          if (restored) {
-            applyDraft(restored);
-            pendingRestoredDraftRef.current = null;
-          }
+        const restored = pendingRestoredDraftRef.current;
+        if (restored) {
+          applyDraft(restored);
+          pendingRestoredDraftRef.current = null;
         }
       } catch (e) {
         if (version === discoveryVersionRef.current) {
@@ -136,6 +139,29 @@ export function HoldTapSettings() {
   }
 
   const selected = holdTaps.find((h) => h.id === selectedId) ?? null;
+  const instances = holdTaps.map((holdTap) => ({
+    holdTap,
+    presentation: presentHoldTap(holdTap.name),
+    usages: findHoldTapUsages(presentHoldTap(holdTap.name), layers, behaviors),
+  }));
+  const usedInstances = instances.filter((instance) => instance.usages.length > 0);
+  const unusedInstances = instances.filter((instance) => instance.usages.length === 0);
+  const selectedInstance = instances.find((instance) => instance.holdTap.id === selectedId) ?? null;
+  const usageReady = behaviors.length > 0;
+
+  useEffect(() => {
+    if (holdTaps.length === 0) return;
+    const initial = selectedId === null
+      ? usedInstances[0]?.holdTap ?? (usageReady ? null : holdTaps[0])
+      : automaticallySelectedRef.current && usageReady && selectedInstance?.usages.length === 0
+        ? usedInstances[0]?.holdTap ?? null
+        : null;
+    if (!initial) return;
+    automaticallySelectedRef.current = true;
+    setSelectedId(initial.id);
+    applyInfo(initial);
+  }, [holdTaps, selectedId, selectedInstance, usageReady, usedInstances]);
+
   const dirty = !!selected && (tappingTerm !== selected.tappingTermMs || quickTap !== sanitizeMs(selected.quickTapMs) || requirePriorIdle !== sanitizeMs(selected.requirePriorIdleMs) || flavor !== selected.flavor);
 
   const handleApply = useCallback(async () => {
@@ -263,31 +289,59 @@ export function HoldTapSettings() {
         長押し設定
         {selected && (
           <span className="text-sm font-normal text-base-content/60 ml-2">
-            ({selected.name})
+            ({selectedInstance?.presentation.title ?? selected.name})
           </span>
         )}
       </h2>
 
       {/* Instance selector */}
-      {holdTaps.length > 1 && (
-        <section className="flex gap-2 flex-wrap">
-          {holdTaps.map((ht) => (
+      {(holdTaps.length > 1 || (usageReady && unusedInstances.length > 0)) && (
+        <section className="flex flex-col gap-2">
+          <div className="flex gap-2 flex-wrap">
+          {usedInstances.map(({ holdTap, presentation, usages }) => (
             <Button
-              key={ht.id}
+              key={holdTap.id}
               className={`rounded-md px-3 py-1.5 text-sm transition-all ${
-                selectedId === ht.id
+                selectedId === holdTap.id
                   ? "bg-primary text-primary-content"
                   : "bg-base-200 hover:bg-base-300"
               }`}
               onPress={() => {
-                setSelectedId(ht.id);
-                applyInfo(ht);
+                automaticallySelectedRef.current = false;
+                setSelectedId(holdTap.id);
+                applyInfo(holdTap);
               }}
             >
-              {ht.name}
+              {presentation.title}（{usages.length}キー）
             </Button>
           ))}
+          </div>
+          {unusedInstances.length > 0 && !showUnused && (
+            <Button className="text-sm text-primary self-start" onPress={() => setShowUnused(true)}>
+              未使用の設定を表示
+            </Button>
+          )}
+          {showUnused && (
+            <div className="flex gap-2 flex-wrap">
+              {unusedInstances.map(({ holdTap, presentation }) => (
+                <Button
+                  key={holdTap.id}
+                  className={`rounded-md px-3 py-1.5 text-sm transition-all ${selectedId === holdTap.id ? "bg-primary text-primary-content" : "bg-base-200 hover:bg-base-300"}`}
+                  onPress={() => { automaticallySelectedRef.current = false; setSelectedId(holdTap.id); applyInfo(holdTap); }}
+                >
+                  {presentation.title}（0キー）
+                </Button>
+              ))}
+            </div>
+          )}
         </section>
+      )}
+
+      {selectedInstance && (
+        <p className="text-sm text-base-content/60">
+          {selectedInstance.usages.length}キーで使用中
+          {selectedInstance.usages.length > 0 && `: ${selectedInstance.usages.map((usage) => `${usage.layerName} / ${usage.keyLabel}`).join("、")}`}
+        </p>
       )}
 
       {holdTaps.length === 0 && !loading && (
@@ -301,8 +355,8 @@ export function HoldTapSettings() {
       {selected && !loading && (
         <>
           <SettingsCard
-            title="タッピングターム"
-            description="キーを押してから「長押し」と判定されるまでの時間"
+            title="長押し判定までの時間"
+            description="押してから長押しになるまで"
             defaultNote={`初期値: ${selected.defaultTappingTermMs}ms`}
           >
             <div className="flex items-center gap-3">
@@ -327,8 +381,8 @@ export function HoldTapSettings() {
           </SettingsCard>
 
           <SettingsCard
-            title="クイックタップ"
-            description="素早く連打した時にタップとして扱う時間"
+            title="連打を単押しにする時間"
+            description="素早く連打した時に単押しとして扱う範囲"
             defaultNote={`初期値: ${sanitizeMs(selected.defaultQuickTapMs)}ms`}
           >
             <div className="flex items-center gap-3">
@@ -353,8 +407,8 @@ export function HoldTapSettings() {
           </SettingsCard>
 
           <SettingsCard
-            title="入力前待ち時間"
-            description="前のキーを離してからこの時間経過しないと長押し判定しない"
+            title="直前の入力を待つ時間"
+            description="前のキー操作直後の誤長押しを防ぐ時間"
             defaultNote={`初期値: ${sanitizeMs(selected.defaultRequirePriorIdleMs)}ms`}
           >
             <div className="flex items-center gap-3">
@@ -379,8 +433,8 @@ export function HoldTapSettings() {
           </SettingsCard>
 
           <SettingsCard
-            title="判定モード"
-            description="タップと長押しをどう判定するか"
+            title="判定方法"
+            description="他のキーを押した時に単押し／長押しをどう決めるか"
             defaultNote={`初期値: ${HT.FLAVOR_LABELS[selected.defaultFlavor] ?? "不明"}`}
           >
             <select
