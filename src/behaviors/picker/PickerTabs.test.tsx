@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PickerTabs } from "./PickerTabs";
 import { OsModeProvider } from "../../OsModeContext";
@@ -64,6 +64,31 @@ describe("PickerTabs", () => {
     expect(screen.getByText("文字・記号")).toBeDefined();
     expect(content).toContainElement(screen.getByRole("button", { name: "A" }));
     expect(content).toContainElement(screen.getByRole("button", { name: "Z" }));
+  });
+
+  it("タブ切替はbindingを適用せず、候補選択時だけ適用する", () => {
+    const onApplyBinding = vi.fn();
+
+    render(
+      <OsModeProvider>
+        <PickerTabs
+          keyPosition={37}
+          behaviors={fakeBehaviors}
+          layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+          onApplyBinding={onApplyBinding}
+        />
+      </OsModeProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "文字・記号" }));
+    fireEvent.click(screen.getByRole("button", { name: "日本語" }));
+
+    expect(onApplyBinding).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "文字・記号" }));
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+
+    expect(onApplyBinding).toHaveBeenCalledTimes(1);
   });
 
   it("defaults to ショートカット tab with おすすめ for thumb key", () => {
