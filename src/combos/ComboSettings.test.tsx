@@ -48,6 +48,12 @@ function getAllResponse(present = true, overrides?: Parameters<typeof encodeComb
   return Writer.create().uint32(34).bytes(inner).finish();
 }
 
+function getAllResponseFor(combos: Parameters<typeof encodeCombo>[0][]): Uint8Array {
+  const inner = Writer.create();
+  for (const combo of combos) inner.uint32(10).bytes(encodeCombo(combo));
+  return Writer.create().uint32(34).bytes(inner.finish()).finish();
+}
+
 function errorResponse(message: string): Uint8Array {
   return Writer.create().uint32(10).bytes(Writer.create().uint32(10).string(message).finish()).finish();
 }
@@ -68,6 +74,20 @@ async function beginMissionControlDraft() {
   fireEvent.click(screen.getByTitle("13"));
   fireEvent.click(screen.getByTitle("18"));
   fireEvent.click(screen.getByRole("button", { name: "Mission Control" }));
+}
+
+function deleteButton() {
+  const button = screen.getAllByRole("button").find((candidate) => candidate.textContent === "");
+  expect(button).toBeDefined();
+  return button!;
+}
+
+function leavesNoSensitiveLogValue(value: unknown): boolean {
+  if (value instanceof Uint8Array || Array.isArray(value)) return false;
+  if (typeof value === "string") return !["binding", "behaviorId", "param1", "param2", "17301586", "13", "18"].some((sensitive) => value.includes(sensitive));
+  if (typeof value === "number") return ![13, 18, 17301586].includes(value);
+  if (!value || typeof value !== "object") return true;
+  return Object.entries(value).every(([key, nested]) => ["label", "stage", "payloadLength", "responseKind", "errorType"].includes(key) && leavesNoSensitiveLogValue(nested));
 }
 
 describe("ComboSettings save confirmation", () => {
@@ -273,5 +293,157 @@ describe("ComboSettings save confirmation", () => {
 
     await waitFor(() => expect(mocks.registration?.dirty).toBe(true));
     expect(mocks.toast).not.toHaveBeenCalledWith("コンボを保存しました", "success");
+  });
+
+  it("keeps a restored draft enabled across an old save, reconnect, and late discovery", async () => {
+    const oldSave = deferred<Uint8Array>();
+    const oldDiscovery = deferred<Uint8Array>();
+    const view = renderSettings();
+    await beginMissionControlDraft();
+    const snapshot = mocks.registration!.snapshot!();
+    mocks.subsystem!.callRPC.mockImplementationOnce(() => oldSave.promise);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存中..." })).toBeDisabled());
+
+    await act(async () => {
+      mocks.subsystem = null;
+      view.rerender(<ComboSettings />);
+      mocks.subsystem = { callRPC: vi.fn().mockImplementationOnce(() => oldDiscovery.promise) };
+      view.rerender(<ComboSettings />);
+      mocks.registration!.restore!(snapshot);
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
+
+    await act(async () => { oldSave.resolve(comboResponse("set", true)); oldDiscovery.resolve(getAllResponse(false)); });
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "新規コンボ" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "編集" })).not.toBeInTheDocument();
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it("keeps a deep dirty snapshot isolated and restores every editable draft field after remount", async () => {
+    const view = renderSettings();
+    await beginMissionControlDraft();
+    const snapshot = mocks.registration!.snapshot!() as { comboId: number; keyPositions: number[]; timeoutMs: number; binding: { behaviorId: number; param1: number; param2: number }; layerMask: number; slowRelease: boolean };
+    snapshot.comboId = 99; snapshot.keyPositions.splice(0, 2, 0, 1); snapshot.timeoutMs = 77;
+    snapshot.binding.behaviorId = 99; snapshot.binding.param1 = 99; snapshot.binding.param2 = 99; snapshot.layerMask = 99; snapshot.slowRelease = true;
+    expect(screen.getByText("選択中: 13 + 18")).toBeInTheDocument();
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("50");
+
+    const saved = mocks.registration!.snapshot!();
+    view.unmount();
+    renderSettings();
+    await waitFor(() => expect(mocks.registration).toBeDefined());
+    mocks.registration!.restore!(saved);
+    await waitFor(() => expect(screen.getByText("選択中: 13 + 18")).toBeInTheDocument());
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("50");
+    expect(await mocks.registration!.discard()).toBe(true);
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "新規コンボ" })).not.toBeInTheDocument());
+  });
+
+  it("returns false without closing a re-edited draft after submitted readback refreshes the list", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    const set = deferred<Uint8Array>();
+    const readback = deferred<Uint8Array>();
+    mocks.subsystem!.callRPC.mockImplementationOnce(() => set.promise).mockImplementationOnce(() => readback.promise);
+    const result = mocks.registration!.save();
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存中..." })).toBeDisabled());
+    set.resolve(comboResponse("set", true));
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3));
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "60" } });
+    readback.resolve(getAllResponse(true));
+
+    await expect(result).resolves.toBe(false);
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
+    expect(screen.getByText("50ms")).toBeInTheDocument();
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("60");
+    expect(mocks.toast).not.toHaveBeenCalledWith("コンボを保存しました", "success");
+  });
+
+  it("requires comboId equality, accepts reverse readback keys, and replaces the list on confirmed save", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(comboResponse("set", true)).mockResolvedValueOnce(getAllResponse(true, { comboId: 2, keys: [18, 13] }));
+    const failed = mocks.registration!.save();
+    await expect(failed).resolves.toBe(false);
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "編集" })).not.toBeInTheDocument();
+
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(comboResponse("set", true)).mockResolvedValueOnce(getAllResponseFor([{ keys: [18, 13] }, { comboId: 2, keys: [0, 1] }]));
+    await expect(mocks.registration!.save()).resolves.toBe(true);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "編集" })).toHaveLength(2));
+  });
+
+  it("times out a pending delete without losing its list card or open edit form", async () => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true)) };
+    renderSettings();
+    await waitFor(() => expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "編集" }));
+    mocks.subsystem!.callRPC.mockImplementationOnce(() => new Promise<Uint8Array>(() => undefined));
+    vi.useFakeTimers();
+    fireEvent.click(deleteButton());
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(mocks.toast).toHaveBeenCalledWith("コンボを保存するには、キーボードのFirmware更新が必要です。", "error");
+    expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "コンボを編集" })).toBeInTheDocument();
+  });
+
+  it("ignores a deferred delete response after reconnect without changing the replacement list", async () => {
+    const oldDelete = deferred<Uint8Array>();
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true)) };
+    const view = renderSettings();
+    await waitFor(() => expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument());
+    mocks.subsystem!.callRPC.mockImplementationOnce(() => oldDelete.promise);
+    fireEvent.click(deleteButton());
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(2));
+
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true, { comboId: 2, keys: [0, 1] })) };
+    view.rerender(<ComboSettings />);
+    await waitFor(() => expect(screen.getByText("0 + 1")).toBeInTheDocument());
+    await act(async () => { oldDelete.resolve(comboResponse("delete", true)); });
+    await waitFor(() => expect(screen.getByText("0 + 1")).toBeInTheDocument());
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it("clears timeout timers after early save success and explicit delete rejection", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    vi.useFakeTimers();
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(comboResponse("set", true)).mockResolvedValueOnce(getAllResponse(true));
+    await expect(mocks.registration!.save()).resolves.toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "編集" }));
+    mocks.subsystem!.callRPC.mockRejectedValueOnce(new Error("delete rejected"));
+    await act(async () => { fireEvent.click(deleteButton()); await Promise.resolve(); });
+    expect(mocks.toast).toHaveBeenCalledWith("コンボの削除に失敗しました", "error");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("never logs combo binding fields, byte arrays, or fixture-sensitive values on every RPC outcome", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const first = renderSettings();
+    await beginMissionControlDraft();
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(new Uint8Array());
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(error).toHaveBeenCalled());
+    first.unmount();
+
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true)) };
+    const second = renderSettings();
+    await waitFor(() => expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument());
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(comboResponse("delete", false));
+    fireEvent.click(deleteButton());
+    await waitFor(() => expect(error).toHaveBeenCalledTimes(2));
+    second.unmount();
+
+    mocks.subsystem = { callRPC: vi.fn().mockRejectedValue(new Error("discovery failed")) };
+    renderSettings();
+    await waitFor(() => expect(error).toHaveBeenCalledTimes(3));
+    const allLogs = [...info.mock.calls, ...error.mock.calls];
+    expect(allLogs.length).toBeGreaterThan(0);
+    for (const call of allLogs) for (const argument of call) expect(leavesNoSensitiveLogValue(argument)).toBe(true);
+    info.mockRestore(); error.mockRestore();
   });
 });
