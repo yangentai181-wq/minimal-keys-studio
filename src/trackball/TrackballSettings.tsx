@@ -17,6 +17,30 @@ import {
   encodeScrollLayerMask,
 } from "./layer-settings";
 
+type TrackballDraft = {
+  selectedId: number | null;
+  multiplier: number;
+  divisor: number;
+  rotation: number;
+  xInvert: boolean;
+  yInvert: boolean;
+  xySwap: boolean;
+  xyToScroll: boolean;
+  axisSnapMode: RIP.AxisSnapMode;
+  axisSnapThreshold: number;
+  axisSnapTimeout: number;
+  scrollLayerId: number | null;
+  scrollMask: number;
+  scrollTouched: boolean;
+  autoMouseEnabled: boolean;
+  autoMouseLayerId: number | null;
+  autoMouseDeactivationDelayMs: number;
+};
+
+function sameDraft(left: TrackballDraft, right: TrackballDraft) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function TrackballSettings() {
   const subsystem = useCustomSubsystem(RIP.SUBSYSTEM_ID);
   const { toast } = useToast();
@@ -53,7 +77,14 @@ export function TrackballSettings() {
   const [autoMouseDeactivationDelayMs, setAutoMouseDeactivationDelayMs] = useState(700);
   const [scrollWarning, setScrollWarning] = useState<string | null>(null);
   const requestGeneration = useRef(0);
+  const selectedIdRef = useRef(selectedId);
+  const subsystemRef = useRef(subsystem);
+  const draftRef = useRef<TrackballDraft | null>(null);
   const { layers } = useStudioKeymap();
+
+  selectedIdRef.current = selectedId;
+  subsystemRef.current = subsystem;
+  draftRef.current = { selectedId, multiplier, divisor, rotation, xInvert, yInvert, xySwap, xyToScroll, axisSnapMode, axisSnapThreshold, axisSnapTimeout, scrollLayerId, scrollMask, scrollTouched, autoMouseEnabled, autoMouseLayerId, autoMouseDeactivationDelayMs };
 
   // Discover processors via listInputProcessors (data arrives via notifications)
   useEffect(() => {
@@ -132,6 +163,14 @@ export function TrackballSettings() {
 
   const selectedProcessor = processors.find((p) => p.id === selectedId) ?? null;
   const confirmedScroll = selectedProcessor ? decodeScrollLayerSelection(selectedProcessor.scrollLayers, layers) : { kind: "none" as const };
+  const visibleScrollLayerId = scrollTouched ? scrollLayerId : confirmedScroll.kind === "single" ? confirmedScroll.layerId : null;
+  const visibleScrollWarning = scrollTouched
+    ? scrollWarning
+    : confirmedScroll.kind === "multiple"
+      ? "複数レイヤーが設定されています。次に選んだ1つへ置き換わります"
+      : confirmedScroll.kind === "unavailable"
+        ? ERROR_MESSAGES["trackball.layerUnavailable"]
+        : null;
   const dirty = selectedProcessor !== null && (
     multiplier !== selectedProcessor.scaleMultiplier || divisor !== selectedProcessor.scaleDivisor || rotation !== selectedProcessor.rotationDegrees ||
     xInvert !== selectedProcessor.xInvert || yInvert !== selectedProcessor.yInvert || xySwap !== selectedProcessor.xySwapEnabled || xyToScroll !== selectedProcessor.xyToScrollEnabled ||
@@ -160,13 +199,14 @@ export function TrackballSettings() {
   const normalizeDeactivationDelay = (value: number) => Math.min(5000, Math.max(100, Math.round(value / 50) * 50));
   const isUnsupportedScrollResponse = (error: unknown) => {
     const message = error instanceof Error ? error.message : "";
-    return message.startsWith("Empty RPC response") || message.startsWith("Unexpected RPC response");
+    return message === "Failed to process request" || message.startsWith("Empty RPC response") || message.startsWith("Unexpected RPC response");
   };
 
   const handleApply = useCallback(async (): Promise<boolean> => {
     if (!subsystem || selectedId === null || !selectedProcessor) return false;
     const generation = ++requestGeneration.current;
     const id = selectedId;
+    const submittedDraft = draftRef.current;
     setSaving(true);
     try {
       const selectedScrollLayer = scrollLayerId === null ? null : layers.find((layer) => layer.id === scrollLayerId);
@@ -223,14 +263,18 @@ export function TrackballSettings() {
       if (confirmed.scaleMultiplier !== multiplier || confirmed.scaleDivisor !== divisor || confirmed.rotationDegrees !== rotation || confirmed.xInvert !== xInvert || confirmed.yInvert !== yInvert || confirmed.xySwapEnabled !== xySwap || confirmed.xyToScrollEnabled !== xyToScroll || confirmed.axisSnapMode !== axisSnapMode || confirmed.axisSnapThreshold !== axisSnapThreshold || confirmed.axisSnapTimeoutMs !== axisSnapTimeout || confirmed.scrollLayers !== nextScrollMask || confirmed.tempLayerEnabled !== autoMouseEnabled || confirmed.tempLayerLayer !== autoMouseLayer || confirmed.tempLayerDeactivationDelayMs !== normalizedDelay) throw new Error("Readback did not match draft");
       if (generation !== requestGeneration.current || id !== selectedId) return false;
       setProcessors((previous) => previous.map((processor) => processor.id === confirmed.id ? confirmed : processor));
-      applyProcessorInfo(confirmed);
-      formDirty.current = false;
+      if (submittedDraft && draftRef.current && sameDraft(submittedDraft, draftRef.current)) {
+        applyProcessorInfo(confirmed);
+        formDirty.current = false;
+      }
       return true;
     } catch (e) {
       if (generation === requestGeneration.current) {
         try {
           const readback = await callWithTimeout("getInputProcessor", RIP.encodeGetInputProcessor(id), "getInputProcessor");
-          if (readback.getInputProcessor?.id === id) setProcessors((previous) => previous.map((processor) => processor.id === id ? readback.getInputProcessor! : processor));
+          if (generation === requestGeneration.current && subsystemRef.current === subsystem && selectedIdRef.current === id && readback.getInputProcessor?.id === id) {
+            setProcessors((previous) => previous.map((processor) => processor.id === id ? readback.getInputProcessor! : processor));
+          }
         } catch { /* draft deliberately remains untouched */ }
       }
       console.error("Failed to apply trackball config:", e);
@@ -325,12 +369,12 @@ export function TrackballSettings() {
       <section className="rounded-xl border border-orange-200 bg-white p-3 shadow-sm space-y-3">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium">スクロールするレイヤー</span>
-          <select value={scrollTouched || confirmedScroll.kind === "single" ? scrollLayerId ?? "" : ""} onChange={(event) => { const layerId = event.target.value === "" ? null : Number(event.target.value); setScrollLayerId(layerId); setScrollMask(layerId === null ? 0 : encodeScrollLayerMask(layers.find((layer) => layer.id === layerId)!)); setScrollTouched(true); setScrollWarning(null); }} className="rounded px-2 py-1 bg-base-100 border border-base-300">
+          <select value={visibleScrollLayerId ?? ""} onChange={(event) => { const layerId = event.target.value === "" ? null : Number(event.target.value); setScrollLayerId(layerId); setScrollMask(layerId === null ? 0 : encodeScrollLayerMask(layers.find((layer) => layer.id === layerId)!)); setScrollTouched(true); setScrollWarning(null); }} className="rounded px-2 py-1 bg-base-100 border border-base-300">
             <option value="">なし</option>
             {layers.map((layer) => <option key={layer.id} value={layer.id} disabled={layer.index > 31}>{layer.name}{layer.index > 31 ? " (選択不可)" : ""}</option>)}
           </select>
         </label>
-        {scrollWarning && <p role="alert" className="text-sm text-warning">{scrollWarning}</p>}
+        {visibleScrollWarning && <p role="alert" className="text-sm text-warning">{visibleScrollWarning}</p>}
         <label className="flex items-center gap-2 text-sm">
           <input aria-label="Auto Mouseを有効にする" type="checkbox" checked={autoMouseEnabled} onChange={(event) => setAutoMouseEnabled(event.target.checked)} />
           Auto Mouseを有効にする
