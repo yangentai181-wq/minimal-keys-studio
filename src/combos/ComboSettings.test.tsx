@@ -84,8 +84,8 @@ function deleteButton() {
 
 function leavesNoSensitiveLogValue(value: unknown): boolean {
   if (value instanceof Uint8Array || Array.isArray(value)) return false;
-  if (typeof value === "string") return !["binding", "behaviorId", "param1", "param2", "17301586", "13", "18"].some((sensitive) => value.includes(sensitive));
-  if (typeof value === "number") return ![13, 18, 17301586].includes(value);
+  if (typeof value === "string") return !["binding", "behaviorId", "param1", "param2", "01070052", "17236050", "13", "18"].some((sensitive) => value.includes(sensitive));
+  if (typeof value === "number") return ![1, 13, 18, 17236050].includes(value);
   if (!value || typeof value !== "object") return true;
   return Object.entries(value).every(([key, nested]) => ["label", "stage", "payloadLength", "responseKind", "errorType"].includes(key) && leavesNoSensitiveLogValue(nested));
 }
@@ -444,6 +444,81 @@ describe("ComboSettings save confirmation", () => {
     const allLogs = [...info.mock.calls, ...error.mock.calls];
     expect(allLogs.length).toBeGreaterThan(0);
     for (const call of allLogs) for (const argument of call) expect(leavesNoSensitiveLogValue(argument)).toBe(true);
+    expect(leavesNoSensitiveLogValue(17236050)).toBe(false);
+    expect(leavesNoSensitiveLogValue("01070052")).toBe(false);
+    expect(leavesNoSensitiveLogValue({ payloadLength: 21, behaviorId: 1 })).toBe(false);
+    expect(leavesNoSensitiveLogValue(new Uint8Array([10, 19]))).toBe(false);
     info.mockRestore(); error.mockRestore();
+  });
+
+  it("lets a current discovery clear loading while a current save completes on the same subsystem", async () => {
+    const discovery = deferred<Uint8Array>();
+    const set = deferred<Uint8Array>();
+    const readback = deferred<Uint8Array>();
+    const view = renderSettings();
+    await beginMissionControlDraft();
+    mocks.subsystem = { callRPC: vi.fn().mockImplementationOnce(() => discovery.promise).mockImplementationOnce(() => set.promise).mockImplementationOnce(() => readback.promise) };
+    view.rerender(<ComboSettings />);
+    await waitFor(() => expect(screen.getByText("読み込み中...")).toBeInTheDocument());
+
+    const saved = mocks.registration!.save();
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存中..." })).toBeDisabled());
+    await act(async () => { set.resolve(comboResponse("set", true)); discovery.resolve(getAllResponse(false)); });
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3));
+    await act(async () => { readback.resolve(getAllResponse(true, { keys: [18, 13] })); });
+
+    await expect(saved).resolves.toBe(true);
+    await waitFor(() => expect(screen.queryByText("読み込み中...")).not.toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "新規コンボ" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument();
+  });
+
+  it("lets a current discovery clear loading while a current delete completes on the same subsystem", async () => {
+    const discovery = deferred<Uint8Array>();
+    const deletion = deferred<Uint8Array>();
+    const readback = deferred<Uint8Array>();
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true)) };
+    const view = renderSettings();
+    await waitFor(() => expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument());
+    mocks.subsystem = { callRPC: vi.fn().mockImplementationOnce(() => discovery.promise).mockImplementationOnce(() => deletion.promise).mockImplementationOnce(() => readback.promise) };
+    view.rerender(<ComboSettings />);
+    await waitFor(() => expect(screen.getByText("読み込み中...")).toBeInTheDocument());
+    fireEvent.click(deleteButton());
+    await act(async () => { deletion.resolve(comboResponse("delete", true)); discovery.resolve(getAllResponse(true)); });
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3));
+    await act(async () => { readback.resolve(getAllResponse(false)); });
+
+    await waitFor(() => expect(screen.queryByText("読み込み中...")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "編集" })).not.toBeInTheDocument();
+    expect(mocks.toast).toHaveBeenCalledWith("コンボを削除しました", "success");
+  });
+
+  it("keeps snapshot and restored binding fields isolated from caller mutation", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    const first = mocks.registration!.snapshot!() as { comboId: number; keyPositions: number[]; timeoutMs: number; binding: { behaviorId: number; param1: number; param2: number }; layerMask: number; slowRelease: boolean };
+    first.binding.behaviorId = 99; first.binding.param1 = 99; first.binding.param2 = 99;
+    const second = mocks.registration!.snapshot!() as typeof first;
+    expect(second).toEqual({ comboId: 1, keyPositions: [13, 18], timeoutMs: 50, binding: { behaviorId: 1, param1: 17236050, param2: 0 }, layerMask: 0, slowRelease: false });
+
+    const restore = { comboId: 7, keyPositions: [18, 13], timeoutMs: 70, binding: { behaviorId: 3, param1: 4, param2: 5 }, layerMask: 6, slowRelease: true };
+    await act(async () => { mocks.registration!.restore!(restore); });
+    restore.keyPositions[0] = 0; restore.binding.behaviorId = 99; restore.binding.param1 = 99; restore.binding.param2 = 99; restore.timeoutMs = 99; restore.layerMask = 99; restore.slowRelease = false;
+    const restored = mocks.registration!.snapshot!() as typeof first;
+    expect(restored).toEqual({ comboId: 7, keyPositions: [18, 13], timeoutMs: 70, binding: { behaviorId: 3, param1: 4, param2: 5 }, layerMask: 6, slowRelease: true });
+  });
+
+  it("replaces stale discovery cards with only confirmed save readback cards", async () => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true, { comboId: 7, keys: [0, 1], timeoutMs: 99 })) };
+    renderSettings();
+    await waitFor(() => expect(screen.getByText("0 + 1")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新規コンボ" }));
+    fireEvent.click(screen.getByTitle("13")); fireEvent.click(screen.getByTitle("18")); fireEvent.click(screen.getByRole("button", { name: "Mission Control" }));
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(comboResponse("set", true)).mockResolvedValueOnce(getAllResponse(true, { comboId: 8, keys: [18, 13] }));
+    await expect(mocks.registration!.save()).resolves.toBe(true);
+    await waitFor(() => expect(screen.getByText("18 + 13")).toBeInTheDocument());
+    expect(screen.queryByText("0 + 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("99ms")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "編集" })).toHaveLength(1);
   });
 });
