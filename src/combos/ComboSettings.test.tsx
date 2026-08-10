@@ -52,6 +52,12 @@ function errorResponse(message: string): Uint8Array {
   return Writer.create().uint32(10).bytes(Writer.create().uint32(10).string(message).finish()).finish();
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
 function renderSettings() {
   return render(<ComboSettings />);
 }
@@ -239,5 +245,33 @@ describe("ComboSettings save confirmation", () => {
       10, 19, 10, 17, 8, 1, 16, 13, 16, 18, 24, 50,
       34, 7, 8, 1, 16, 210, 128, 156, 8,
     ]);
+  });
+
+  it("ignores a deferred discovery after disconnect and accepts the new subsystem list", async () => {
+    const oldDiscovery = deferred<Uint8Array>();
+    mocks.subsystem = { callRPC: vi.fn().mockImplementationOnce(() => oldDiscovery.promise) };
+    const view = renderSettings();
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(1));
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(false)) };
+    view.rerender(<ComboSettings />);
+    oldDiscovery.resolve(getAllResponse(true));
+
+    await waitFor(() => expect(screen.getByText(/コンボキーが設定されていません/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "編集" })).not.toBeInTheDocument();
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it("keeps a deferred save draft when the subsystem disconnects", async () => {
+    const view = renderSettings();
+    await beginMissionControlDraft();
+    const pendingSave = deferred<Uint8Array>();
+    mocks.subsystem!.callRPC.mockImplementationOnce(() => pendingSave.promise);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    mocks.subsystem = null;
+    view.rerender(<ComboSettings />);
+    pendingSave.resolve(comboResponse("set", true));
+
+    await waitFor(() => expect(mocks.registration?.dirty).toBe(true));
+    expect(mocks.toast).not.toHaveBeenCalledWith("コンボを保存しました", "success");
   });
 });

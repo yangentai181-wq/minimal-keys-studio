@@ -137,12 +137,23 @@ export function ComboSettings() {
   const [saving, setSaving] = useState(false);
   const editingRef = useRef<Combos.ComboConfig | null>(null);
   const subsystemRef = useRef(subsystem);
-  const operationGenerationRef = useRef(0);
+  const subsystemGenerationRef = useRef(0);
+  const discoveryTokenRef = useRef(0);
+  const saveTokenRef = useRef(0);
+  const deleteTokenRef = useRef(0);
 
   const nextIdRef = useRef(1);
 
   useEffect(() => { editingRef.current = editing; }, [editing]);
-  useEffect(() => { subsystemRef.current = subsystem; operationGenerationRef.current += 1; }, [subsystem]);
+  useEffect(() => {
+    subsystemRef.current = subsystem;
+    subsystemGenerationRef.current += 1;
+    discoveryTokenRef.current += 1;
+    saveTokenRef.current += 1;
+    deleteTokenRef.current += 1;
+    setLoading(false);
+    setSaving(false);
+  }, [subsystem]);
 
   const callWithTimeout = useCallback(
     async (label: string, payload: Uint8Array, timeoutMs = 5000) => {
@@ -170,25 +181,28 @@ export function ComboSettings() {
       setLoading(false);
       return;
     }
-    const generation = ++operationGenerationRef.current;
+    const subsystemGeneration = subsystemGenerationRef.current;
+    const token = ++discoveryTokenRef.current;
+    const isCurrent = () => subsystemGeneration === subsystemGenerationRef.current
+      && token === discoveryTokenRef.current && subsystemRef.current === subsystem;
 
     async function load() {
       setLoading(true);
       try {
         const resp = await callWithTimeout("getAllCombos", Combos.encodeGetAllCombos(), 15000);
-        if (generation !== operationGenerationRef.current || subsystemRef.current !== subsystem) return;
+        if (!isCurrent()) return;
         const list = resp.getAllCombos?.combos ?? [];
         setCombos(list);
         if (list.length > 0) {
           nextIdRef.current = Math.max(...list.map((c) => c.comboId)) + 1;
         }
       } catch (e) {
-        if (generation === operationGenerationRef.current && subsystemRef.current === subsystem) {
-          console.error("[Combos] Failed to load:", e);
+        if (isCurrent()) {
+          console.error("[Combos] Discovery failed:", { errorType: isTimeout(e) ? "timeout" : "failure" });
           toast("コンボの読み込みに失敗しました", "error");
         }
       } finally {
-        if (generation === operationGenerationRef.current && subsystemRef.current === subsystem) setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     }
     load();
@@ -214,8 +228,10 @@ export function ComboSettings() {
     }
     const draft = validation.normalized;
     const activeSubsystem = subsystem;
-    const generation = ++operationGenerationRef.current;
-    const isCurrent = () => generation === operationGenerationRef.current && subsystemRef.current === activeSubsystem;
+    const subsystemGeneration = subsystemGenerationRef.current;
+    const token = ++saveTokenRef.current;
+    const isCurrent = () => subsystemGeneration === subsystemGenerationRef.current
+      && token === saveTokenRef.current && subsystemRef.current === activeSubsystem;
 
     setSaving(true);
     try {
@@ -244,8 +260,10 @@ export function ComboSettings() {
   const handleDelete = useCallback(async (comboId: number) => {
     if (!subsystem) return false;
     const activeSubsystem = subsystem;
-    const generation = ++operationGenerationRef.current;
-    const isCurrent = () => generation === operationGenerationRef.current && subsystemRef.current === activeSubsystem;
+    const subsystemGeneration = subsystemGenerationRef.current;
+    const token = ++deleteTokenRef.current;
+    const isCurrent = () => subsystemGeneration === subsystemGenerationRef.current
+      && token === deleteTokenRef.current && subsystemRef.current === activeSubsystem;
     try {
       const resp = await callWithTimeout("deleteCombo", Combos.encodeDeleteCombo(comboId));
       if (!isCurrent()) return false;
