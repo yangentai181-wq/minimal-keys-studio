@@ -1,15 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TrackballSettings } from "./TrackballSettings";
+import * as RIP from "../proto/rip";
 
 const mocks = vi.hoisted(() => ({
   subsystem: null as { subsystemIndex: number; callRPC: ReturnType<typeof vi.fn> } | null,
   toast: vi.fn(),
+  notification: undefined as ((payload: Uint8Array) => void) | undefined,
 }));
 
 vi.mock("../rpc/useCustomSubsystem", () => ({
   useCustomSubsystem: () => mocks.subsystem,
-  useCustomNotification: () => undefined,
+  useCustomNotification: (_index: number | undefined, callback: (payload: Uint8Array) => void) => { mocks.notification = callback; },
 }));
 
 vi.mock("../misc/Toast", () => ({
@@ -40,6 +42,33 @@ describe("TrackballSettings", () => {
       subsystemIndex: 1,
       callRPC: vi.fn().mockResolvedValue(undefined),
     };
+    mocks.notification = undefined;
+    mocks.toast.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it("preserves a multiple legacy scroll mask while saving another setting", async () => {
+    const processor: RIP.InputProcessorInfo = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 144,
+    };
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    mocks.subsystem!.callRPC.mockResolvedValue(new Uint8Array([1]));
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "setRotation" })
+      .mockReturnValueOnce({ responseType: "setScrollLayers" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, rotationDegrees: 45 } });
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("複数レイヤー");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "度" }), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+
+    await waitFor(() => expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeGetInputProcessor(1)));
+    expect(mocks.subsystem?.callRPC).not.toHaveBeenCalledWith(RIP.encodeSetScrollLayers(1, 0));
   });
 
   it("places precision settings before the existing rotation, inversion, and scroll controls", () => {
