@@ -7,14 +7,15 @@ import {
 } from "../rpc/useCustomSubsystem";
 import { useToast } from "../misc/Toast";
 import * as RIP from "../proto/rip";
-import {
-  AUTO_MOUSE_LAYER_INDEX,
-  SCROLL_LAYER_INDEX,
-} from "../keyboard/minimal-keys-layers";
 import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
-
-const AUTO_MOUSE_TIMEOUT_MS = 700;
+import { useStudioKeymap } from "../keyboard/useStudioKeymap";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import {
+  decodeScrollLayerSelection,
+  encodeAutoMouseLayerId,
+  encodeScrollLayerMask,
+} from "./layer-settings";
 
 export function TrackballSettings() {
   const subsystem = useCustomSubsystem(RIP.SUBSYSTEM_ID);
@@ -44,6 +45,12 @@ export function TrackballSettings() {
   const [axisSnapMode, setAxisSnapMode] = useState<RIP.AxisSnapMode>(0);
   const [axisSnapThreshold, setAxisSnapThreshold] = useState(0);
   const [axisSnapTimeout, setAxisSnapTimeout] = useState(0);
+  const [scrollLayerId, setScrollLayerId] = useState<number | null>(null);
+  const [autoMouseEnabled, setAutoMouseEnabled] = useState(false);
+  const [autoMouseLayerId, setAutoMouseLayerId] = useState<number | null>(null);
+  const [autoMouseDeactivationDelayMs, setAutoMouseDeactivationDelayMs] = useState(700);
+  const [scrollWarning, setScrollWarning] = useState<string | null>(null);
+  const { layers } = useStudioKeymap();
 
   // Discover processors via listInputProcessors (data arrives via notifications)
   useEffect(() => {
@@ -97,7 +104,7 @@ export function TrackballSettings() {
     }
   });
 
-  function applyProcessorInfo(info: RIP.InputProcessorInfo) {
+  const applyProcessorInfo = useCallback((info: RIP.InputProcessorInfo) => {
     setMultiplier(info.scaleMultiplier);
     setDivisor(info.scaleDivisor);
     setRotation(info.rotationDegrees);
@@ -108,60 +115,105 @@ export function TrackballSettings() {
     setAxisSnapMode(info.axisSnapMode);
     setAxisSnapThreshold(info.axisSnapThreshold);
     setAxisSnapTimeout(info.axisSnapTimeoutMs);
-  }
+    const scroll = decodeScrollLayerSelection(info.scrollLayers, layers);
+    setScrollLayerId(scroll.kind === "single" ? scroll.layerId : null);
+    setScrollWarning(scroll.kind === "multiple" ? "複数レイヤーが設定されています。次に選んだ1つへ置き換わります" : scroll.kind === "unavailable" ? ERROR_MESSAGES["trackball.layerUnavailable"] : null);
+    setAutoMouseEnabled(info.tempLayerEnabled);
+    setAutoMouseLayerId(info.tempLayerLayer || null);
+    setAutoMouseDeactivationDelayMs(info.tempLayerDeactivationDelayMs || 100);
+  }, [layers]);
 
   const selectedProcessor = processors.find((p) => p.id === selectedId) ?? null;
+  const confirmedScroll = selectedProcessor ? decodeScrollLayerSelection(selectedProcessor.scrollLayers, layers) : { kind: "none" as const };
+  const dirty = selectedProcessor !== null && (
+    multiplier !== selectedProcessor.scaleMultiplier || divisor !== selectedProcessor.scaleDivisor || rotation !== selectedProcessor.rotationDegrees ||
+    xInvert !== selectedProcessor.xInvert || yInvert !== selectedProcessor.yInvert || xySwap !== selectedProcessor.xySwapEnabled || xyToScroll !== selectedProcessor.xyToScrollEnabled ||
+    axisSnapMode !== selectedProcessor.axisSnapMode || axisSnapThreshold !== selectedProcessor.axisSnapThreshold || axisSnapTimeout !== selectedProcessor.axisSnapTimeoutMs ||
+    scrollLayerId !== (confirmedScroll.kind === "single" ? confirmedScroll.layerId : null) || autoMouseEnabled !== selectedProcessor.tempLayerEnabled ||
+    autoMouseLayerId !== (selectedProcessor.tempLayerLayer || null) || autoMouseDeactivationDelayMs !== selectedProcessor.tempLayerDeactivationDelayMs
+  );
+  useEffect(() => { formDirty.current = dirty; }, [dirty]);
 
   const callWithTimeout = useCallback(
-    async (label: string, payload: Uint8Array) => {
+    async (label: string, payload: Uint8Array, expectedResponseType: RIP.RipResponseType) => {
       if (!subsystem) throw new Error("No subsystem");
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(`RPC timeout: ${label}`)), 5000)
       );
-      await Promise.race([subsystem.callRPC(payload), timeout]);
+      const raw = await Promise.race([subsystem.callRPC(payload), timeout]);
+      if (!(raw instanceof Uint8Array)) throw new Error(`Empty RPC response: ${label}`);
+      const response = RIP.decodeResponse(raw);
+      if (response.error) throw new Error(response.error);
+      if (response.responseType !== expectedResponseType) throw new Error(`Unexpected RPC response: ${label}`);
+      return response;
     },
     [subsystem]
   );
 
-  const handleApply = useCallback(async () => {
-    if (!subsystem || selectedId === null || !selectedProcessor) return;
+  const handleApply = useCallback(async (): Promise<boolean> => {
+    if (!subsystem || selectedId === null || !selectedProcessor) return false;
     setSaving(true);
     try {
       const id = selectedId;
+      const selectedScrollLayer = scrollLayerId === null ? null : layers.find((layer) => layer.id === scrollLayerId);
+      const selectedAutoMouseLayer = autoMouseLayerId === null ? null : layers.find((layer) => layer.id === autoMouseLayerId);
+      if (scrollLayerId !== null && !selectedScrollLayer) throw new Error(ERROR_MESSAGES["trackball.layerUnavailable"]);
+      if (autoMouseLayerId !== null && !selectedAutoMouseLayer) throw new Error(ERROR_MESSAGES["trackball.layerUnavailable"]);
+      const scrollMask = selectedScrollLayer ? encodeScrollLayerMask(selectedScrollLayer) : 0;
+      const autoMouseLayer = selectedAutoMouseLayer ? encodeAutoMouseLayerId(selectedAutoMouseLayer) : 0;
       if (multiplier !== selectedProcessor.scaleMultiplier) {
-        await callWithTimeout("setScaleMultiplier", RIP.encodeSetScaleMultiplier(id, multiplier));
+        await callWithTimeout("setScaleMultiplier", RIP.encodeSetScaleMultiplier(id, multiplier), "setScaleMultiplier");
       }
       if (divisor !== selectedProcessor.scaleDivisor) {
-        await callWithTimeout("setScaleDivisor", RIP.encodeSetScaleDivisor(id, divisor));
+        await callWithTimeout("setScaleDivisor", RIP.encodeSetScaleDivisor(id, divisor), "setScaleDivisor");
       }
       if (rotation !== selectedProcessor.rotationDegrees) {
-        await callWithTimeout("setRotation", RIP.encodeSetRotation(id, rotation));
+        await callWithTimeout("setRotation", RIP.encodeSetRotation(id, rotation), "setRotation");
       }
       if (xInvert !== selectedProcessor.xInvert) {
-        await callWithTimeout("setXInvert", RIP.encodeSetXInvert(id, xInvert));
+        await callWithTimeout("setXInvert", RIP.encodeSetXInvert(id, xInvert), "setXInvert");
       }
       if (yInvert !== selectedProcessor.yInvert) {
-        await callWithTimeout("setYInvert", RIP.encodeSetYInvert(id, yInvert));
+        await callWithTimeout("setYInvert", RIP.encodeSetYInvert(id, yInvert), "setYInvert");
       }
       if (xySwap !== selectedProcessor.xySwapEnabled) {
-        await callWithTimeout("setXySwapEnabled", RIP.encodeSetXySwapEnabled(id, xySwap));
+        await callWithTimeout("setXySwapEnabled", RIP.encodeSetXySwapEnabled(id, xySwap), "setXySwapEnabled");
       }
       if (xyToScroll !== selectedProcessor.xyToScrollEnabled) {
-        await callWithTimeout("setXyToScrollEnabled", RIP.encodeSetXyToScrollEnabled(id, xyToScroll));
+        await callWithTimeout("setXyToScrollEnabled", RIP.encodeSetXyToScrollEnabled(id, xyToScroll), "setXyToScrollEnabled");
       }
       if (axisSnapMode !== selectedProcessor.axisSnapMode) {
-        await callWithTimeout("setAxisSnapMode", RIP.encodeSetAxisSnapMode(id, axisSnapMode));
+        await callWithTimeout("setAxisSnapMode", RIP.encodeSetAxisSnapMode(id, axisSnapMode), "setAxisSnapMode");
       }
       if (axisSnapThreshold !== selectedProcessor.axisSnapThreshold) {
-        await callWithTimeout("setAxisSnapThreshold", RIP.encodeSetAxisSnapThreshold(id, axisSnapThreshold));
+        await callWithTimeout("setAxisSnapThreshold", RIP.encodeSetAxisSnapThreshold(id, axisSnapThreshold), "setAxisSnapThreshold");
       }
       if (axisSnapTimeout !== selectedProcessor.axisSnapTimeoutMs) {
-        await callWithTimeout("setAxisSnapTimeout", RIP.encodeSetAxisSnapTimeout(id, axisSnapTimeout));
+        await callWithTimeout("setAxisSnapTimeout", RIP.encodeSetAxisSnapTimeout(id, axisSnapTimeout), "setAxisSnapTimeout");
       }
+      if (scrollMask !== selectedProcessor.scrollLayers) {
+        try {
+          await callWithTimeout("setScrollLayers", RIP.encodeSetScrollLayers(id, scrollMask), "setScrollLayers");
+        } catch (error) {
+          toast(ERROR_MESSAGES["trackball.scrollFirmwareRequired"], "error");
+          throw error;
+        }
+      }
+      if (autoMouseEnabled !== selectedProcessor.tempLayerEnabled) await callWithTimeout("setTempLayerEnabled", RIP.encodeSetTempLayerEnabled(id, autoMouseEnabled), "setTempLayerEnabled");
+      if (autoMouseLayer !== selectedProcessor.tempLayerLayer) await callWithTimeout("setTempLayerLayer", RIP.encodeSetTempLayerLayer(id, autoMouseLayer), "setTempLayerLayer");
+      if (autoMouseDeactivationDelayMs !== selectedProcessor.tempLayerDeactivationDelayMs) await callWithTimeout("setTempLayerDeactivationDelay", RIP.encodeSetTempLayerDeactivationDelay(id, autoMouseDeactivationDelayMs), "setTempLayerDeactivationDelay");
+      const readback = await callWithTimeout("getInputProcessor", RIP.encodeGetInputProcessor(id), "getInputProcessor");
+      if (!readback.getInputProcessor) throw new Error("Empty readback");
+      const confirmed = readback.getInputProcessor;
+      if (confirmed.scaleMultiplier !== multiplier || confirmed.scaleDivisor !== divisor || confirmed.rotationDegrees !== rotation || confirmed.xInvert !== xInvert || confirmed.yInvert !== yInvert || confirmed.xySwapEnabled !== xySwap || confirmed.xyToScrollEnabled !== xyToScroll || confirmed.axisSnapMode !== axisSnapMode || confirmed.axisSnapThreshold !== axisSnapThreshold || confirmed.axisSnapTimeoutMs !== axisSnapTimeout || confirmed.scrollLayers !== scrollMask || confirmed.tempLayerEnabled !== autoMouseEnabled || confirmed.tempLayerLayer !== autoMouseLayer || confirmed.tempLayerDeactivationDelayMs !== autoMouseDeactivationDelayMs) throw new Error("Readback did not match draft");
+      setProcessors((previous) => previous.map((processor) => processor.id === confirmed.id ? confirmed : processor));
+      applyProcessorInfo(confirmed);
       formDirty.current = false;
+      return true;
     } catch (e) {
       console.error("Failed to apply trackball config:", e);
       toast(ERROR_MESSAGES["trackball.apply"], "error");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -180,6 +232,12 @@ export function TrackballSettings() {
     axisSnapMode,
     axisSnapThreshold,
     axisSnapTimeout,
+    scrollLayerId,
+    autoMouseEnabled,
+    autoMouseLayerId,
+    autoMouseDeactivationDelayMs,
+    layers,
+    applyProcessorInfo,
     toast,
   ]);
 
@@ -187,7 +245,11 @@ export function TrackballSettings() {
     if (!subsystem || selectedId === null) return;
     setSaving(true);
     try {
-      await subsystem.callRPC(RIP.encodeResetInputProcessor(selectedId));
+      await callWithTimeout("resetInputProcessor", RIP.encodeResetInputProcessor(selectedId), "resetInputProcessor");
+      const readback = await callWithTimeout("getInputProcessor", RIP.encodeGetInputProcessor(selectedId), "getInputProcessor");
+      if (!readback.getInputProcessor) throw new Error("Empty readback");
+      setProcessors((previous) => previous.map((processor) => processor.id === selectedId ? readback.getInputProcessor! : processor));
+      applyProcessorInfo(readback.getInputProcessor);
       formDirty.current = false;
     } catch (e) {
       console.error("Failed to reset trackball config:", e);
@@ -195,7 +257,18 @@ export function TrackballSettings() {
     } finally {
       setSaving(false);
     }
-  }, [subsystem, selectedId, toast]);
+  }, [subsystem, selectedId, callWithTimeout, applyProcessorInfo, toast]);
+
+  useDirtyRegistration("trackball", {
+    dirty,
+    save: handleApply,
+    discard: async () => { if (!selectedProcessor) return true; applyProcessorInfo(selectedProcessor); formDirty.current = false; return true; },
+    snapshot: () => ({ multiplier, divisor, rotation, xInvert, yInvert, xySwap, xyToScroll, axisSnapMode, axisSnapThreshold, axisSnapTimeout, scrollLayerId, autoMouseEnabled, autoMouseLayerId, autoMouseDeactivationDelayMs }),
+    restore: (snapshot) => {
+      const draft = snapshot as { multiplier: number; divisor: number; rotation: number; xInvert: boolean; yInvert: boolean; xySwap: boolean; xyToScroll: boolean; axisSnapMode: RIP.AxisSnapMode; axisSnapThreshold: number; axisSnapTimeout: number; scrollLayerId: number | null; autoMouseEnabled: boolean; autoMouseLayerId: number | null; autoMouseDeactivationDelayMs: number };
+      setMultiplier(draft.multiplier); setDivisor(draft.divisor); setRotation(draft.rotation); setXInvert(draft.xInvert); setYInvert(draft.yInvert); setXySwap(draft.xySwap); setXyToScroll(draft.xyToScroll); setAxisSnapMode(draft.axisSnapMode); setAxisSnapThreshold(draft.axisSnapThreshold); setAxisSnapTimeout(draft.axisSnapTimeout); setScrollLayerId(draft.scrollLayerId); setAutoMouseEnabled(draft.autoMouseEnabled); setAutoMouseLayerId(draft.autoMouseLayerId); setAutoMouseDeactivationDelayMs(draft.autoMouseDeactivationDelayMs);
+    },
+  });
 
   if (!subsystem) {
     return (
@@ -223,19 +296,30 @@ export function TrackballSettings() {
 
       <TrackballPrecisionSettings />
 
-      <section className="rounded-xl border border-orange-200 bg-white p-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-slate-900">Auto Mouse Layer</span>
-          <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs text-orange-600">
-            Layer {AUTO_MOUSE_LAYER_INDEX}
-          </span>
-          <span className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs text-teal-700">
-            Timeout {AUTO_MOUSE_TIMEOUT_MS}ms
-          </span>
-          <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500">
-            Scroll Layer {SCROLL_LAYER_INDEX}
-          </span>
-        </div>
+      <section className="rounded-xl border border-orange-200 bg-white p-3 shadow-sm space-y-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">スクロールするレイヤー</span>
+          <select value={scrollLayerId ?? ""} onChange={(event) => { setScrollLayerId(event.target.value === "" ? null : Number(event.target.value)); setScrollWarning(null); }} className="rounded px-2 py-1 bg-base-100 border border-base-300">
+            <option value="">なし</option>
+            {layers.map((layer) => <option key={layer.id} value={layer.id} disabled={layer.index > 31}>{layer.name}{layer.index > 31 ? " (選択不可)" : ""}</option>)}
+          </select>
+        </label>
+        {scrollWarning && <p role="alert" className="text-sm text-warning">{scrollWarning}</p>}
+        <label className="flex items-center gap-2 text-sm">
+          <input aria-label="Auto Mouseを有効にする" type="checkbox" checked={autoMouseEnabled} onChange={(event) => setAutoMouseEnabled(event.target.checked)} />
+          Auto Mouseを有効にする
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm">Auto Mouseレイヤー</span>
+          <select aria-label="Auto Mouseレイヤー" value={autoMouseLayerId ?? ""} onChange={(event) => setAutoMouseLayerId(event.target.value === "" ? null : Number(event.target.value))} className="rounded px-2 py-1 bg-base-100 border border-base-300">
+            <option value="">なし</option>
+            {layers.filter((layer) => Number.isInteger(layer.id) && layer.id >= 0).map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm">ボール停止後に戻るまで</span>
+          <input aria-label="ボール停止後に戻るまで" type="number" min={100} max={5000} step={50} value={autoMouseDeactivationDelayMs} onChange={(event) => setAutoMouseDeactivationDelayMs(Math.min(5000, Math.max(100, Number(event.target.value) || 100)))} className="rounded px-2 py-1 bg-base-100 border border-base-300" />
+        </label>
       </section>
 
       {/* Processor selector (if multiple) */}

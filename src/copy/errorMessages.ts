@@ -4,6 +4,8 @@ export const ERROR_MESSAGES = {
   "trackball.discover": "トラックボール設定を読み込めませんでした。接続を確認して、もう一度お試しください。",
   "trackball.apply": "トラックボール設定を保存できませんでした。接続を確認して、もう一度お試しください。",
   "trackball.reset": "トラックボール設定を初期化できませんでした。接続を確認して、もう一度お試しください。",
+  "trackball.scrollFirmwareRequired": "スクロールレイヤーを変更するには、キーボードのFirmware更新が必要です。",
+  "trackball.layerUnavailable": "選んだレイヤーが見つかりません。レイヤー一覧を読み直してください。",
   "encoder.discover": "エンコーダーを読み込めませんでした。接続を確認して、もう一度お試しください。",
   "encoder.loadBindings": "エンコーダーの割り当てを読み込めませんでした。接続を確認して、もう一度お試しください。",
   "encoder.setClockwiseBinding": "時計回りの割り当てを保存できませんでした。接続を確認して、もう一度お試しください。",

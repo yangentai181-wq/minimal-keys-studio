@@ -8,6 +8,8 @@ const expectedOperations = [
   "trackball.discover",
   "trackball.apply",
   "trackball.reset",
+  "trackball.scrollFirmwareRequired",
+  "trackball.layerUnavailable",
   "encoder.discover",
   "encoder.loadBindings",
   "encoder.setClockwiseBinding",
@@ -27,14 +29,21 @@ const expectedOperations = [
   "holdTap.reset",
 ] as const;
 
+const explanatoryOperations = new Set([
+  "trackball.scrollFirmwareRequired",
+  "trackball.layerUnavailable",
+]);
+
 describe("ERROR_MESSAGES", () => {
-  it("provides Japanese recovery guidance for all 22 audited operations", () => {
+  it("provides Japanese recovery guidance for all 24 audited operations", () => {
     expect(Object.keys(ERROR_MESSAGES).sort()).toEqual([...expectedOperations].sort());
 
     for (const operation of expectedOperations) {
       const message = ERROR_MESSAGES[operation];
       expect(message).toMatch(/[ぁ-んァ-ヶ一-龠]/);
-      expect(message).toMatch(/もう一度|確認/);
+      if (!explanatoryOperations.has(operation)) {
+        expect(message).toMatch(/もう一度|確認/);
+      }
       expect(message).not.toMatch(/failed|error|RPC/i);
     }
   });

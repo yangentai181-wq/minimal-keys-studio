@@ -24,6 +24,16 @@ vi.mock("./TrackballPrecisionSettings", () => ({
   ),
 }));
 
+vi.mock("../keyboard/useStudioKeymap", () => ({
+  useStudioKeymap: () => ({
+    loading: false,
+    layers: [
+      { id: 40, index: 4, name: "Mouse", bindings: [] },
+      { id: 70, index: 7, name: "Scroll", bindings: [] },
+    ],
+  }),
+}));
+
 describe("TrackballSettings", () => {
   beforeEach(() => {
     mocks.subsystem = {
@@ -62,5 +72,19 @@ describe("TrackballSettings", () => {
     const precision = screen.getByRole("region", { name: "精密モード設定" });
     expect(root.firstElementChild).toBe(precision);
     expect(screen.getByRole("heading", { name: "トラックボール設定は利用できません" })).toBeVisible();
+  });
+
+  it("shows editable scroll and Auto Mouse controls without exposing activation delay", () => {
+    render(<TrackballSettings />);
+
+    expect(screen.getByLabelText("スクロールするレイヤー")).toBeVisible();
+    expect(screen.getByLabelText("スクロールするレイヤー")).toHaveTextContent("なし");
+    expect(screen.getByLabelText("Auto Mouseを有効にする")).toBeVisible();
+    expect(screen.getByLabelText("Auto Mouseレイヤー")).toBeVisible();
+    const delay = screen.getByLabelText("ボール停止後に戻るまで");
+    expect(delay).toHaveAttribute("min", "100");
+    expect(delay).toHaveAttribute("max", "5000");
+    expect(delay).toHaveAttribute("step", "50");
+    expect(screen.queryByText(/起動待ち/)).not.toBeInTheDocument();
   });
 });
