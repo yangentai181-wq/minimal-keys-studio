@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { useOsMode } from "../../OsModeContext";
@@ -35,11 +35,20 @@ export function PickerTabs({
 }: PickerTabsProps) {
   const { osMode } = useOsMode();
   const [activeTab, setActiveTab] = useState<TabId>("actions");
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  function selectTab(tabId: TabId) {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+    setActiveTab(tabId);
+  }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+    <div data-testid="picker-tabs" className="flex min-h-0 flex-1 flex-col gap-1.5">
       {/* Tab bar */}
-      <div className="flex gap-0.5 overflow-x-auto rounded-lg bg-base-200 p-0.5">
+      <div
+        data-testid="picker-tab-bar"
+        className="flex gap-0.5 overflow-x-auto rounded-lg bg-base-200 p-0.5"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -48,7 +57,7 @@ export function PickerTabs({
                 ? "bg-white text-primary font-medium shadow-sm"
                 : "text-base-content/50 hover:text-base-content"
             }`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => selectTab(tab.id)}
           >
             {tab.label}
           </button>
@@ -56,7 +65,11 @@ export function PickerTabs({
       </div>
 
       {/* Tab content */}
-      <div data-testid="picker-tab-content" className="min-h-0 flex-1">
+      <div
+        ref={contentRef}
+        data-testid="picker-tab-content"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+      >
         {activeTab === "actions" && (
           <ActionsTab
             keyPosition={keyPosition}
