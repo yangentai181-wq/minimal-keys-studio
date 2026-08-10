@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Writer } from "protobufjs/minimal.js";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ComboSettings } from "./ComboSettings";
 
@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   subsystem: null as { callRPC: ReturnType<typeof vi.fn> } | null,
   toast: vi.fn(),
   callRpc: vi.fn(),
+  registration: undefined as { dirty: boolean; save: () => Promise<boolean>; discard: () => Promise<boolean>; snapshot?: () => unknown; restore?: (snapshot: unknown) => void } | undefined,
 }));
 
 vi.mock("../rpc/useCustomSubsystem", () => ({ useCustomSubsystem: () => mocks.subsystem }));
@@ -16,6 +17,9 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/core", () => ({
 }));
 vi.mock("../misc/Toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("../rpc/logging", () => ({ call_rpc: mocks.callRpc }));
+vi.mock("../navigation/DirtyStateContext", () => ({
+  useDirtyRegistration: (_id: string, registration: typeof mocks.registration) => { mocks.registration = registration; },
+}));
 vi.mock("../behaviors/BehaviorsContext", () => ({
   useBehaviorList: () => [{ id: 1, displayName: "Key Press", metadata: [] }],
 }));
@@ -61,9 +65,11 @@ async function beginMissionControlDraft() {
 }
 
 describe("ComboSettings save confirmation", () => {
+  afterEach(() => { vi.useRealTimers(); });
   beforeEach(() => {
     mocks.toast.mockReset();
     mocks.callRpc.mockReset();
+    mocks.registration = undefined;
     mocks.callRpc.mockResolvedValue({ keymap: { getKeymap: { layers: [] } } });
     mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(false)) };
   });
@@ -129,6 +135,19 @@ describe("ComboSettings save confirmation", () => {
     expect(screen.getByRole("heading", { name: "新規コンボ" })).toBeInTheDocument();
   });
 
+  it("times out a never-resolving save after 5000ms and clears its timer", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    mocks.subsystem!.callRPC.mockImplementationOnce(() => new Promise<Uint8Array>(() => undefined));
+    vi.useFakeTimers();
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+
+    expect(mocks.toast).toHaveBeenCalledWith("コンボを保存するには、キーボードのFirmware更新が必要です。", "error");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("confirms deletion only when explicit success is followed by an absent readback", async () => {
     mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true)) };
     renderSettings();
@@ -160,6 +179,23 @@ describe("ComboSettings save confirmation", () => {
     expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument();
   });
 
+  it.each([
+    ["empty response", new Uint8Array()],
+    ["success=false", comboResponse("delete", false)],
+    ["error response", errorResponse("rejected")],
+  ])("keeps a listed combo when delete has %s", async (_name, response) => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValue(getAllResponse(true)) };
+    renderSettings();
+    await waitFor(() => expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument());
+    const deleteButton = screen.getAllByRole("button").find((button) => button.textContent === "");
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(response);
+
+    fireEvent.click(deleteButton!);
+
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("コンボの削除に失敗しました", "error"));
+    expect(screen.getByRole("button", { name: "編集" })).toBeInTheDocument();
+  });
+
   it("logs save payload length and stages without logging binding values", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     renderSettings();
@@ -172,5 +208,36 @@ describe("ComboSettings save confirmation", () => {
     const setRequest = info.mock.calls.find(([, detail]) => (detail as { label?: string }).label === "setCombo")?.[1];
     expect(setRequest).not.toHaveProperty("binding");
     info.mockRestore();
+  });
+
+  it("registers a new draft for dirty navigation, restores a deep snapshot, and discards it", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    expect(mocks.registration?.dirty).toBe(true);
+    const snapshot = mocks.registration?.snapshot?.() as { keyPositions: number[]; binding: { behaviorId: number } };
+    snapshot.keyPositions.push(99);
+    snapshot.binding.behaviorId = 99;
+    mocks.registration?.restore?.({ comboId: 7, keyPositions: [18, 13], timeoutMs: 50, binding: { behaviorId: 1, param1: 0x01070052, param2: 0 }, layerMask: 0, slowRelease: false });
+    await waitFor(() => expect(screen.getByText("選択中: 13 + 18")).toBeInTheDocument());
+    expect(await mocks.registration?.discard()).toBe(true);
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "新規コンボ" })).not.toBeInTheDocument());
+  });
+
+  it("normalizes J then F to the exact F/J Mission Control payload", async () => {
+    renderSettings();
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "新規コンボ" }));
+    fireEvent.click(screen.getByTitle("18"));
+    fireEvent.click(screen.getByTitle("13"));
+    fireEvent.click(screen.getByRole("button", { name: "Mission Control" }));
+    mocks.subsystem!.callRPC.mockResolvedValueOnce(new Uint8Array());
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(2));
+    expect([...mocks.subsystem!.callRPC.mock.calls[1][0]]).toEqual([
+      10, 19, 10, 17, 8, 1, 16, 13, 16, 18, 24, 50,
+      34, 7, 8, 1, 16, 210, 128, 156, 8,
+    ]);
   });
 });

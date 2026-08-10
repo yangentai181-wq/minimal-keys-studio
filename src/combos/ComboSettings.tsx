@@ -18,6 +18,7 @@ import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
 import { call_rpc } from "../rpc/logging";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { validateComboDraft } from "./combo-validation";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 
 interface LayerDisplay {
   id: number;
@@ -135,10 +136,13 @@ export function ComboSettings() {
   const [editing, setEditing] = useState<Combos.ComboConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const editingRef = useRef<Combos.ComboConfig | null>(null);
+  const subsystemRef = useRef(subsystem);
+  const operationGenerationRef = useRef(0);
 
   const nextIdRef = useRef(1);
 
   useEffect(() => { editingRef.current = editing; }, [editing]);
+  useEffect(() => { subsystemRef.current = subsystem; operationGenerationRef.current += 1; }, [subsystem]);
 
   const callWithTimeout = useCallback(
     async (label: string, payload: Uint8Array, timeoutMs = 5000) => {
@@ -160,32 +164,31 @@ export function ComboSettings() {
     [subsystem]
   );
 
-  const discoveryVersionRef = useRef(0);
-
   useEffect(() => {
     if (!subsystem) {
       setCombos([]);
+      setLoading(false);
       return;
     }
-    const version = ++discoveryVersionRef.current;
+    const generation = ++operationGenerationRef.current;
 
     async function load() {
       setLoading(true);
       try {
         const resp = await callWithTimeout("getAllCombos", Combos.encodeGetAllCombos(), 15000);
-        if (version !== discoveryVersionRef.current) return;
+        if (generation !== operationGenerationRef.current || subsystemRef.current !== subsystem) return;
         const list = resp.getAllCombos?.combos ?? [];
         setCombos(list);
         if (list.length > 0) {
           nextIdRef.current = Math.max(...list.map((c) => c.comboId)) + 1;
         }
       } catch (e) {
-        if (version === discoveryVersionRef.current) {
+        if (generation === operationGenerationRef.current && subsystemRef.current === subsystem) {
           console.error("[Combos] Failed to load:", e);
           toast("コンボの読み込みに失敗しました", "error");
         }
       } finally {
-        if (version === discoveryVersionRef.current) setLoading(false);
+        if (generation === operationGenerationRef.current && subsystemRef.current === subsystem) setLoading(false);
       }
     }
     load();
@@ -202,48 +205,65 @@ export function ComboSettings() {
     });
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (!editing) return;
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    if (!editing || !subsystem) return false;
     const validation = validateComboDraft(editing, combos);
     if (!validation.ok) {
       toast(validation.message, "error");
-      return;
+      return false;
     }
     const draft = validation.normalized;
+    const activeSubsystem = subsystem;
+    const generation = ++operationGenerationRef.current;
+    const isCurrent = () => generation === operationGenerationRef.current && subsystemRef.current === activeSubsystem;
 
     setSaving(true);
     try {
       const response = await callWithTimeout("setCombo", Combos.encodeSetCombo(draft));
+      if (!isCurrent()) return false;
       if (response.error || response.setCombo?.success !== true) throw new Error("setCombo was not explicitly successful");
       const reloadResp = await callWithTimeout("getAllCombos", Combos.encodeGetAllCombos());
+      if (!isCurrent()) return false;
       const readback = reloadResp.getAllCombos?.combos;
       if (!readback?.some((combo) => comboEquals(combo, draft))) throw new Error("Combo readback mismatch");
-      if (!editingRef.current || !comboEquals(editingRef.current, draft)) return;
       setCombos(readback);
+      if (!editingRef.current || !comboEquals(editingRef.current, draft)) return false;
       setEditing(null);
       toast("コンボを保存しました", "success");
+      return true;
     } catch (e) {
+      if (!isCurrent()) return false;
       console.error("[Combos] Save failed:", { errorType: isTimeout(e) ? "timeout" : "failure" });
       toast(isTimeout(e) ? ERROR_MESSAGES["combo.firmwareRequired"] : e instanceof Error && e.message === "Combo readback mismatch" ? ERROR_MESSAGES["combo.readbackMismatch"] : "コンボの保存に失敗しました", "error");
+      return false;
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
     }
-  }, [editing, combos, callWithTimeout, toast]);
+  }, [editing, combos, subsystem, callWithTimeout, toast]);
 
   const handleDelete = useCallback(async (comboId: number) => {
+    if (!subsystem) return false;
+    const activeSubsystem = subsystem;
+    const generation = ++operationGenerationRef.current;
+    const isCurrent = () => generation === operationGenerationRef.current && subsystemRef.current === activeSubsystem;
     try {
       const resp = await callWithTimeout("deleteCombo", Combos.encodeDeleteCombo(comboId));
+      if (!isCurrent()) return false;
       if (resp.error || resp.deleteCombo?.success !== true) throw new Error("deleteCombo was not explicitly successful");
       const reloadResp = await callWithTimeout("getAllCombos", Combos.encodeGetAllCombos());
+      if (!isCurrent()) return false;
       const readback = reloadResp.getAllCombos?.combos;
       if (!readback || readback.some((combo) => combo.comboId === comboId)) throw new Error("Combo delete readback mismatch");
       setCombos(readback);
       toast("コンボを削除しました", "success");
+      return true;
     } catch (e) {
+      if (!isCurrent()) return false;
       console.error("[Combos] Delete failed:", { errorType: isTimeout(e) ? "timeout" : "failure" });
       toast(isTimeout(e) ? ERROR_MESSAGES["combo.firmwareRequired"] : "コンボの削除に失敗しました", "error");
+      return false;
     }
-  }, [callWithTimeout, toast]);
+  }, [subsystem, callWithTimeout, toast]);
 
   const handleEdit = useCallback((combo: Combos.ComboConfig) => {
     setEditing({ ...combo });
@@ -258,6 +278,18 @@ export function ComboSettings() {
       return { ...prev, keyPositions: positions };
     });
   }, []);
+
+  const dirty = editing !== null && (!combos.some((combo) => combo.comboId === editing.comboId) || !comboEquals(editing, combos.find((combo) => combo.comboId === editing.comboId)!));
+  useDirtyRegistration("combos", {
+    dirty,
+    save: handleSave,
+    discard: async () => { setEditing(null); return true; },
+    snapshot: () => editing ? { ...editing, keyPositions: [...editing.keyPositions], binding: editing.binding ? { ...editing.binding } : null } : null,
+    restore: (snapshot) => {
+      const draft = snapshot as Combos.ComboConfig | null;
+      setEditing(draft ? { ...draft, keyPositions: [...draft.keyPositions], binding: draft.binding ? { ...draft.binding } : null } : null);
+    },
+  });
 
   if (!subsystem) {
     return (
