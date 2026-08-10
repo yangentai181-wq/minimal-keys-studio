@@ -51,6 +51,19 @@ describe("findHoldTapUsages", () => {
     ]);
   });
 
+  it("labels keyboard HID usages with modifier bits in the usage page", () => {
+    const modifierPageLayers = [{
+      id: 4,
+      index: 0,
+      name: "Base",
+      bindings: [{ behaviorId: 10, param1: 0, param2: (0x0107 << 16) + 82 }],
+    }];
+
+    expect(findHoldTapUsages(presentHoldTap("mod_tap"), modifierPageLayers, behaviors)).toEqual([
+      { layerId: 4, layerName: "Base", position: 0, keyLabel: "↑" },
+    ]);
+  });
+
   it("keeps an unmapped hold-tap editable with no inferred usages", () => {
     expect(findHoldTapUsages(presentHoldTap("custom"), layers, behaviors)).toEqual([]);
   });

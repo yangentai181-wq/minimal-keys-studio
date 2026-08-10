@@ -3,6 +3,7 @@ import { Writer } from "protobufjs/minimal.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DirtyRegistration } from "../navigation/DirtyStateContext";
+import * as HT from "../proto/holdtap";
 import { HoldTapSettings } from "./HoldTapSettings";
 
 const mocks = vi.hoisted(() => ({
@@ -76,6 +77,19 @@ function multiListResponse(): Uint8Array {
     .uint32(10).bytes(namedHoldTapInfo(2, "my_custom_hold_tap"))
     .finish();
   return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function twoKnownHoldTapsResponse(): Uint8Array {
+  const list = Writer.create()
+    .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap"))
+    .uint32(10).bytes(namedHoldTapInfo(2, "layer_tap"))
+    .finish();
+  return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function setTappingTermSuccess(): Uint8Array {
+  const result = Writer.create().uint32(8).bool(true).finish();
+  return Writer.create().uint32(26).bytes(result).finish();
 }
 
 function errorResponse(message: string): Uint8Array {
@@ -181,12 +195,53 @@ describe("HoldTapSettings presentation", () => {
     for (const slider of screen.getAllByRole("slider")) expect(slider).toHaveAttribute("step", "10");
   });
 
-  it("reveals unused settings only on request and does not save another instance", async () => {
+  it("keeps an edited fallback draft when late keymap data identifies another instance as used", async () => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(twoKnownHoldTapsResponse()) };
+    mocks.layers = [];
+    mocks.behaviors = [];
+    const view = render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    mocks.layers = [{ id: 4, index: 0, name: "Base", bindings: [{ behaviorId: 20, param1: 0, param2: 0x00070004 }] }];
+    mocks.behaviors = [{ id: 20, displayName: "Layer-Tap", metadata: [] }];
+    view.rerender(<HoldTapSettings />);
+
+    expect(slider).toHaveValue("250");
+    expect(screen.getByText(/Mod-Tap/)).toBeInTheDocument();
+  });
+
+  it("automatically selects an in-use instance when late data arrives before edits", async () => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(twoKnownHoldTapsResponse()) };
+    mocks.layers = [];
+    mocks.behaviors = [];
+    const view = render(<HoldTapSettings />);
+    await screen.findAllByRole("slider");
+
+    mocks.layers = [{ id: 4, index: 0, name: "Base", bindings: [{ behaviorId: 20, param1: 0, param2: 0x00070004 }] }];
+    mocks.behaviors = [{ id: 20, displayName: "Layer-Tap", metadata: [] }];
+    view.rerender(<HoldTapSettings />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Layer-Tap.*1キー/ })).toBeInTheDocument());
+  });
+
+  it("saves only the selected unused instance after an edit", async () => {
+    mocks.subsystem = {
+      callRPC: vi.fn()
+        .mockResolvedValueOnce(multiListResponse())
+        .mockResolvedValueOnce(setTappingTermSuccess())
+        .mockResolvedValueOnce(multiListResponse()),
+    };
     render(<HoldTapSettings />);
     fireEvent.click(await screen.findByRole("button", { name: "未使用の設定を表示" }));
     fireEvent.click(screen.getByRole("button", { name: /My Custom Hold Tap/ }));
     fireEvent.change(screen.getAllByRole("slider")[0], { target: { value: "250" } });
 
-    expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(1);
+    await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+    expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3);
+    expect(Array.from(mocks.subsystem!.callRPC.mock.calls[1][0])).toEqual(
+      Array.from(HT.encodeSetTappingTerm(2, 250)),
+    );
+    expect(screen.getAllByRole("slider")[0]).toHaveValue("200");
   });
 });

@@ -59,6 +59,9 @@ export function HoldTapSettings() {
   const [flavor, setFlavor] = useState<HT.HoldTapFlavor>(0);
   const pendingRestoredDraftRef = useRef<HoldTapDraft | null>(null);
   const automaticallySelectedRef = useRef(false);
+  const markUserEdit = () => {
+    automaticallySelectedRef.current = false;
+  };
 
   const applyDraft = useCallback((draft: HoldTapDraft) => {
     setSelectedId(draft.selectedId);
@@ -367,7 +370,10 @@ export function HoldTapSettings() {
                 max={500}
                 step={10}
                 value={tappingTerm}
-                onChange={(e) => setTappingTerm(parseInt(e.target.value))}
+                onChange={(e) => {
+                  markUserEdit();
+                  setTappingTerm(parseInt(e.target.value));
+                }}
                 className="flex-1 accent-primary"
               />
               <span className="text-xs text-base-content/50 w-10 text-right">遅い</span>
@@ -393,7 +399,10 @@ export function HoldTapSettings() {
                 max={500}
                 step={10}
                 value={quickTap}
-                onChange={(e) => setQuickTap(parseInt(e.target.value))}
+                onChange={(e) => {
+                  markUserEdit();
+                  setQuickTap(parseInt(e.target.value));
+                }}
                 className="flex-1 accent-primary"
               />
               <span className="text-xs text-base-content/50 w-10 text-right">長い</span>
@@ -419,7 +428,10 @@ export function HoldTapSettings() {
                 max={500}
                 step={10}
                 value={requirePriorIdle}
-                onChange={(e) => setRequirePriorIdle(parseInt(e.target.value))}
+                onChange={(e) => {
+                  markUserEdit();
+                  setRequirePriorIdle(parseInt(e.target.value));
+                }}
                 className="flex-1 accent-primary"
               />
               <span className="text-xs text-base-content/50 w-10 text-right">長い</span>
@@ -439,9 +451,10 @@ export function HoldTapSettings() {
           >
             <select
               value={flavor}
-              onChange={(e) =>
-                setFlavor(parseInt(e.target.value) as HT.HoldTapFlavor)
-              }
+              onChange={(e) => {
+                markUserEdit();
+                setFlavor(parseInt(e.target.value) as HT.HoldTapFlavor);
+              }}
               className="w-full rounded-md px-2 py-1.5 bg-base-100 border border-base-300"
             >
               {Object.entries(HT.FLAVOR_LABELS).map(([value, label]) => (

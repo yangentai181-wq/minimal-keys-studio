@@ -54,8 +54,9 @@ export function findHoldTapUsages(
     layer.bindings.flatMap((binding, position) => {
       if (!behaviorIds.has(binding.behaviorId)) return [];
       const [rawPage, id] = hid_usage_page_and_id_from_usage(binding.param2);
-      const keyLabel = rawPage === 7 && id <= 255
-        ? getHidKeyDescription(rawPage, id).roleName
+      const page = rawPage & 0xff;
+      const keyLabel = page === 7 && id <= 255
+        ? getHidKeyDescription(page, id).roleName
         : `位置 ${position}`;
       return [{ layerId: layer.id, layerName: layer.name, position, keyLabel }];
     }),
