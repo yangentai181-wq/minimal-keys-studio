@@ -43,17 +43,20 @@ describe("PickerTabs", () => {
 
   it("タブ切替時に候補contentを先頭へ戻す", () => {
     render(
-      <OsModeProvider>
-        <PickerTabs
-          keyPosition={37}
-          behaviors={fakeBehaviors}
-          layers={[{ id: 0, index: 0, name: "Layer 0" }]}
-          onApplyBinding={() => {}}
-        />
-      </OsModeProvider>
+      <div style={{ display: "flex", flexDirection: "column", height: "8rem" }}>
+        <OsModeProvider>
+          <PickerTabs
+            keyPosition={37}
+            behaviors={fakeBehaviors}
+            layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+            onApplyBinding={() => {}}
+          />
+        </OsModeProvider>
+      </div>
     );
 
     const content = screen.getByTestId("picker-tab-content");
+    expect(content).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
     content.scrollTop = 120;
     fireEvent.click(screen.getByRole("button", { name: "文字・記号" }));
 
