@@ -16,6 +16,8 @@ import { ConnectionContext } from "../rpc/ConnectionContext";
 import { LockStateContext } from "../rpc/LockStateContext";
 import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
 import { call_rpc } from "../rpc/logging";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { validateComboDraft } from "./combo-validation";
 
 interface LayerDisplay {
   id: number;
@@ -100,6 +102,28 @@ function getKeyLabel(position: number, keyLabels: string[]): string {
   return keyLabels[position] ?? `${position}`;
 }
 
+function sortedKeys(keys: number[]): number[] {
+  return [...keys].sort((a, b) => a - b);
+}
+
+function comboEquals(first: Combos.ComboConfig, second: Combos.ComboConfig): boolean {
+  const firstKeys = sortedKeys(first.keyPositions);
+  const secondKeys = sortedKeys(second.keyPositions);
+  return first.comboId === second.comboId
+    && firstKeys.length === secondKeys.length
+    && firstKeys.every((value, index) => value === secondKeys[index])
+    && first.timeoutMs === second.timeoutMs
+    && first.binding?.behaviorId === second.binding?.behaviorId
+    && first.binding?.param1 === second.binding?.param1
+    && first.binding?.param2 === second.binding?.param2
+    && first.layerMask === second.layerMask
+    && first.slowRelease === second.slowRelease;
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("RPC timeout:");
+}
+
 export function ComboSettings() {
   const subsystem = useCustomSubsystem(Combos.SUBSYSTEM_ID);
   const { toast } = useToast();
@@ -110,17 +134,28 @@ export function ComboSettings() {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Combos.ComboConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const editingRef = useRef<Combos.ComboConfig | null>(null);
 
   const nextIdRef = useRef(1);
+
+  useEffect(() => { editingRef.current = editing; }, [editing]);
 
   const callWithTimeout = useCallback(
     async (label: string, payload: Uint8Array, timeoutMs = 5000) => {
       if (!subsystem) throw new Error("No subsystem");
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`RPC timeout: ${label}`)), timeoutMs)
-      );
-      const data = await Promise.race([subsystem.callRPC(payload), timeout]);
-      return Combos.decodeResponse(data);
+      console.info("[Combos] RPC", { label, stage: "request", payloadLength: payload.length });
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const timeout = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`RPC timeout: ${label}`)), timeoutMs);
+        });
+        const data = await Promise.race([subsystem.callRPC(payload), timeout]);
+        const response = Combos.decodeResponse(data);
+        console.info("[Combos] RPC", { label, stage: "response", responseKind: response.error ? "error" : "ok" });
+        return response;
+      } finally {
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
+      }
     },
     [subsystem]
   );
@@ -168,48 +203,45 @@ export function ComboSettings() {
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!editing || editing.keyPositions.length < 2) {
-      toast("2つ以上のキーを選択してください", "error");
+    if (!editing) return;
+    const validation = validateComboDraft(editing, combos);
+    if (!validation.ok) {
+      toast(validation.message, "error");
       return;
     }
-    if (!editing.binding || editing.binding.behaviorId === 0) {
-      toast("割り当てる動作を選択してください", "error");
-      return;
-    }
+    const draft = validation.normalized;
 
     setSaving(true);
     try {
-      const resp = await callWithTimeout("setCombo", Combos.encodeSetCombo(editing));
-      if (resp.error) {
-        toast("コンボの保存に失敗しました", "error");
-        return;
-      }
+      const response = await callWithTimeout("setCombo", Combos.encodeSetCombo(draft));
+      if (response.error || response.setCombo?.success !== true) throw new Error("setCombo was not explicitly successful");
       const reloadResp = await callWithTimeout("getAllCombos", Combos.encodeGetAllCombos());
-      if (reloadResp.getAllCombos?.combos) {
-        setCombos(reloadResp.getAllCombos.combos);
-      }
+      const readback = reloadResp.getAllCombos?.combos;
+      if (!readback?.some((combo) => comboEquals(combo, draft))) throw new Error("Combo readback mismatch");
+      if (!editingRef.current || !comboEquals(editingRef.current, draft)) return;
+      setCombos(readback);
       setEditing(null);
       toast("コンボを保存しました", "success");
     } catch (e) {
-      console.error("[Combos] Save failed:", e);
-      toast("コンボの保存に失敗しました", "error");
+      console.error("[Combos] Save failed:", { errorType: isTimeout(e) ? "timeout" : "failure" });
+      toast(isTimeout(e) ? ERROR_MESSAGES["combo.firmwareRequired"] : e instanceof Error && e.message === "Combo readback mismatch" ? ERROR_MESSAGES["combo.readbackMismatch"] : "コンボの保存に失敗しました", "error");
     } finally {
       setSaving(false);
     }
-  }, [editing, callWithTimeout, toast]);
+  }, [editing, combos, callWithTimeout, toast]);
 
   const handleDelete = useCallback(async (comboId: number) => {
     try {
       const resp = await callWithTimeout("deleteCombo", Combos.encodeDeleteCombo(comboId));
-      if (resp.error) {
-        toast("コンボの削除に失敗しました", "error");
-        return;
-      }
-      setCombos((prev) => prev.filter((c) => c.comboId !== comboId));
+      if (resp.error || resp.deleteCombo?.success !== true) throw new Error("deleteCombo was not explicitly successful");
+      const reloadResp = await callWithTimeout("getAllCombos", Combos.encodeGetAllCombos());
+      const readback = reloadResp.getAllCombos?.combos;
+      if (!readback || readback.some((combo) => combo.comboId === comboId)) throw new Error("Combo delete readback mismatch");
+      setCombos(readback);
       toast("コンボを削除しました", "success");
     } catch (e) {
-      console.error("[Combos] Delete failed:", e);
-      toast("コンボの削除に失敗しました", "error");
+      console.error("[Combos] Delete failed:", { errorType: isTimeout(e) ? "timeout" : "failure" });
+      toast(isTimeout(e) ? ERROR_MESSAGES["combo.firmwareRequired"] : "コンボの削除に失敗しました", "error");
     }
   }, [callWithTimeout, toast]);
 

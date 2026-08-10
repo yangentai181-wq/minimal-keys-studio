@@ -27,15 +27,19 @@ const expectedOperations = [
   "holdTap.discover",
   "holdTap.save",
   "holdTap.reset",
+  "combo.firmwareRequired",
+  "combo.readbackMismatch",
 ] as const;
 
 const explanatoryOperations = new Set([
   "trackball.scrollFirmwareRequired",
   "trackball.layerUnavailable",
+  "combo.firmwareRequired",
+  "combo.readbackMismatch",
 ]);
 
 describe("ERROR_MESSAGES", () => {
-  it("provides Japanese recovery guidance for all 24 audited operations", () => {
+  it("provides Japanese recovery guidance for all 26 audited operations", () => {
     expect(Object.keys(ERROR_MESSAGES).sort()).toEqual([...expectedOperations].sort());
 
     for (const operation of expectedOperations) {

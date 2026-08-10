@@ -23,6 +23,8 @@ export const ERROR_MESSAGES = {
   "holdTap.discover": "長押し設定を読み込めませんでした。接続を確認して、もう一度お試しください。",
   "holdTap.save": "長押し設定を保存できませんでした。接続を確認して、もう一度お試しください。",
   "holdTap.reset": "長押し設定を初期化できませんでした。接続を確認して、もう一度お試しください。",
+  "combo.firmwareRequired": "コンボを保存するには、キーボードのFirmware更新が必要です。",
+  "combo.readbackMismatch": "コンボの保存を確認できませんでした。編集内容は保持されています。",
 } as const;
 
 export const CONNECTION_FAILURE_MESSAGE =
