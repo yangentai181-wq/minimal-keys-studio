@@ -668,4 +668,67 @@ describe("TrackballSettings", () => {
 
     expect(screen.getByRole("option", { name: "Too high (選択不可)" })).toBeDisabled();
   });
+
+  it("keeps Base layer ID 0 selected for Auto Mouse and writes it after another layer", async () => {
+    mocks.layers = [
+      { id: 0, index: 0, name: "Base", bindings: [] },
+      { id: 40, index: 4, name: "Mouse", bindings: [] },
+    ];
+    const processor = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 0, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+    } satisfies RIP.InputProcessorInfo;
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "setTempLayerLayer" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, tempLayerLayer: 40 } })
+      .mockReturnValueOnce({ responseType: "setTempLayerLayer" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: processor });
+    mocks.subsystem!.callRPC.mockResolvedValue(new Uint8Array([1]));
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    const autoMouse = screen.getByLabelText("Auto Mouseレイヤー");
+    expect(autoMouse).toHaveValue("0");
+    expect(autoMouse.querySelector('option[value="0"]')).toHaveTextContent("Base");
+    expect(autoMouse.querySelector('option[value=""]')).not.toBeInTheDocument();
+
+    fireEvent.change(autoMouse, { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    fireEvent.change(autoMouse, { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    expect(autoMouse).toHaveValue("0");
+    expect(mocks.dirtyRegistration?.dirty).toBe(false);
+    expect(mocks.subsystem?.callRPC).toHaveBeenCalledWith(RIP.encodeSetTempLayerLayer(1, 0));
+  });
+
+  it("does not send an Auto Mouse layer setter for an unrelated save with Base ID 0", async () => {
+    mocks.layers = [
+      { id: 0, index: 0, name: "Base", bindings: [] },
+      { id: 40, index: 4, name: "Mouse", bindings: [] },
+    ];
+    const processor = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 0, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+    } satisfies RIP.InputProcessorInfo;
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "setRotation" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, rotationDegrees: 45 } });
+    mocks.subsystem!.callRPC.mockResolvedValue(new Uint8Array([1]));
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "度" }), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    expect(mocks.dirtyRegistration?.dirty).toBe(false);
+    expect(mocks.subsystem?.callRPC.mock.calls.some(([payload]) => (payload as Uint8Array)[0] === 66)).toBe(false);
+  });
 });

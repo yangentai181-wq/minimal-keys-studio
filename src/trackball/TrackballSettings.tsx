@@ -157,7 +157,7 @@ export function TrackballSettings() {
     setScrollTouched(false);
     setScrollWarning(scroll.kind === "multiple" ? "複数レイヤーが設定されています。次に選んだ1つへ置き換わります" : scroll.kind === "unavailable" ? ERROR_MESSAGES["trackball.layerUnavailable"] : null);
     setAutoMouseEnabled(info.tempLayerEnabled);
-    setAutoMouseLayerId(info.tempLayerLayer || null);
+    setAutoMouseLayerId(info.tempLayerLayer);
     setAutoMouseDeactivationDelayMs(info.tempLayerDeactivationDelayMs || 100);
   }, [layers]);
 
@@ -176,7 +176,7 @@ export function TrackballSettings() {
     xInvert !== selectedProcessor.xInvert || yInvert !== selectedProcessor.yInvert || xySwap !== selectedProcessor.xySwapEnabled || xyToScroll !== selectedProcessor.xyToScrollEnabled ||
     axisSnapMode !== selectedProcessor.axisSnapMode || axisSnapThreshold !== selectedProcessor.axisSnapThreshold || axisSnapTimeout !== selectedProcessor.axisSnapTimeoutMs ||
     (scrollTouched && scrollMask !== selectedProcessor.scrollLayers) || autoMouseEnabled !== selectedProcessor.tempLayerEnabled ||
-    autoMouseLayerId !== (selectedProcessor.tempLayerLayer || null) || autoMouseDeactivationDelayMs !== selectedProcessor.tempLayerDeactivationDelayMs
+    autoMouseLayerId !== selectedProcessor.tempLayerLayer || autoMouseDeactivationDelayMs !== selectedProcessor.tempLayerDeactivationDelayMs
   );
   useEffect(() => { formDirty.current = dirty; }, [dirty]);
 
@@ -212,9 +212,9 @@ export function TrackballSettings() {
       const selectedScrollLayer = scrollLayerId === null ? null : layers.find((layer) => layer.id === scrollLayerId);
       const selectedAutoMouseLayer = autoMouseLayerId === null ? null : layers.find((layer) => layer.id === autoMouseLayerId);
       if (scrollTouched && scrollLayerId !== null && !selectedScrollLayer) throw new Error(ERROR_MESSAGES["trackball.layerUnavailable"]);
-      if (autoMouseLayerId !== null && !selectedAutoMouseLayer) throw new Error(ERROR_MESSAGES["trackball.layerUnavailable"]);
+      if (autoMouseLayerId === null || !selectedAutoMouseLayer) throw new Error(ERROR_MESSAGES["trackball.layerUnavailable"]);
       const nextScrollMask = scrollTouched ? (selectedScrollLayer ? encodeScrollLayerMask(selectedScrollLayer) : 0) : scrollMask;
-      const autoMouseLayer = selectedAutoMouseLayer ? encodeAutoMouseLayerId(selectedAutoMouseLayer) : 0;
+      const autoMouseLayer = encodeAutoMouseLayerId(selectedAutoMouseLayer);
       const normalizedDelay = normalizeDeactivationDelay(autoMouseDeactivationDelayMs);
       if (multiplier !== selectedProcessor.scaleMultiplier) {
         await callWithTimeout("setScaleMultiplier", RIP.encodeSetScaleMultiplier(id, multiplier), "setScaleMultiplier");
@@ -387,7 +387,6 @@ export function TrackballSettings() {
         <label className="flex flex-col gap-1">
           <span className="text-sm">Auto Mouseレイヤー</span>
           <select aria-label="Auto Mouseレイヤー" value={autoMouseLayerId ?? ""} onChange={(event) => setAutoMouseLayerId(event.target.value === "" ? null : Number(event.target.value))} className="rounded px-2 py-1 bg-base-100 border border-base-300">
-            <option value="">なし</option>
             {layers.filter((layer) => Number.isInteger(layer.id) && layer.id >= 0).map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
           </select>
         </label>
