@@ -34,6 +34,26 @@ describe("validateComboDraft", () => {
     expect(validateComboDraft(combo({ keyPositions }), [])).toEqual({ ok: false, message });
   });
 
+  it.each([
+    [[Number.NaN, 13]],
+    [[Number.POSITIVE_INFINITY, 13]],
+    [[-1, 13]],
+    [[1.5, 13]],
+    [[0x1_0000_0000, 13]],
+  ])("rejects key positions that cannot be encoded as uint32: %j", (keyPositions) => {
+    expect(validateComboDraft(combo({ keyPositions }), [])).toEqual({
+      ok: false,
+      message: "キー位置は0以上にしてください",
+    });
+  });
+
+  it("accepts uint32 key position boundaries", () => {
+    expect(validateComboDraft(combo({ keyPositions: [0xffffffff, 0] }), [])).toEqual({
+      ok: true,
+      normalized: combo({ keyPositions: [0, 0xffffffff] }),
+    });
+  });
+
   it("requires a behavior", () => {
     expect(validateComboDraft(combo({ binding: null }), [])).toEqual({
       ok: false,
@@ -41,10 +61,24 @@ describe("validateComboDraft", () => {
     });
   });
 
-  it.each([0, 1001])("requires a timeout from 1 through 1000ms", (timeoutMs) => {
+  it.each([0, Number.NaN, 1.5, 0x1_0000_0000])("requires a positive uint32 behavior ID", (behaviorId) => {
+    expect(validateComboDraft(combo({ binding: { behaviorId, param1: 0, param2: 0 } }), [])).toEqual({
+      ok: false,
+      message: "動作を選んでください",
+    });
+  });
+
+  it.each([0, 1001, Number.NaN, 1.5, Number.POSITIVE_INFINITY])("requires a timeout from 1 through 1000ms", (timeoutMs) => {
     expect(validateComboDraft(combo({ timeoutMs }), [])).toEqual({
       ok: false,
       message: "タイムアウトは1〜1000msにしてください",
+    });
+  });
+
+  it.each([1, 1000])("accepts timeout boundary %i", (timeoutMs) => {
+    expect(validateComboDraft(combo({ timeoutMs }), [])).toEqual({
+      ok: true,
+      normalized: combo({ timeoutMs }),
     });
   });
 
@@ -87,5 +121,15 @@ describe("validateComboDraft", () => {
       ok: true,
       normalized: combo({ comboId: 2 }),
     });
+  });
+
+  it("does not mutate an existing combo's key positions while comparing key sets", () => {
+    const existing = combo({ comboId: 2, keyPositions: [18, 13], layerMask: 0b0010 });
+
+    expect(validateComboDraft(combo({ layerMask: 0b0001 }), [existing])).toEqual({
+      ok: true,
+      normalized: combo({ layerMask: 0b0001 }),
+    });
+    expect(existing.keyPositions).toEqual([18, 13]);
   });
 });

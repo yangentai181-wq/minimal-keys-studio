@@ -24,15 +24,15 @@ export function validateComboDraft(
     return { ok: false, message: INVALID_KEYS_MESSAGE };
   }
 
-  if (keyPositions.some((position) => position < 0)) {
+  if (!keyPositions.every(isUint32)) {
     return { ok: false, message: NEGATIVE_POSITION_MESSAGE };
   }
 
-  if (!draft.binding) {
+  if (!draft.binding || !isUint32(draft.binding.behaviorId) || draft.binding.behaviorId === 0) {
     return { ok: false, message: MISSING_BEHAVIOR_MESSAGE };
   }
 
-  if (draft.timeoutMs < 1 || draft.timeoutMs > 1000) {
+  if (!Number.isInteger(draft.timeoutMs) || draft.timeoutMs < 1 || draft.timeoutMs > 1000) {
     return { ok: false, message: INVALID_TIMEOUT_MESSAGE };
   }
 
@@ -58,4 +58,8 @@ function hasSameKeys(sortedKeys: number[], keys: number[]): boolean {
 
 function layerMasksOverlap(first: number, second: number): boolean {
   return first === 0 || second === 0 || (first & second) !== 0;
+}
+
+function isUint32(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
 }
