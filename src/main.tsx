@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { enqueueEvent } from "./telemetry/telemetry-client.ts";
 import "./index.css";
+import "./motion/motion.css";
 
 function trackGlobalError(message: string, stack?: string): void {
   try {
