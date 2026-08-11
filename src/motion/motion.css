@@ -21,27 +21,32 @@
 }
 
 [data-motion-state="enter"] {
-  animation: motion-enter var(--motion-view) ease-out;
+  animation: motion-enter var(--motion-view) cubic-bezier(0, 0, 0.2, 1);
 }
 
 [data-motion-state="confirmed"] {
-  animation: motion-confirmed var(--motion-confirm) ease-out;
+  animation: motion-confirmed var(--motion-confirm) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 [data-motion-state="closing"] {
-  animation: motion-closing var(--motion-dialog-out) ease-in forwards;
+  animation: motion-closing var(--motion-dialog-out) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+button:not(:disabled),
+[data-pressed]:not([data-disabled]) {
+  transition: transform var(--motion-return) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 button:not(.keycap):not(:disabled):active,
 [data-pressed]:not(.keycap):not([data-disabled]) {
   transform: translateY(1px) scale(0.98);
-  transition: transform var(--motion-press) ease-out;
+  transition: transform var(--motion-press) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .keycap:not(:disabled):active,
 .keycap[data-pressed]:not([data-disabled]) {
-  transform: scale(0.95);
-  transition: transform var(--motion-press) ease-out;
+  transform: translateY(1px) scale(0.98);
+  transition: transform var(--motion-press) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

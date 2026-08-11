@@ -17,4 +17,31 @@ describe("motion accessibility", () => {
     const reducedMotion = motionCss.split("@media (prefers-reduced-motion: reduce)")[1];
     expect(reducedMotion).toContain("transform: none");
   });
+
+  it("uses the specified easing and separate press and return timing", () => {
+    expect(motionCss).toContain(
+      "animation: motion-enter var(--motion-view) cubic-bezier(0, 0, 0.2, 1)"
+    );
+    expect(motionCss).toContain(
+      "animation: motion-confirmed var(--motion-confirm) cubic-bezier(0.4, 0, 0.2, 1)"
+    );
+    expect(motionCss).toContain(
+      "animation: motion-closing var(--motion-dialog-out) cubic-bezier(0.4, 0, 0.2, 1) forwards"
+    );
+    expect(motionCss).toContain(
+      "transition: transform var(--motion-return) cubic-bezier(0.4, 0, 0.2, 1)"
+    );
+    expect(motionCss).toContain(
+      "transition: transform var(--motion-press) cubic-bezier(0.4, 0, 0.2, 1)"
+    );
+  });
+
+  it("keeps the required press transform for keycaps", () => {
+    const keycapPressRule = motionCss.slice(
+      motionCss.indexOf(".keycap:not(:disabled):active"),
+      motionCss.indexOf("@media (prefers-reduced-motion: reduce)")
+    );
+
+    expect(keycapPressRule).toContain("transform: translateY(1px) scale(0.98)");
+  });
 });
