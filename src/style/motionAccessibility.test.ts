@@ -36,6 +36,18 @@ describe("motion accessibility", () => {
     );
   });
 
+  it("uses a 4px view entrance and a 160ms sliding tab indicator", () => {
+    expect(motionCss).toContain("from { opacity: 0; transform: translateY(4px); }");
+    expect(motionCss).toContain(".motion-tab-indicator");
+    expect(motionCss).toContain(
+      "transition: left var(--motion-view) cubic-bezier(0, 0, 0.2, 1), width var(--motion-view) cubic-bezier(0, 0, 0.2, 1)"
+    );
+
+    const reducedMotion = motionCss.split("@media (prefers-reduced-motion: reduce)")[1];
+    expect(reducedMotion).toContain(".motion-tab-indicator");
+    expect(reducedMotion).toContain("transition: none");
+  });
+
   it("keeps the required press transform for keycaps", () => {
     const keycapPressRule = motionCss.slice(
       motionCss.indexOf(".keycap:not(:disabled):active"),
