@@ -47,10 +47,19 @@ button:not(.keycap):not(:disabled):active,
   transition: transform var(--motion-press) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.keycap:not(:disabled),
+.keycap[data-pressed]:not([data-disabled]) {
+  transition-property: transform, box-shadow, border-color, background-color;
+  transition-duration: var(--motion-return);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .keycap:not(:disabled):active,
 .keycap[data-pressed]:not([data-disabled]) {
   transform: translateY(1px) scale(0.98);
-  transition: transform var(--motion-press) cubic-bezier(0.4, 0, 0.2, 1);
+  transition-property: transform, box-shadow, border-color, background-color;
+  transition-duration: var(--motion-press);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

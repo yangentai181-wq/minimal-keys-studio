@@ -56,4 +56,20 @@ describe("motion accessibility", () => {
 
     expect(keycapPressRule).toContain("transform: translateY(1px) scale(0.98)");
   });
+
+  it("keeps keycap visual transitions during return and press", () => {
+    const keycapRule = motionCss.slice(
+      motionCss.indexOf(".keycap:not(:disabled),"),
+      motionCss.indexOf(".keycap:not(:disabled):active")
+    );
+    const keycapPressRule = motionCss.slice(
+      motionCss.indexOf(".keycap:not(:disabled):active"),
+      motionCss.indexOf("@media (prefers-reduced-motion: reduce)")
+    );
+
+    expect(keycapRule).toContain("transition-property: transform, box-shadow, border-color, background-color");
+    expect(keycapRule).toContain("transition-duration: var(--motion-return)");
+    expect(keycapPressRule).toContain("transition-property: transform, box-shadow, border-color, background-color");
+    expect(keycapPressRule).toContain("transition-duration: var(--motion-press)");
+  });
 });
