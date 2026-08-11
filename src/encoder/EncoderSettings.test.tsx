@@ -89,10 +89,33 @@ function encodeBinding(binding: BehaviorBinding): Uint8Array {
   return writer.finish();
 }
 
-function sensorsResponse(): Uint8Array {
-  const sensor = Writer.create().uint32(8).uint32(0).uint32(18).string("Encoder").finish();
-  const sensors = Writer.create().uint32(10).bytes(sensor).finish();
-  return Writer.create().uint32(42).bytes(sensors).finish();
+function sensorsResponse(
+  sensorsList: Array<{ index: number; name: string }> = [{ index: 0, name: "Encoder" }],
+): Uint8Array {
+  const sensors = Writer.create();
+  for (const sensor of sensorsList) {
+    const encoded = Writer.create()
+      .uint32(8).uint32(sensor.index)
+      .uint32(18).string(sensor.name)
+      .finish();
+    sensors.uint32(10).bytes(encoded);
+  }
+  return Writer.create().uint32(42).bytes(sensors.finish()).finish();
+}
+
+function layerBindingsListResponse(
+  layers: Array<{ cw: BehaviorBinding; ccw: BehaviorBinding; layerId: number }>,
+): Uint8Array {
+  const bindings = Writer.create();
+  for (const { cw, ccw, layerId } of layers) {
+    const layer = Writer.create()
+      .uint32(8).uint32(layerId)
+      .uint32(18).bytes(encodeBinding(cw))
+      .uint32(26).bytes(encodeBinding(ccw))
+      .finish();
+    bindings.uint32(10).bytes(layer);
+  }
+  return Writer.create().uint32(34).bytes(bindings.finish()).finish();
 }
 
 function layerBindingsResponse(
@@ -100,13 +123,7 @@ function layerBindingsResponse(
   ccw: BehaviorBinding = { behaviorId: 2, param1: 0, param2: 0 },
   layerId = 0,
 ): Uint8Array {
-  const layer = Writer.create()
-    .uint32(8).uint32(layerId)
-    .uint32(18).bytes(encodeBinding(cw))
-    .uint32(26).bytes(encodeBinding(ccw))
-    .finish();
-  const bindings = Writer.create().uint32(10).bytes(layer).finish();
-  return Writer.create().uint32(34).bytes(bindings).finish();
+  return layerBindingsListResponse([{ cw, ccw, layerId }]);
 }
 
 function errorResponse(message: string): Uint8Array {
@@ -267,7 +284,8 @@ describe("EncoderSettings dirty drafts", () => {
     renderSettings();
     fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
 
-    const savePromise = registration().save();
+    let savePromise!: Promise<boolean>;
+    await act(async () => { savePromise = registration().save(); });
     await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(5));
     fireEvent.click(screen.getByRole("button", { name: "binding-11" }));
     await act(async () => {
@@ -278,6 +296,92 @@ describe("EncoderSettings dirty drafts", () => {
     expect(screen.getByRole("button", { name: "binding-21" })).toBeInTheDocument();
     expect(registration().dirty).toBe(true);
     expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the submitted sensor selected until its deferred save readback finishes", async () => {
+    const readback = deferred<Uint8Array>();
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse([
+        { index: 0, name: "Encoder A" },
+        { index: 1, name: "Encoder B" },
+      ]))
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockImplementationOnce(() => readback.promise);
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+
+    let savePromise!: Promise<boolean>;
+    await act(async () => { savePromise = registration().save(); });
+    const otherSensor = await screen.findByRole("button", { name: "Encoder B" });
+    await waitFor(() => expect(otherSensor).toBeDisabled());
+    fireEvent.click(otherSensor);
+
+    expect(screen.getByText("(Encoder A)")).toBeInTheDocument();
+    expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(5);
+    await act(async () => {
+      readback.resolve(layerBindingsResponse({ behaviorId: 11, param1: 0, param2: 0 }));
+      await expect(savePromise).resolves.toBe(true);
+    });
+
+    expect(screen.getByText("(Encoder A)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    expect(otherSensor).toBeEnabled();
+  });
+
+  it("keeps the submitted layer selected until its deferred save readback finishes", async () => {
+    const readback = deferred<Uint8Array>();
+    const initialBindings = layerBindingsListResponse([
+      {
+        cw: { behaviorId: 1, param1: 0, param2: 0 },
+        ccw: { behaviorId: 2, param1: 0, param2: 0 },
+        layerId: 0,
+      },
+      {
+        cw: { behaviorId: 3, param1: 0, param2: 0 },
+        ccw: { behaviorId: 4, param1: 0, param2: 0 },
+        layerId: 1,
+      },
+    ]);
+    const savedBindings = layerBindingsListResponse([
+      {
+        cw: { behaviorId: 11, param1: 0, param2: 0 },
+        ccw: { behaviorId: 2, param1: 0, param2: 0 },
+        layerId: 0,
+      },
+      {
+        cw: { behaviorId: 3, param1: 0, param2: 0 },
+        ccw: { behaviorId: 4, param1: 0, param2: 0 },
+        layerId: 1,
+      },
+    ]);
+    mocks.callRpc.mockResolvedValue({
+      keymap: { getKeymap: { layers: [{ id: 0, name: "Base" }, { id: 1, name: "Fn" }] } },
+    });
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(initialBindings)
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockImplementationOnce(() => readback.promise);
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+
+    let savePromise!: Promise<boolean>;
+    await act(async () => { savePromise = registration().save(); });
+    const otherLayer = await screen.findByRole("button", { name: "Fn" });
+    await waitFor(() => expect(otherLayer).toBeDisabled());
+    fireEvent.click(otherLayer);
+
+    expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    await act(async () => {
+      readback.resolve(savedBindings);
+      await expect(savePromise).resolves.toBe(true);
+    });
+
+    expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    expect(otherLayer).toBeEnabled();
   });
 
   it("keeps the encoder draft dirty when a setter response fails", async () => {

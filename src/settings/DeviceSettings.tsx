@@ -38,6 +38,8 @@ export function DeviceSettings() {
   const editVersionRef = useRef(0);
   const operationVersionRef = useRef(0);
   const draftDirtyRef = useRef(false);
+  const expectedCentralRef = useRef<Pick<SETTINGS.ActivitySettings, "idleMs" | "sleepMs"> | null>(null);
+  const centralGuardActiveRef = useRef(false);
 
   // Listen for settings notifications from all devices
   useCustomNotification(subsystem?.subsystemIndex, (payload) => {
@@ -51,8 +53,14 @@ export function DeviceSettings() {
       });
       // Use central settings (source=0) for form defaults
       if (s.source === 0 && !draftDirtyRef.current) {
-        setIdleSeconds(Math.round(s.idleMs / 1000));
-        setSleepMinutes(Math.round(s.sleepMs / 60000));
+        const expected = expectedCentralRef.current;
+        const matchesExpected = expected === null
+          || (s.idleMs === expected.idleMs && s.sleepMs === expected.sleepMs);
+        if (!centralGuardActiveRef.current || matchesExpected) {
+          expectedCentralRef.current = { idleMs: s.idleMs, sleepMs: s.sleepMs };
+          setIdleSeconds(Math.round(s.idleMs / 1000));
+          setSleepMinutes(Math.round(s.sleepMs / 60000));
+        }
       }
     }
   });
@@ -105,6 +113,11 @@ export function DeviceSettings() {
       const getAllResponse = await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
       requireSettingsAcknowledgement(getAllResponse, "getAllActivitySettings", "Get-all settings");
       if (operationVersion !== operationVersionRef.current || submittedEditVersion !== editVersionRef.current) return;
+      expectedCentralRef.current = {
+        idleMs: submittedIdleSeconds * 1000,
+        sleepMs: submittedSleepMinutes * 60000,
+      };
+      centralGuardActiveRef.current = true;
       draftDirtyRef.current = false;
       feedbackActive.trigger();
       setFeedback("設定を適用しました");
@@ -146,6 +159,11 @@ export function DeviceSettings() {
       const getAllResponse = await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
       requireSettingsAcknowledgement(getAllResponse, "getAllActivitySettings", "Get-all settings");
       if (operationVersion !== operationVersionRef.current || submittedEditVersion !== editVersionRef.current) return;
+      expectedCentralRef.current = {
+        idleMs: submittedIdleSeconds * 1000,
+        sleepMs: submittedSleepMinutes * 60000,
+      };
+      centralGuardActiveRef.current = true;
       draftDirtyRef.current = false;
       setFeedback("全デバイスに同期しました");
     } catch (e) {
@@ -207,6 +225,7 @@ export function DeviceSettings() {
             step={5}
             value={idleSeconds}
             onChange={(e) => {
+              centralGuardActiveRef.current = true;
               draftDirtyRef.current = true;
               editVersionRef.current += 1;
               feedbackActive.clear();
@@ -234,6 +253,7 @@ export function DeviceSettings() {
             step={1}
             value={sleepMinutes}
             onChange={(e) => {
+              centralGuardActiveRef.current = true;
               draftDirtyRef.current = true;
               editVersionRef.current += 1;
               feedbackActive.clear();

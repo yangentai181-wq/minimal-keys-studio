@@ -391,6 +391,7 @@ export function EncoderSettings() {
                   ? "bg-primary text-primary-content"
                   : "bg-base-300"
               }`}
+              isDisabled={saving}
               onPress={() => {
                 setSelectedSensorIndex(s.index);
                 loadBindingsForSensor(s.index);
@@ -424,6 +425,7 @@ export function EncoderSettings() {
                       ? "bg-primary text-primary-content"
                       : "bg-base-300 hover:bg-base-200"
                   }`}
+                  disabled={saving}
                   onClick={() => setSelectedLayer(layer.id)}
                 >
                   {layer.name}

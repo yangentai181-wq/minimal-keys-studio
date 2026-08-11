@@ -125,6 +125,38 @@ describe("DeviceSettings", () => {
     expect(screen.queryByText("設定を適用しました")).not.toBeInTheDocument();
   });
 
+  it("accepts only the saved central value after apply and preserves the next failed draft", async () => {
+    mocks.callRPC
+      .mockResolvedValueOnce(response("set", true))
+      .mockResolvedValueOnce(response("getAll", true));
+    render(<DeviceSettings />);
+    const [idleInput, sleepInput] = screen.getAllByRole("spinbutton");
+    await act(async () => { mocks.notification?.(activityNotification(30, 15, 0)); });
+    fireEvent.change(idleInput, { target: { value: "45" } });
+    fireEvent.change(sleepInput, { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+    expect(await screen.findByRole("button", { name: "適用済み" })).toBeEnabled();
+
+    await act(async () => { mocks.notification?.(activityNotification(30, 15, 0)); });
+    expect(idleInput).toHaveValue(45);
+    expect(sleepInput).toHaveValue(20);
+    expect(screen.getByText("アイドル: 30秒")).toBeInTheDocument();
+
+    await act(async () => { mocks.notification?.(activityNotification(45, 20, 0)); });
+    expect(idleInput).toHaveValue(45);
+    expect(sleepInput).toHaveValue(20);
+    expect(screen.getByText("アイドル: 45秒")).toBeInTheDocument();
+
+    mocks.callRPC.mockResolvedValueOnce(response("set", false));
+    fireEvent.change(idleInput, { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalled());
+    await act(async () => { mocks.notification?.(activityNotification(45, 20, 0)); });
+
+    expect(idleInput).toHaveValue(50);
+    expect(sleepInput).toHaveValue(20);
+  });
+
   it("requires explicit acknowledgements when syncing all devices", async () => {
     mocks.callRPC
       .mockResolvedValueOnce(response("set", true))
