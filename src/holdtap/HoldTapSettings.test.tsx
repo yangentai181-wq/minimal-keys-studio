@@ -249,4 +249,37 @@ describe("HoldTapSettings presentation", () => {
     );
     expect(screen.getAllByRole("slider")[0]).toHaveValue("200");
   });
+
+  it("clears prior applied feedback when the next apply fails", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(listResponse())
+      .mockRejectedValueOnce(new Error("offline")) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+    await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+    expect(screen.getByRole("button", { name: "適用済み" })).toBeEnabled();
+
+    fireEvent.change(slider, { target: { value: "260" } });
+    await act(async () => { await expect(registration().save()).rejects.toThrow("offline"); });
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("does not show applied feedback when the refreshed list payload is missing", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(new Uint8Array()) };
+    render(<HoldTapSettings />);
+    fireEvent.change((await screen.findAllByRole("slider"))[0], { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(); });
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
 });

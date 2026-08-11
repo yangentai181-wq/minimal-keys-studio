@@ -206,6 +206,7 @@ export function TrackballSettings() {
   };
 
   const handleApply = useCallback(async (): Promise<boolean> => {
+    feedback.clear();
     if (!subsystem || selectedId === null || !selectedProcessor) return false;
     const generation = ++requestGeneration.current;
     const id = selectedId;
@@ -274,6 +275,7 @@ export function TrackballSettings() {
       if (draftUnchanged) feedback.trigger();
       return draftUnchanged;
     } catch (e) {
+      feedback.clear();
       if (generation === requestGeneration.current) {
         try {
           const readback = await callWithTimeout("getInputProcessor", RIP.encodeGetInputProcessor(id), "getInputProcessor");
@@ -316,6 +318,7 @@ export function TrackballSettings() {
   ]);
 
   const handleReset = useCallback(async () => {
+    feedback.clear();
     if (!subsystem || selectedId === null || saving) return;
     const generation = ++requestGeneration.current;
     const id = selectedId;
@@ -332,12 +335,13 @@ export function TrackballSettings() {
         formDirty.current = false;
       }
     } catch (e) {
+      feedback.clear();
       console.error("Failed to reset trackball config:", e);
       toast(ERROR_MESSAGES["trackball.reset"], "error");
     } finally {
       setSaving(false);
     }
-  }, [subsystem, selectedId, saving, callWithTimeout, applyProcessorInfo, toast]);
+  }, [subsystem, selectedId, saving, callWithTimeout, applyProcessorInfo, toast, feedback]);
 
   useDirtyRegistration("trackball", {
     dirty,

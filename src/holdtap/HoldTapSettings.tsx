@@ -171,6 +171,7 @@ export function HoldTapSettings() {
   const dirty = !!selected && (tappingTerm !== selected.tappingTermMs || quickTap !== sanitizeMs(selected.quickTapMs) || requirePriorIdle !== sanitizeMs(selected.requirePriorIdleMs) || flavor !== selected.flavor);
 
   const handleApply = useCallback(async () => {
+    feedback.clear();
     if (!subsystem || selectedId === null || !selected) return;
     setSaving(true);
     try {
@@ -208,15 +209,15 @@ export function HoldTapSettings() {
         "listHoldTaps",
         HT.encodeListHoldTaps()
       );
-      if (resp.listHoldTaps?.holdTaps) {
-        setHoldTaps(resp.listHoldTaps.holdTaps);
-        const updated = resp.listHoldTaps.holdTaps.find(
-          (h) => h.id === id
-        );
-        if (updated) applyInfo(updated);
-      }
+      if (!resp.listHoldTaps?.holdTaps) throw new Error("Hold-tap list response was missing");
+      setHoldTaps(resp.listHoldTaps.holdTaps);
+      const updated = resp.listHoldTaps.holdTaps.find(
+        (h) => h.id === id
+      );
+      if (updated) applyInfo(updated);
       feedback.trigger();
     } catch (e) {
+      feedback.clear();
       console.error("[HoldTap] Failed to save:", e);
       toast(ERROR_MESSAGES["holdTap.save"], "error");
       throw e;
@@ -254,6 +255,7 @@ export function HoldTapSettings() {
   });
 
   const handleReset = useCallback(async () => {
+    feedback.clear();
     if (!subsystem || selectedId === null) return;
     setSaving(true);
     try {
@@ -274,12 +276,13 @@ export function HoldTapSettings() {
         if (updated) applyInfo(updated);
       }
     } catch (e) {
+      feedback.clear();
       console.error("[HoldTap] Failed to reset:", e);
       toast(ERROR_MESSAGES["holdTap.reset"], "error");
     } finally {
       setSaving(false);
     }
-  }, [subsystem, selectedId, callWithTimeout, toast]);
+  }, [subsystem, selectedId, callWithTimeout, toast, feedback]);
 
   if (!subsystem) {
     return (

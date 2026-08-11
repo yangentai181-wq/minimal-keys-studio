@@ -28,4 +28,16 @@ describe("DeviceSettings", () => {
     await waitFor(() => expect(mocks.toast).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
   });
+
+  it("clears prior applied feedback when the next apply fails", async () => {
+    mocks.callRPC.mockResolvedValue(undefined);
+    render(<DeviceSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+    expect(await screen.findByRole("button", { name: "適用済み" })).toBeEnabled();
+
+    mocks.callRPC.mockRejectedValueOnce(new Error("offline"));
+    fireEvent.click(screen.getByRole("button", { name: "適用済み" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
 });

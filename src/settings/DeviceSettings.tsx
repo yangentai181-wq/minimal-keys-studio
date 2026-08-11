@@ -70,6 +70,7 @@ export function DeviceSettings() {
     );
 
   const handleApply = useCallback(async () => {
+    feedbackActive.clear();
     if (!subsystem) return;
     setSaving(true);
     setFeedback(null);
@@ -86,6 +87,7 @@ export function DeviceSettings() {
       feedbackActive.trigger();
       setFeedback("設定を適用しました");
     } catch (e) {
+      feedbackActive.clear();
       console.error("Failed to apply settings:", e);
       toast(ERROR_MESSAGES["device.applySettings"], "error");
       setFeedback("設定の適用に失敗しました");
@@ -95,6 +97,7 @@ export function DeviceSettings() {
   }, [subsystem, idleSeconds, sleepMinutes, toast, feedbackActive]);
 
   const handleSync = useCallback(async () => {
+    feedbackActive.clear();
     if (!subsystem) return;
     setSaving(true);
     setFeedback(null);
@@ -112,13 +115,14 @@ export function DeviceSettings() {
       await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
       setFeedback("全デバイスに同期しました");
     } catch (e) {
+      feedbackActive.clear();
       console.error("Failed to sync settings:", e);
       toast(ERROR_MESSAGES["device.syncSettings"], "error");
       setFeedback("同期に失敗しました");
     } finally {
       setSaving(false);
     }
-  }, [subsystem, idleSeconds, sleepMinutes, allSettings, toast]);
+  }, [subsystem, idleSeconds, sleepMinutes, allSettings, toast, feedbackActive]);
 
   if (!subsystem) {
     return (

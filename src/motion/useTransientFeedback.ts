@@ -10,9 +10,15 @@ export function useTransientFeedback(durationMs = 220) {
     timeoutRef.current = setTimeout(() => setActive(false), durationMs);
   }, [durationMs]);
 
+  const clear = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setActive(false);
+  }, []);
+
   useEffect(() => () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
   }, []);
 
-  return { active, trigger };
+  return { active, trigger, clear };
 }

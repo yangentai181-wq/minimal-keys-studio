@@ -233,6 +233,7 @@ export function EncoderSettings() {
   const dirty = !!confirmedBinding && (JSON.stringify(behaviorToRsrBinding(cwBinding)) !== JSON.stringify(confirmedBinding.cwBinding) || JSON.stringify(behaviorToRsrBinding(ccwBinding)) !== JSON.stringify(confirmedBinding.ccwBinding));
 
   const handleSave = useCallback(async () => {
+    feedback.clear();
     if (!subsystem || selectedSensorIndex === null) return;
     setSaving(true);
     let failureMessage: string = ERROR_MESSAGES["encoder.save"];
@@ -283,15 +284,15 @@ export function EncoderSettings() {
         "getAllLayerBindings",
         RSR.encodeGetAllLayerBindings(selectedSensorIndex)
       );
-      if (resp.getAllLayerBindings?.bindings) {
-        const savedLayer = resp.getAllLayerBindings.bindings.find(
-          (b: RSR.LayerBindings) => b.layer === selectedLayer
-        );
-        console.debug(`[Encoder] Verified layer ${selectedLayer} after save:`, JSON.stringify(savedLayer));
-        setLayerBindings(resp.getAllLayerBindings.bindings);
-      }
+      if (!resp.getAllLayerBindings?.bindings) throw new Error("Encoder bindings response was missing");
+      const savedLayer = resp.getAllLayerBindings.bindings.find(
+        (b: RSR.LayerBindings) => b.layer === selectedLayer
+      );
+      console.debug(`[Encoder] Verified layer ${selectedLayer} after save:`, JSON.stringify(savedLayer));
+      setLayerBindings(resp.getAllLayerBindings.bindings);
       feedback.trigger();
     } catch (e) {
+      feedback.clear();
       console.error("[Encoder] Failed to save:", e);
       toast(failureMessage, "error");
       throw e;

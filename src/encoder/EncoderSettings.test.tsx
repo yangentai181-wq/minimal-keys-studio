@@ -186,6 +186,38 @@ describe("EncoderSettings dirty drafts", () => {
     expect(screen.getByRole("button", { name: "保存済み" })).toBeEnabled();
   });
 
+  it("clears prior saved feedback when the next save fails", async () => {
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockResolvedValueOnce(layerBindingsResponse({ behaviorId: 11, param1: 0, param2: 0 }))
+      .mockRejectedValueOnce(new Error("offline"));
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+    await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+    expect(screen.getByRole("button", { name: "保存済み" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "binding-11" }));
+    await act(async () => { await expect(registration().save()).rejects.toThrow("offline"); });
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("does not show saved feedback when the refreshed bindings payload is missing", async () => {
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockResolvedValueOnce(new Uint8Array());
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(); });
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
   it("keeps the encoder draft dirty when a setter response fails", async () => {
     mocks.subsystem!.callRPC
       .mockResolvedValueOnce(errorResponse("device rejected the binding"))

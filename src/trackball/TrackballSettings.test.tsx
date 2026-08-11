@@ -87,6 +87,32 @@ describe("TrackballSettings", () => {
     ]);
   });
 
+  it("clears prior applied feedback when the next apply fails", async () => {
+    const processor: RIP.InputProcessorInfo = {
+      id: 1, name: "Trackball", scaleMultiplier: 1, scaleDivisor: 1, rotationDegrees: 0,
+      tempLayerEnabled: false, tempLayerLayer: 40, tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 700,
+      activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0, axisSnapTimeoutMs: 0,
+      xyToScrollEnabled: false, xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 16,
+    };
+    vi.spyOn(RIP, "decodeNotification").mockReturnValue({ inputProcessorChanged: processor });
+    vi.spyOn(RIP, "decodeResponse")
+      .mockReturnValueOnce({ responseType: "setRotation" })
+      .mockReturnValueOnce({ responseType: "getInputProcessor", getInputProcessor: { ...processor, rotationDegrees: 45 } });
+    let calls = 0;
+    mocks.subsystem!.callRPC.mockImplementation(() => ++calls === 4 ? Promise.reject(new Error("offline")) : Promise.resolve(new Uint8Array([1])));
+    render(<TrackballSettings />);
+    act(() => mocks.notification?.(new Uint8Array()));
+    const rotation = screen.getByRole("spinbutton", { name: "度" });
+    fireEvent.change(rotation, { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用" }));
+    expect(await screen.findByRole("button", { name: "適用済み" })).toBeEnabled();
+
+    fireEvent.change(rotation, { target: { value: "90" } });
+    fireEvent.click(screen.getByRole("button", { name: "適用済み" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
   it("snapshots and restores every Trackball draft field including the selected processor", () => {
     render(<TrackballSettings />);
 
