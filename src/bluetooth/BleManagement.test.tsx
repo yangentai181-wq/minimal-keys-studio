@@ -2,13 +2,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BleManagement } from "./BleManagement";
 
-const mocks = vi.hoisted(() => ({
-  callRPC: vi.fn(),
-  toast: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const callRPC = vi.fn();
+  return {
+    callRPC,
+    subsystem: { subsystemIndex: 1, callRPC },
+    toast: vi.fn(),
+  };
+});
 
 vi.mock("../rpc/useCustomSubsystem", () => ({
-  useCustomSubsystem: () => ({ subsystemIndex: 1, callRPC: mocks.callRPC }),
+  useCustomSubsystem: () => mocks.subsystem,
 }));
 
 vi.mock("../misc/Toast", () => ({
