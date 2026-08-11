@@ -35,4 +35,32 @@ describe("AppHeader save feedback", () => {
     await act(async () => {});
     expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
   });
+
+  it("clears saved feedback when the next save resolves false", async () => {
+    const onSave = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    render(<OsModeProvider><AppHeader onSave={onSave} /></OsModeProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByRole("button", { name: "保存済み" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存済み" }));
+    await act(async () => {});
+
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("ignores an older successful save after a newer attempt has failed", async () => {
+    let resolveOld!: (value: boolean) => void;
+    let resolveNew!: (value: boolean) => void;
+    const oldSave = new Promise<boolean>((resolve) => { resolveOld = resolve; });
+    const newSave = new Promise<boolean>((resolve) => { resolveNew = resolve; });
+    const onSave = vi.fn().mockReturnValueOnce(oldSave).mockReturnValueOnce(newSave);
+    render(<OsModeProvider><AppHeader onSave={onSave} /></OsModeProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => { resolveNew(false); });
+    await act(async () => { resolveOld(true); });
+
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
 });

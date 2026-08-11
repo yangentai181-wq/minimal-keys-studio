@@ -31,6 +31,27 @@ type EncoderDraft = {
   ccwBinding: BehaviorBinding;
 };
 
+function sameBehaviorBinding(a: BehaviorBinding, b: BehaviorBinding): boolean {
+  return a.behaviorId === b.behaviorId
+    && (a.param1 ?? 0) === (b.param1 ?? 0)
+    && (a.param2 ?? 0) === (b.param2 ?? 0);
+}
+
+function sameRsrBinding(a: RSR.Binding | null, b: RSR.Binding): boolean {
+  return !!a
+    && a.behaviorId === b.behaviorId
+    && a.param1 === b.param1
+    && a.param2 === b.param2
+    && a.tapMs === b.tapMs;
+}
+
+function sameEncoderDraft(a: EncoderDraft, b: EncoderDraft): boolean {
+  return a.selectedSensorIndex === b.selectedSensorIndex
+    && a.selectedLayer === b.selectedLayer
+    && sameBehaviorBinding(a.cwBinding, b.cwBinding)
+    && sameBehaviorBinding(a.ccwBinding, b.ccwBinding);
+}
+
 function useLayers(): LayerDisplay[] {
   const connection = useContext(ConnectionContext);
   const lockState = useContext(LockStateContext);
@@ -95,6 +116,9 @@ export function EncoderSettings() {
   const [ccwBinding, setCcwBinding] = useState<BehaviorBinding>({
     behaviorId: 0, param1: 0, param2: 0,
   });
+  const draftRef = useRef<EncoderDraft>({ selectedSensorIndex, selectedLayer, cwBinding, ccwBinding });
+  draftRef.current = { selectedSensorIndex, selectedLayer, cwBinding, ccwBinding };
+  const saveVersionRef = useRef(0);
   const pendingRestoredDraftRef = useRef<EncoderDraft | null>(null);
   const skipBaselineApplyRef = useRef(false);
 
@@ -235,15 +259,22 @@ export function EncoderSettings() {
   const handleSave = useCallback(async () => {
     feedback.clear();
     if (!subsystem || selectedSensorIndex === null) return;
+    const version = ++saveVersionRef.current;
+    const submitted: EncoderDraft = {
+      selectedSensorIndex,
+      selectedLayer,
+      cwBinding: { ...cwBinding },
+      ccwBinding: { ...ccwBinding },
+    };
     setSaving(true);
     let failureMessage: string = ERROR_MESSAGES["encoder.save"];
     try {
-      const cwRsr = behaviorToRsrBinding(cwBinding);
-      const ccwRsr = behaviorToRsrBinding(ccwBinding);
+      const cwRsr = behaviorToRsrBinding(submitted.cwBinding);
+      const ccwRsr = behaviorToRsrBinding(submitted.ccwBinding);
 
       const cwBehavior = behaviors.find((b) => b.id === cwRsr.behaviorId);
       const ccwBehavior = behaviors.find((b) => b.id === ccwRsr.behaviorId);
-      console.debug(`[Encoder] Saving sensor=${selectedSensorIndex} layer=${selectedLayer}`);
+      console.debug(`[Encoder] Saving sensor=${submitted.selectedSensorIndex} layer=${submitted.selectedLayer}`);
       console.debug(`[Encoder] CW: behaviorId=${cwRsr.behaviorId} (${cwBehavior?.displayName ?? 'unknown'}) param1=${cwRsr.param1} param2=${cwRsr.param2}`);
       console.debug(`[Encoder] CCW: behaviorId=${ccwRsr.behaviorId} (${ccwBehavior?.displayName ?? 'unknown'}) param1=${ccwRsr.param1} param2=${ccwRsr.param2}`);
 
@@ -251,7 +282,7 @@ export function EncoderSettings() {
       try {
         cwResp = await callWithTimeout(
           "setLayerCwBinding",
-          RSR.encodeSetLayerCwBinding(selectedSensorIndex, selectedLayer, cwRsr)
+          RSR.encodeSetLayerCwBinding(submitted.selectedSensorIndex!, submitted.selectedLayer, cwRsr)
         );
       } catch (error) {
         failureMessage = ERROR_MESSAGES["encoder.setClockwiseBinding"];
@@ -267,7 +298,7 @@ export function EncoderSettings() {
       try {
         ccwResp = await callWithTimeout(
           "setLayerCcwBinding",
-          RSR.encodeSetLayerCcwBinding(selectedSensorIndex, selectedLayer, ccwRsr)
+          RSR.encodeSetLayerCcwBinding(submitted.selectedSensorIndex!, submitted.selectedLayer, ccwRsr)
         );
       } catch (error) {
         failureMessage = ERROR_MESSAGES["encoder.setCounterClockwiseBinding"];
@@ -282,22 +313,31 @@ export function EncoderSettings() {
       // Reload bindings to confirm saved values
       const resp = await callWithTimeout(
         "getAllLayerBindings",
-        RSR.encodeGetAllLayerBindings(selectedSensorIndex)
+        RSR.encodeGetAllLayerBindings(submitted.selectedSensorIndex!)
       );
       if (!resp.getAllLayerBindings?.bindings) throw new Error("Encoder bindings response was missing");
       const savedLayer = resp.getAllLayerBindings.bindings.find(
-        (b: RSR.LayerBindings) => b.layer === selectedLayer
+        (b: RSR.LayerBindings) => b.layer === submitted.selectedLayer
       );
-      console.debug(`[Encoder] Verified layer ${selectedLayer} after save:`, JSON.stringify(savedLayer));
+      if (!savedLayer) throw new Error("Encoder selected layer was missing from readback");
+      if (!sameRsrBinding(savedLayer.cwBinding, cwRsr) || !sameRsrBinding(savedLayer.ccwBinding, ccwRsr)) {
+        throw new Error("Encoder readback did not match the submitted bindings");
+      }
+      console.debug(`[Encoder] Verified layer ${submitted.selectedLayer} after save:`, JSON.stringify(savedLayer));
+      if (version !== saveVersionRef.current) return;
+      const draftUnchanged = sameEncoderDraft(draftRef.current, submitted);
+      if (!draftUnchanged) skipBaselineApplyRef.current = true;
       setLayerBindings(resp.getAllLayerBindings.bindings);
-      feedback.trigger();
+      if (draftUnchanged) feedback.trigger();
     } catch (e) {
-      feedback.clear();
-      console.error("[Encoder] Failed to save:", e);
-      toast(failureMessage, "error");
+      if (version === saveVersionRef.current) {
+        feedback.clear();
+        console.error("[Encoder] Failed to save:", e);
+        toast(failureMessage, "error");
+      }
       throw e;
     } finally {
-      setSaving(false);
+      if (version === saveVersionRef.current) setSaving(false);
     }
   }, [subsystem, selectedSensorIndex, selectedLayer, cwBinding, ccwBinding, callWithTimeout, behaviors, toast, feedback]);
 

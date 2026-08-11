@@ -95,7 +95,13 @@ function EnabledPrecisionControls({ confirmed, draftPosition, updateDraft, dirty
 function SaveButton({ save, disabled, saving }: { save: () => Promise<boolean>; disabled: boolean; saving: boolean }) {
   const feedback = useTransientFeedback(800);
   const handleSave = async () => {
-    if (await save()) feedback.trigger();
+    feedback.clear();
+    try {
+      if (await save()) feedback.trigger();
+      else feedback.clear();
+    } catch {
+      feedback.clear();
+    }
   };
   return <div className="flex justify-end">
     <Button onPress={() => void handleSave()} isDisabled={disabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">

@@ -98,9 +98,10 @@ function sensorsResponse(): Uint8Array {
 function layerBindingsResponse(
   cw: BehaviorBinding = { behaviorId: 1, param1: 0, param2: 0 },
   ccw: BehaviorBinding = { behaviorId: 2, param1: 0, param2: 0 },
+  layerId = 0,
 ): Uint8Array {
   const layer = Writer.create()
-    .uint32(8).uint32(0)
+    .uint32(8).uint32(layerId)
     .uint32(18).bytes(encodeBinding(cw))
     .uint32(26).bytes(encodeBinding(ccw))
     .finish();
@@ -215,6 +216,67 @@ describe("EncoderSettings dirty drafts", () => {
     fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
 
     await act(async () => { await expect(registration().save()).rejects.toThrow(); });
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("rejects mismatched encoder readback and preserves the draft", async () => {
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockResolvedValueOnce(layerBindingsResponse());
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(/readback/i); });
+
+    expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("rejects encoder readback missing the selected layer and preserves the draft", async () => {
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockResolvedValueOnce(layerBindingsResponse(
+        { behaviorId: 11, param1: 0, param2: 0 },
+        { behaviorId: 2, param1: 0, param2: 0 },
+        1,
+      ));
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(/selected layer/i); });
+
+    expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    expect(registration().dirty).toBe(true);
+  });
+
+  it("keeps encoder edits made after submission when matching readback arrives", async () => {
+    const readback = deferred<Uint8Array>();
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockImplementationOnce(() => readback.promise);
+    renderSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+
+    const savePromise = registration().save();
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(5));
+    fireEvent.click(screen.getByRole("button", { name: "binding-11" }));
+    await act(async () => {
+      readback.resolve(layerBindingsResponse({ behaviorId: 11, param1: 0, param2: 0 }));
+      await expect(savePromise).resolves.toBe(true);
+    });
+
+    expect(screen.getByRole("button", { name: "binding-21" })).toBeInTheDocument();
+    expect(registration().dirty).toBe(true);
     expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
   });
 

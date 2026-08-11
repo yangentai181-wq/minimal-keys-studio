@@ -77,6 +77,40 @@ describe("TrackballPrecisionSettings", () => {
     await act(async () => {});
     expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
   });
+
+  it("clears saved feedback when the next save resolves false", async () => {
+    const saveAttempt = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save: saveAttempt, reload,
+    });
+    render(<TrackballPrecisionSettings />);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByRole("button", { name: "保存済み" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存済み" }));
+    await act(async () => {});
+
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("clears saved feedback when the next save rejects", async () => {
+    const saveAttempt = vi.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error("offline"));
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save: saveAttempt, reload,
+    });
+    render(<TrackballPrecisionSettings />);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByRole("button", { name: "保存済み" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存済み" }));
+    await act(async () => {});
+
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
   it("shows the confirmed default CPI values with constrained controls", () => {
     render(<TrackballPrecisionSettings />);
 

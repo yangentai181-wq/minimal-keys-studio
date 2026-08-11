@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const motionCss = readFileSync(resolve(import.meta.dirname, "../motion/motion.css"), "utf8");
 
 describe("motion accessibility", () => {
-  it("defines the shared durations and removes transforms for reduced motion", () => {
+  it("defines the shared durations and scopes reduced-motion transform suppression to motion targets", () => {
     expect(motionCss).toContain("--motion-press: 90ms");
     expect(motionCss).toContain("--motion-return: 120ms");
     expect(motionCss).toContain("--motion-view: 160ms");
@@ -15,7 +15,15 @@ describe("motion accessibility", () => {
     expect(motionCss).toContain("@media (prefers-reduced-motion: reduce)");
 
     const reducedMotion = motionCss.split("@media (prefers-reduced-motion: reduce)")[1];
-    expect(reducedMotion).toContain("transform: none");
+    expect(reducedMotion).not.toMatch(
+      /\*,\s*\*::before,\s*\*::after\s*\{[^}]*transform:\s*none/s
+    );
+    expect(reducedMotion).toContain('[data-motion-state="enter"]');
+    expect(reducedMotion).toContain('[data-motion-state="confirmed"]');
+    expect(reducedMotion).toContain('[data-motion-state="closing"]');
+    expect(reducedMotion).toContain("button:not(.keycap):not(:disabled):active");
+    expect(reducedMotion).toContain(".keycap:not(:disabled):active");
+    expect(reducedMotion).toContain("transform: none !important");
   });
 
   it("uses the specified easing and separate press and return timing", () => {

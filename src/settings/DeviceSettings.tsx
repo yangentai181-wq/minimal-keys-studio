@@ -12,6 +12,16 @@ import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
 import { useTransientFeedback } from "../motion/useTransientFeedback";
 
+function requireSettingsAcknowledgement(
+  data: Uint8Array,
+  field: "setActivitySettings" | "getAllActivitySettings",
+  label: string,
+): void {
+  const response = SETTINGS.decodeResponse(data);
+  if (response.error) throw new Error(response.error);
+  if (response[field] !== true) throw new Error(`${label} acknowledgement was missing or false`);
+}
+
 export function DeviceSettings() {
   const { toast } = useToast();
   const { isOptedIn, setOptedIn } = useTelemetry();
@@ -25,6 +35,9 @@ export function DeviceSettings() {
   const feedbackActive = useTransientFeedback(800);
   const [feedback, setFeedback] = useState<string | null>(null);
   const loadedRef = useRef(false);
+  const editVersionRef = useRef(0);
+  const operationVersionRef = useRef(0);
+  const draftDirtyRef = useRef(false);
 
   // Listen for settings notifications from all devices
   useCustomNotification(subsystem?.subsystemIndex, (payload) => {
@@ -37,7 +50,7 @@ export function DeviceSettings() {
         return next;
       });
       // Use central settings (source=0) for form defaults
-      if (s.source === 0) {
+      if (s.source === 0 && !draftDirtyRef.current) {
         setIdleSeconds(Math.round(s.idleMs / 1000));
         setSleepMinutes(Math.round(s.sleepMs / 60000));
       }
@@ -50,6 +63,7 @@ export function DeviceSettings() {
     loadedRef.current = true;
     subsystem
       .callRPC(SETTINGS.encodeGetAllActivitySettings())
+      .then((data) => requireSettingsAcknowledgement(data, "getAllActivitySettings", "Get-all settings"))
       .catch((e: unknown) => {
         console.error("Failed to request all activity settings:", e);
         toast(ERROR_MESSAGES["device.loadSettings"], "error");
@@ -72,55 +86,79 @@ export function DeviceSettings() {
   const handleApply = useCallback(async () => {
     feedbackActive.clear();
     if (!subsystem) return;
+    const operationVersion = ++operationVersionRef.current;
+    const submittedEditVersion = editVersionRef.current;
+    const submittedIdleSeconds = idleSeconds;
+    const submittedSleepMinutes = sleepMinutes;
     setSaving(true);
     setFeedback(null);
     try {
-      await subsystem.callRPC(
+      const setResponse = await subsystem.callRPC(
         SETTINGS.encodeSetActivitySettings({
-          idleMs: idleSeconds * 1000,
-          sleepMs: sleepMinutes * 60000,
+          idleMs: submittedIdleSeconds * 1000,
+          sleepMs: submittedSleepMinutes * 60000,
           source: 0,
         })
       );
+      requireSettingsAcknowledgement(setResponse, "setActivitySettings", "Set settings");
       // Reload all settings
-      await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
+      const getAllResponse = await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
+      requireSettingsAcknowledgement(getAllResponse, "getAllActivitySettings", "Get-all settings");
+      if (operationVersion !== operationVersionRef.current || submittedEditVersion !== editVersionRef.current) return;
+      draftDirtyRef.current = false;
       feedbackActive.trigger();
       setFeedback("設定を適用しました");
     } catch (e) {
-      feedbackActive.clear();
-      console.error("Failed to apply settings:", e);
-      toast(ERROR_MESSAGES["device.applySettings"], "error");
-      setFeedback("設定の適用に失敗しました");
+      if (operationVersion === operationVersionRef.current) {
+        feedbackActive.clear();
+        console.error("Failed to apply settings:", e);
+        toast(ERROR_MESSAGES["device.applySettings"], "error");
+        if (submittedEditVersion === editVersionRef.current) {
+          setFeedback("設定の適用に失敗しました");
+        }
+      }
     } finally {
-      setSaving(false);
+      if (operationVersion === operationVersionRef.current) setSaving(false);
     }
   }, [subsystem, idleSeconds, sleepMinutes, toast, feedbackActive]);
 
   const handleSync = useCallback(async () => {
     feedbackActive.clear();
     if (!subsystem) return;
+    const operationVersion = ++operationVersionRef.current;
+    const submittedEditVersion = editVersionRef.current;
+    const submittedIdleSeconds = idleSeconds;
+    const submittedSleepMinutes = sleepMinutes;
     setSaving(true);
     setFeedback(null);
     try {
       // Apply current settings to all devices
       for (const s of allSettings) {
-        await subsystem.callRPC(
+        const setResponse = await subsystem.callRPC(
           SETTINGS.encodeSetActivitySettings({
-            idleMs: idleSeconds * 1000,
-            sleepMs: sleepMinutes * 60000,
+            idleMs: submittedIdleSeconds * 1000,
+            sleepMs: submittedSleepMinutes * 60000,
             source: s.source,
           })
         );
+        requireSettingsAcknowledgement(setResponse, "setActivitySettings", "Set settings");
       }
-      await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
+      const getAllResponse = await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
+      requireSettingsAcknowledgement(getAllResponse, "getAllActivitySettings", "Get-all settings");
+      if (operationVersion !== operationVersionRef.current || submittedEditVersion !== editVersionRef.current) return;
+      draftDirtyRef.current = false;
       setFeedback("全デバイスに同期しました");
     } catch (e) {
-      feedbackActive.clear();
-      console.error("Failed to sync settings:", e);
-      toast(ERROR_MESSAGES["device.syncSettings"], "error");
-      setFeedback("同期に失敗しました");
+      if (operationVersion === operationVersionRef.current) {
+        feedbackActive.clear();
+        console.error("Failed to sync settings:", e);
+        toast(ERROR_MESSAGES["device.syncSettings"], "error");
+        if (submittedEditVersion === editVersionRef.current) {
+          setFeedback("同期に失敗しました");
+        }
+      }
     } finally {
-      setSaving(false);
+      if (operationVersion === operationVersionRef.current) setSaving(false);
     }
   }, [subsystem, idleSeconds, sleepMinutes, allSettings, toast, feedbackActive]);
 
@@ -168,7 +206,13 @@ export function DeviceSettings() {
             min={0}
             step={5}
             value={idleSeconds}
-            onChange={(e) => setIdleSeconds(parseInt(e.target.value) || 0)}
+            onChange={(e) => {
+              draftDirtyRef.current = true;
+              editVersionRef.current += 1;
+              feedbackActive.clear();
+              setFeedback(null);
+              setIdleSeconds(parseInt(e.target.value) || 0);
+            }}
             className="rounded px-2 py-1 bg-base-100 border border-base-300 w-24"
           />
           <span className="text-sm text-base-content/60">秒</span>
@@ -189,7 +233,13 @@ export function DeviceSettings() {
             min={0}
             step={1}
             value={sleepMinutes}
-            onChange={(e) => setSleepMinutes(parseInt(e.target.value) || 0)}
+            onChange={(e) => {
+              draftDirtyRef.current = true;
+              editVersionRef.current += 1;
+              feedbackActive.clear();
+              setFeedback(null);
+              setSleepMinutes(parseInt(e.target.value) || 0);
+            }}
             className="rounded px-2 py-1 bg-base-100 border border-base-300 w-24"
           />
           <span className="text-sm text-base-content/60">分</span>

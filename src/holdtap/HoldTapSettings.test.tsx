@@ -71,12 +71,16 @@ function namedHoldTapInfo(id: number, name: string, tappingTermMs = 200): Uint8A
     .finish();
 }
 
-function multiListResponse(): Uint8Array {
+function multiListResponse(secondTappingTermMs = 200): Uint8Array {
   const list = Writer.create()
     .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap"))
-    .uint32(10).bytes(namedHoldTapInfo(2, "my_custom_hold_tap"))
+    .uint32(10).bytes(namedHoldTapInfo(2, "my_custom_hold_tap", secondTappingTermMs))
     .finish();
   return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function emptyListResponse(): Uint8Array {
+  return Writer.create().uint32(18).bytes(new Uint8Array()).finish();
 }
 
 function twoKnownHoldTapsResponse(): Uint8Array {
@@ -234,7 +238,7 @@ describe("HoldTapSettings presentation", () => {
       callRPC: vi.fn()
         .mockResolvedValueOnce(multiListResponse())
         .mockResolvedValueOnce(setTappingTermSuccess())
-        .mockResolvedValueOnce(multiListResponse()),
+        .mockResolvedValueOnce(multiListResponse(250)),
     };
     render(<HoldTapSettings />);
     fireEvent.click(await screen.findByRole("button", { name: "未使用の設定を表示" }));
@@ -247,7 +251,67 @@ describe("HoldTapSettings presentation", () => {
     expect(Array.from(mocks.subsystem!.callRPC.mock.calls[1][0])).toEqual(
       Array.from(HT.encodeSetTappingTerm(2, 250)),
     );
-    expect(screen.getAllByRole("slider")[0]).toHaveValue("200");
+    expect(screen.getAllByRole("slider")[0]).toHaveValue("250");
+  });
+
+  it("rejects a mismatched hold-tap readback and preserves the draft", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(listResponse(240)) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(/readback/i); });
+
+    expect(slider).toHaveValue("250");
+    expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("rejects a hold-tap readback missing the selected ID and preserves the draft", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(emptyListResponse()) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(/selected/i); });
+
+    expect(slider).toHaveValue("250");
+    expect(registration().dirty).toBe(true);
+  });
+
+  it("keeps edits made after submission when the matching readback arrives", async () => {
+    const readback = deferred<Uint8Array>();
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockImplementationOnce(() => readback.promise) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    const savePromise = registration().save();
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3));
+    fireEvent.change(slider, { target: { value: "260" } });
+    await act(async () => {
+      readback.resolve(listResponse(250));
+      await expect(savePromise).resolves.toBe(true);
+    });
+
+    expect(slider).toHaveValue("260");
+    expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
   });
 
   it("clears prior applied feedback when the next apply fails", async () => {
@@ -256,7 +320,7 @@ describe("HoldTapSettings presentation", () => {
     mocks.subsystem = { callRPC: vi.fn()
       .mockResolvedValueOnce(listResponse())
       .mockResolvedValueOnce(setTappingTermSuccess())
-      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(listResponse(250))
       .mockRejectedValueOnce(new Error("offline")) };
     render(<HoldTapSettings />);
     const slider = (await screen.findAllByRole("slider"))[0];

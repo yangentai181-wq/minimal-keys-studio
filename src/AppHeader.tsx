@@ -7,7 +7,7 @@ import {
 } from "react-aria-components";
 import { useConnectedDeviceData } from "./rpc/useConnectedDeviceData";
 import { useSub } from "./usePubSub";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useModalRef } from "./misc/useModalRef";
 import { LockStateContext } from "./rpc/LockStateContext";
 import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
@@ -44,6 +44,7 @@ export const AppHeader = ({
 }: AppHeaderProps) => {
   const [showSettingsReset, setShowSettingsReset] = useState(false);
   const feedback = useTransientFeedback(800);
+  const saveOperationRef = useRef(0);
   const { osMode, setOsMode } = useOsMode();
 
   const lockState = useContext(LockStateContext);
@@ -69,9 +70,15 @@ export const AppHeader = ({
     setUnsaved(unsaved)
   );
   const handleSave = async () => {
+    const operation = ++saveOperationRef.current;
+    feedback.clear();
     try {
-      if (await onSave?.()) feedback.trigger();
+      const succeeded = await onSave?.();
+      if (operation !== saveOperationRef.current) return;
+      if (succeeded) feedback.trigger();
+      else feedback.clear();
     } catch {
+      if (operation === saveOperationRef.current) feedback.clear();
       // The save callback owns the user-facing error toast.
     }
   };

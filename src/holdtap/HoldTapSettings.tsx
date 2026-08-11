@@ -43,6 +43,22 @@ type HoldTapDraft = {
   flavor: HT.HoldTapFlavor;
 };
 
+function holdTapMatchesDraft(info: HT.HoldTapInfo, draft: HoldTapDraft): boolean {
+  return info.id === draft.selectedId
+    && info.tappingTermMs === draft.tappingTerm
+    && sanitizeMs(info.quickTapMs) === draft.quickTap
+    && sanitizeMs(info.requirePriorIdleMs) === draft.requirePriorIdle
+    && info.flavor === draft.flavor;
+}
+
+function sameHoldTapDraft(a: HoldTapDraft, b: HoldTapDraft): boolean {
+  return a.selectedId === b.selectedId
+    && a.tappingTerm === b.tappingTerm
+    && a.quickTap === b.quickTap
+    && a.requirePriorIdle === b.requirePriorIdle
+    && a.flavor === b.flavor;
+}
+
 export function HoldTapSettings() {
   const subsystem = useCustomSubsystem(HT.SUBSYSTEM_ID);
   const { layers } = useStudioKeymap();
@@ -60,6 +76,9 @@ export function HoldTapSettings() {
   const [quickTap, setQuickTap] = useState(0);
   const [requirePriorIdle, setRequirePriorIdle] = useState(0);
   const [flavor, setFlavor] = useState<HT.HoldTapFlavor>(0);
+  const draftRef = useRef<HoldTapDraft>({ selectedId, tappingTerm, quickTap, requirePriorIdle, flavor });
+  draftRef.current = { selectedId, tappingTerm, quickTap, requirePriorIdle, flavor };
+  const saveVersionRef = useRef(0);
   const pendingRestoredDraftRef = useRef<HoldTapDraft | null>(null);
   const automaticallySelectedRef = useRef(false);
   const markUserEdit = () => {
@@ -173,34 +192,43 @@ export function HoldTapSettings() {
   const handleApply = useCallback(async () => {
     feedback.clear();
     if (!subsystem || selectedId === null || !selected) return;
+    const version = ++saveVersionRef.current;
+    const id = selectedId;
+    const submitted: HoldTapDraft = {
+      selectedId,
+      tappingTerm,
+      quickTap,
+      requirePriorIdle,
+      flavor,
+    };
+    const confirmed = selected;
     setSaving(true);
     try {
-      const id = selectedId;
-      if (tappingTerm !== selected.tappingTermMs) {
+      if (submitted.tappingTerm !== confirmed.tappingTermMs) {
         const response = await callWithTimeout(
           "setTappingTerm",
-          HT.encodeSetTappingTerm(id, tappingTerm)
+          HT.encodeSetTappingTerm(id, submitted.tappingTerm)
         );
         if (!response.setTappingTerm?.success) throw new Error("タッピングタームを保存できませんでした");
       }
-      if (quickTap !== sanitizeMs(selected.quickTapMs)) {
+      if (submitted.quickTap !== sanitizeMs(confirmed.quickTapMs)) {
         const response = await callWithTimeout(
           "setQuickTap",
-          HT.encodeSetQuickTap(id, quickTap)
+          HT.encodeSetQuickTap(id, submitted.quickTap)
         );
         if (!response.setQuickTap?.success) throw new Error("クイックタップを保存できませんでした");
       }
-      if (requirePriorIdle !== sanitizeMs(selected.requirePriorIdleMs)) {
+      if (submitted.requirePriorIdle !== sanitizeMs(confirmed.requirePriorIdleMs)) {
         const response = await callWithTimeout(
           "setRequirePriorIdle",
-          HT.encodeSetRequirePriorIdle(id, requirePriorIdle)
+          HT.encodeSetRequirePriorIdle(id, submitted.requirePriorIdle)
         );
         if (!response.setRequirePriorIdle?.success) throw new Error("入力前待ち時間を保存できませんでした");
       }
-      if (flavor !== selected.flavor) {
+      if (submitted.flavor !== confirmed.flavor) {
         const response = await callWithTimeout(
           "setFlavor",
-          HT.encodeSetFlavor(id, flavor)
+          HT.encodeSetFlavor(id, submitted.flavor)
         );
         if (!response.setFlavor?.success) throw new Error("判定モードを保存できませんでした");
       }
@@ -210,19 +238,29 @@ export function HoldTapSettings() {
         HT.encodeListHoldTaps()
       );
       if (!resp.listHoldTaps?.holdTaps) throw new Error("Hold-tap list response was missing");
-      setHoldTaps(resp.listHoldTaps.holdTaps);
       const updated = resp.listHoldTaps.holdTaps.find(
         (h) => h.id === id
       );
-      if (updated) applyInfo(updated);
-      feedback.trigger();
+      if (!updated) throw new Error("Hold-tap selected ID was missing from readback");
+      if (!holdTapMatchesDraft(updated, submitted)) {
+        throw new Error("Hold-tap readback did not match the submitted settings");
+      }
+      if (version !== saveVersionRef.current) return;
+      const draftUnchanged = sameHoldTapDraft(draftRef.current, submitted);
+      setHoldTaps(resp.listHoldTaps.holdTaps);
+      if (draftUnchanged) {
+        applyInfo(updated);
+        feedback.trigger();
+      }
     } catch (e) {
-      feedback.clear();
-      console.error("[HoldTap] Failed to save:", e);
-      toast(ERROR_MESSAGES["holdTap.save"], "error");
+      if (version === saveVersionRef.current) {
+        feedback.clear();
+        console.error("[HoldTap] Failed to save:", e);
+        toast(ERROR_MESSAGES["holdTap.save"], "error");
+      }
       throw e;
     } finally {
-      setSaving(false);
+      if (version === saveVersionRef.current) setSaving(false);
     }
   }, [
     subsystem,
