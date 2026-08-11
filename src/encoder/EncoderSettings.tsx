@@ -15,6 +15,8 @@ import { BehaviorBindingPicker } from "../behaviors/BehaviorBindingPicker";
 import { useBehaviorList } from "../behaviors/BehaviorsContext";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 
 interface LayerDisplay {
   id: number;
@@ -83,6 +85,7 @@ export function EncoderSettings() {
   const [layerBindings, setLayerBindings] = useState<RSR.LayerBindings[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<number>(0);
   const [saving, setSaving] = useState(false);
+  const feedback = useTransientFeedback(800);
   const [loading, setLoading] = useState(false);
 
   // Local editable state for CW/CCW bindings
@@ -287,6 +290,7 @@ export function EncoderSettings() {
         console.debug(`[Encoder] Verified layer ${selectedLayer} after save:`, JSON.stringify(savedLayer));
         setLayerBindings(resp.getAllLayerBindings.bindings);
       }
+      feedback.trigger();
     } catch (e) {
       console.error("[Encoder] Failed to save:", e);
       toast(failureMessage, "error");
@@ -294,7 +298,7 @@ export function EncoderSettings() {
     } finally {
       setSaving(false);
     }
-  }, [subsystem, selectedSensorIndex, selectedLayer, cwBinding, ccwBinding, callWithTimeout, behaviors, toast]);
+  }, [subsystem, selectedSensorIndex, selectedLayer, cwBinding, ccwBinding, callWithTimeout, behaviors, toast, feedback]);
 
   useDirtyRegistration("encoder", {
     dirty,
@@ -428,7 +432,7 @@ export function EncoderSettings() {
               isDisabled={saving}
               onPress={handleSave}
             >
-              {saving ? "保存中..." : "保存"}
+              <ActionFeedbackLabel idleLabel="保存" pendingLabel="保存中..." successLabel="保存済み" pending={saving} success={feedback.active} />
             </Button>
           </div>
         </>

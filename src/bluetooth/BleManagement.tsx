@@ -66,15 +66,17 @@ export function BleManagement() {
   }, [subsystem, toast]);
 
   const refreshProfiles = useCallback(async () => {
-    if (!subsystem) return;
+    if (!subsystem) return false;
     try {
       const resp = BLE.decodeResponse(
         await rpcWithTimeout("getProfiles", subsystem.callRPC(BLE.encodeGetProfiles()))
       );
       if (resp.getProfiles) setProfiles(resp.getProfiles.profiles);
+      return true;
     } catch (e) {
       console.error("[BLE] Failed to refresh profiles:", e);
       toast(ERROR_MESSAGES["bluetooth.refreshProfiles"], "error");
+      return false;
     }
   }, [subsystem, toast]);
 
@@ -118,12 +120,13 @@ export function BleManagement() {
       if (!subsystem) return;
       try {
         await subsystem.callRPC(BLE.encodeSetProfileName(index, nameValue));
-        await refreshProfiles();
+        if (!await refreshProfiles()) return;
+        toast("プロファイル名を保存しました", "success");
+        setEditingName(null);
       } catch (e) {
         console.error("[BLE] Failed to set profile name:", e);
         toast(ERROR_MESSAGES["bluetooth.setProfileName"], "error");
       }
-      setEditingName(null);
     },
     [subsystem, nameValue, refreshProfiles, toast]
   );

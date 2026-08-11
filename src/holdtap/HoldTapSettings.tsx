@@ -11,6 +11,8 @@ import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { useStudioKeymap } from "../keyboard/useStudioKeymap";
 import { useBehaviorList } from "../behaviors/BehaviorsContext";
 import { findHoldTapUsages, presentHoldTap } from "./holdtap-presentation";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 
 // -1 as uint32 in protobuf = "not configured in device tree" = effectively 0ms
 const SENTINEL = 0xFFFFFFFF;
@@ -49,6 +51,7 @@ export function HoldTapSettings() {
   const [holdTaps, setHoldTaps] = useState<HT.HoldTapInfo[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const feedback = useTransientFeedback(800);
   const [loading, setLoading] = useState(false);
   const [showUnused, setShowUnused] = useState(false);
 
@@ -212,6 +215,7 @@ export function HoldTapSettings() {
         );
         if (updated) applyInfo(updated);
       }
+      feedback.trigger();
     } catch (e) {
       console.error("[HoldTap] Failed to save:", e);
       toast(ERROR_MESSAGES["holdTap.save"], "error");
@@ -229,6 +233,7 @@ export function HoldTapSettings() {
     flavor,
     callWithTimeout,
     toast,
+    feedback,
   ]);
 
   useDirtyRegistration("holdtap", {
@@ -472,7 +477,7 @@ export function HoldTapSettings() {
               isDisabled={saving}
               onPress={handleApply}
             >
-              {saving ? "適用中..." : "適用"}
+              <ActionFeedbackLabel idleLabel="適用" pendingLabel="適用中..." successLabel="適用済み" pending={saving} success={feedback.active} />
             </Button>
             <Button
               className="rounded-md bg-base-200 px-4 py-2 hover:bg-base-300 transition-colors"

@@ -9,6 +9,8 @@ import { useToast } from "../misc/Toast";
 import * as SETTINGS from "../proto/settings";
 import { useTelemetry } from "../telemetry/TelemetryProvider";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 
 export function DeviceSettings() {
   const { toast } = useToast();
@@ -20,6 +22,7 @@ export function DeviceSettings() {
   const [idleSeconds, setIdleSeconds] = useState(30);
   const [sleepMinutes, setSleepMinutes] = useState(15);
   const [saving, setSaving] = useState(false);
+  const feedbackActive = useTransientFeedback(800);
   const [feedback, setFeedback] = useState<string | null>(null);
   const loadedRef = useRef(false);
 
@@ -80,6 +83,7 @@ export function DeviceSettings() {
       );
       // Reload all settings
       await subsystem.callRPC(SETTINGS.encodeGetAllActivitySettings());
+      feedbackActive.trigger();
       setFeedback("設定を適用しました");
     } catch (e) {
       console.error("Failed to apply settings:", e);
@@ -88,7 +92,7 @@ export function DeviceSettings() {
     } finally {
       setSaving(false);
     }
-  }, [subsystem, idleSeconds, sleepMinutes, toast]);
+  }, [subsystem, idleSeconds, sleepMinutes, toast, feedbackActive]);
 
   const handleSync = useCallback(async () => {
     if (!subsystem) return;
@@ -216,7 +220,7 @@ export function DeviceSettings() {
           isDisabled={saving}
           onPress={handleApply}
         >
-          {saving ? "適用中..." : "適用"}
+          <ActionFeedbackLabel idleLabel="適用" pendingLabel="適用中..." successLabel="適用済み" pending={saving} success={feedbackActive.active} />
         </Button>
       </div>
 

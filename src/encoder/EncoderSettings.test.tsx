@@ -171,6 +171,21 @@ describe("EncoderSettings dirty drafts", () => {
     expect(screen.getByRole("button", { name: "binding-2" })).toBeInTheDocument();
   });
 
+  it("shows saved feedback after both bindings and the refresh succeed", async () => {
+    mocks.subsystem!.callRPC = vi.fn()
+      .mockResolvedValueOnce(sensorsResponse())
+      .mockResolvedValueOnce(layerBindingsResponse())
+      .mockResolvedValueOnce(setterResponse("cw", true))
+      .mockResolvedValueOnce(setterResponse("ccw", true))
+      .mockResolvedValueOnce(layerBindingsResponse({ behaviorId: 11, param1: 0, param2: 0 }));
+    renderSettings();
+
+    fireEvent.click(await screen.findByRole("button", { name: "binding-1" }));
+    await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+
+    expect(screen.getByRole("button", { name: "保存済み" })).toBeEnabled();
+  });
+
   it("keeps the encoder draft dirty when a setter response fails", async () => {
     mocks.subsystem!.callRPC
       .mockResolvedValueOnce(errorResponse("device rejected the binding"))
@@ -187,6 +202,7 @@ describe("EncoderSettings dirty drafts", () => {
 
     await waitFor(() => expect(registration().dirty).toBe(true));
     expect(screen.getByRole("button", { name: "binding-11" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
     expect(mocks.toast).toHaveBeenCalledWith(
       ERROR_MESSAGES["encoder.setClockwiseBinding"],
       "error",

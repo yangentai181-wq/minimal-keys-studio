@@ -141,6 +141,7 @@ describe("HoldTapSettings dirty drafts", () => {
     });
     expect(slider).toHaveValue("250");
     expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
   });
 
   it("reapplies a restored hold-tap snapshot after reconnect discovery resolves", async () => {
@@ -241,6 +242,7 @@ describe("HoldTapSettings presentation", () => {
     fireEvent.change(screen.getAllByRole("slider")[0], { target: { value: "250" } });
 
     await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+    expect(screen.getByRole("button", { name: "適用済み" })).toBeEnabled();
     expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3);
     expect(Array.from(mocks.subsystem!.callRPC.mock.calls[1][0])).toEqual(
       Array.from(HT.encodeSetTappingTerm(2, 250)),

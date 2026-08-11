@@ -11,6 +11,8 @@ import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { useStudioKeymap } from "../keyboard/useStudioKeymap";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 import {
   decodeScrollLayerSelection,
   encodeAutoMouseLayerId,
@@ -47,6 +49,7 @@ export function TrackballSettings() {
   const [processors, setProcessors] = useState<RIP.InputProcessorInfo[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const feedback = useTransientFeedback(800);
 
   // Local form state (editable copy of selected processor)
   // Speed is represented as multiplier/divisor. We use divisor=10 as base
@@ -268,6 +271,7 @@ export function TrackballSettings() {
         applyProcessorInfo(confirmed);
         formDirty.current = false;
       }
+      if (draftUnchanged) feedback.trigger();
       return draftUnchanged;
     } catch (e) {
       if (generation === requestGeneration.current) {
@@ -308,6 +312,7 @@ export function TrackballSettings() {
     layers,
     applyProcessorInfo,
     toast,
+    feedback,
   ]);
 
   const handleReset = useCallback(async () => {
@@ -561,7 +566,7 @@ export function TrackballSettings() {
           isDisabled={saving}
           onPress={handleApply}
         >
-          {saving ? "適用中..." : "適用"}
+          <ActionFeedbackLabel idleLabel="適用" pendingLabel="適用中..." successLabel="適用済み" pending={saving} success={feedback.active} />
         </Button>
         <Button
           className="rounded bg-base-300 px-4 py-2 hover:bg-base-200"

@@ -77,7 +77,7 @@ describe("TrackballSettings", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "度" }), { target: { value: "45" } });
     fireEvent.click(screen.getByRole("button", { name: "適用" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用済み" })).toBeEnabled());
     expect(mocks.dirtyRegistration?.dirty).toBe(false);
     expect(mocks.toast).not.toHaveBeenCalled();
     expect(mocks.subsystem?.callRPC.mock.calls).toEqual([
