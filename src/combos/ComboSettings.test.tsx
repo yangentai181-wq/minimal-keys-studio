@@ -111,7 +111,7 @@ describe("ComboSettings save confirmation", () => {
     expect(mocks.toast).toHaveBeenCalledWith("コンボの保存に失敗しました", "error");
   });
 
-  it("shows saved before closing the form after an explicit set success and matching readback", async () => {
+  it("closes immediately after an explicit set success and matching readback", async () => {
     renderSettings();
     await beginMissionControlDraft();
     mocks.subsystem!.callRPC
@@ -120,9 +120,23 @@ describe("ComboSettings save confirmation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "保存済み" })).toBeInTheDocument());
     await waitFor(() => expect(screen.queryByRole("heading", { name: "新規コンボ" })).not.toBeInTheDocument());
     expect(mocks.toast).toHaveBeenCalledWith("コンボを保存しました", "success");
+  });
+
+  it("does not close a new draft after a previous successful save", async () => {
+    renderSettings();
+    await beginMissionControlDraft();
+    mocks.subsystem!.callRPC
+      .mockResolvedValueOnce(comboResponse("set", true))
+      .mockResolvedValueOnce(getAllResponse(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => {});
+    expect(screen.queryByRole("heading", { name: "新規コンボ" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "新規コンボ" }));
+    expect(screen.getByRole("heading", { name: "新規コンボ" })).toBeInTheDocument();
   });
 
   it.each([
@@ -149,6 +163,7 @@ describe("ComboSettings save confirmation", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "新規コンボ" })).toBeInTheDocument());
     expect(mocks.toast).toHaveBeenCalledWith(expectedToast, "error");
+    expect(mocks.toast).not.toHaveBeenCalledWith("コンボを保存しました", "success");
   });
 
   it("keeps the draft and gives Firmware guidance after a save timeout", async () => {
@@ -160,6 +175,7 @@ describe("ComboSettings save confirmation", () => {
 
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("コンボを保存するには、キーボードのFirmware更新が必要です。", "error"));
     expect(screen.getByRole("heading", { name: "新規コンボ" })).toBeInTheDocument();
+    expect(mocks.toast).not.toHaveBeenCalledWith("コンボを保存しました", "success");
   });
 
   it("times out a never-resolving save after 5000ms and clears its timer", async () => {

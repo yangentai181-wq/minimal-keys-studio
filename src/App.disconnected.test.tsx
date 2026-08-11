@@ -20,6 +20,10 @@ vi.mock("./rpc/transportLifecycle", () => ({
   disposeTransport: vi.fn(),
 }));
 
+vi.mock("./rpc/logging", () => ({
+  call_rpc: vi.fn().mockResolvedValue({ core: { getLockState: 0 } }),
+}));
+
 vi.mock("./transport/serial", () => ({
   connect: vi.fn(),
 }));
@@ -109,6 +113,10 @@ vi.mock("./keyboard/Keyboard", () => ({
   default: () => <div>KEYBOARD_MOUNTED</div>,
 }));
 
+vi.mock("./connection/RightUsbEditorShell", () => ({
+  RightUsbEditorShell: ({ header }: { header: ReactNode }) => <>{header}</>,
+}));
+
 describe("App disconnected shell", () => {
   beforeEach(() => {
     mocks.createRpcConnection.mockReset();
@@ -147,5 +155,17 @@ describe("App disconnected shell", () => {
     expect(screen.queryByText(/Raw HID/)).not.toBeInTheDocument();
     expect(screen.queryByText(/0xff60/)).not.toBeInTheDocument();
     expect(screen.queryByText("キーボードに接続しました")).not.toBeInTheDocument();
+  });
+
+  it("shows a success Toast only after connection and device-info both resolve", async () => {
+    mocks.createRpcConnection.mockResolvedValue({
+      notification_readable: new ReadableStream({ start(controller) { controller.close(); } }),
+    });
+    mocks.requestDeviceInfo.mockResolvedValue({ name: "Test keyboard" });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "CONNECT_MODAL_OPEN" }));
+
+    expect(await screen.findByText("キーボードに接続しました")).toHaveAttribute("role", "status");
   });
 });
