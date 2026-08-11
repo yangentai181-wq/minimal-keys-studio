@@ -332,9 +332,11 @@ function AppInner() {
           setConn({ conn: null });
         }),
         isWireless,
-      );
+      ).then(() => {
+        toast("キーボードに接続しました", "success");
+      });
     },
-    [setConn, setConnectedDeviceName, session],
+    [setConn, setConnectedDeviceName, session, toast],
   );
 
   // Studio RPC probe for the right-USB flow: only a successful
@@ -431,7 +433,7 @@ function AppInner() {
                     canRedo={canRedo}
                     onUndo={undo}
                     onRedo={redo}
-                    onSave={() => { void save().catch(() => {}); }}
+                    onSave={save}
                     onDiscard={() => { void discard().catch(() => {}); }}
                     onDisconnect={disconnect}
                     onResetSettings={resetSettings}

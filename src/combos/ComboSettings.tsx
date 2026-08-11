@@ -19,6 +19,8 @@ import { call_rpc } from "../rpc/logging";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { validateComboDraft } from "./combo-validation";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 
 interface LayerDisplay {
   id: number;
@@ -126,6 +128,7 @@ function isTimeout(error: unknown): boolean {
 }
 
 export function ComboSettings() {
+  const feedback = useTransientFeedback(800);
   const subsystem = useCustomSubsystem(Combos.SUBSYSTEM_ID);
   const { toast } = useToast();
   const behaviors = useBehaviorList();
@@ -135,6 +138,7 @@ export function ComboSettings() {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Combos.ComboConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const [closeAfterSave, setCloseAfterSave] = useState(false);
   const editingRef = useRef<Combos.ComboConfig | null>(null);
   const subsystemRef = useRef(subsystem);
   const subsystemGenerationRef = useRef(0);
@@ -145,6 +149,12 @@ export function ComboSettings() {
   const nextIdRef = useRef(1);
 
   useEffect(() => { editingRef.current = editing; }, [editing]);
+  useEffect(() => {
+    if (closeAfterSave && !feedback.active) {
+      setEditing(null);
+      setCloseAfterSave(false);
+    }
+  }, [closeAfterSave, feedback.active]);
   useEffect(() => {
     subsystemRef.current = subsystem;
     subsystemGenerationRef.current += 1;
@@ -244,7 +254,8 @@ export function ComboSettings() {
       if (!readback?.some((combo) => comboEquals(combo, draft))) throw new Error("Combo readback mismatch");
       setCombos(readback);
       if (!editingRef.current || !comboEquals(editingRef.current, draft)) return false;
-      setEditing(null);
+      setCloseAfterSave(true);
+      feedback.trigger();
       toast("コンボを保存しました", "success");
       return true;
     } catch (e) {
@@ -255,7 +266,7 @@ export function ComboSettings() {
     } finally {
       if (isCurrent()) setSaving(false);
     }
-  }, [editing, combos, subsystem, callWithTimeout, toast]);
+  }, [editing, combos, subsystem, callWithTimeout, toast, feedback]);
 
   const handleDelete = useCallback(async (comboId: number) => {
     if (!subsystem) return false;
@@ -448,7 +459,7 @@ export function ComboSettings() {
               isDisabled={saving || editing.keyPositions.length < 2}
               onPress={handleSave}
             >
-              {saving ? "保存中..." : "保存"}
+              <ActionFeedbackLabel idleLabel="保存" pendingLabel="保存中..." successLabel="保存済み" pending={saving} success={feedback.active} />
             </Button>
             <Button
               className="rounded bg-base-300 px-4 py-2 hover:bg-base-200"

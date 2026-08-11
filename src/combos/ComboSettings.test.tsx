@@ -111,7 +111,7 @@ describe("ComboSettings save confirmation", () => {
     expect(mocks.toast).toHaveBeenCalledWith("コンボの保存に失敗しました", "error");
   });
 
-  it("closes the form only after an explicit set success and matching readback", async () => {
+  it("shows saved before closing the form after an explicit set success and matching readback", async () => {
     renderSettings();
     await beginMissionControlDraft();
     mocks.subsystem!.callRPC
@@ -120,6 +120,7 @@ describe("ComboSettings save confirmation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存済み" })).toBeInTheDocument());
     await waitFor(() => expect(screen.queryByRole("heading", { name: "新規コンボ" })).not.toBeInTheDocument());
     expect(mocks.toast).toHaveBeenCalledWith("コンボを保存しました", "success");
   });
@@ -171,6 +172,7 @@ describe("ComboSettings save confirmation", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
 
     expect(mocks.toast).toHaveBeenCalledWith("コンボを保存するには、キーボードのFirmware更新が必要です。", "error");
+    act(() => vi.advanceTimersByTime(800));
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -412,6 +414,7 @@ describe("ComboSettings save confirmation", () => {
     vi.useFakeTimers();
     mocks.subsystem!.callRPC.mockResolvedValueOnce(comboResponse("set", true)).mockResolvedValueOnce(getAllResponse(true));
     await expect(mocks.registration!.save()).resolves.toBe(true);
+    act(() => vi.advanceTimersByTime(800));
     expect(vi.getTimerCount()).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "編集" }));
     mocks.subsystem!.callRPC.mockRejectedValueOnce(new Error("delete rejected"));

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
 import { useTrackballPrecision } from "./TrackballPrecisionContext";
 import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
@@ -9,6 +9,16 @@ const updateDraft = vi.fn();
 const save = vi.fn();
 const reload = vi.fn();
 const selection = (analysis: { supported: true; tapLabel: string; holdLabel: string } | { supported: false; reason: string } | null) => ({ keymap: undefined, behaviors: [], analysis });
+const defaultPrecisionState = () => ({
+  availability: "available" as const,
+  confirmed: {
+    schemaVersion: 1, normalCpi: 800, precisionCpi: 200, enabled: false,
+    selectedPosition: 0, originalBinding: null, revision: 1,
+    precisionActive: false, currentCpi: 800,
+  },
+  draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+  dirty: false, saving: false, error: null, updateDraft, save, reload,
+});
 
 vi.mock("./TrackballPrecisionContext", () => ({
   useTrackballPrecision: vi.fn(() => ({
@@ -19,12 +29,7 @@ vi.mock("./TrackballPrecisionContext", () => ({
       precisionActive: false, currentCpi: 800,
     },
     draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
-    dirty: false,
-    saving: false,
-    error: null,
-    updateDraft,
-    save,
-    reload,
+    dirty: false, saving: false, error: null, updateDraft, save, reload,
   })),
 }));
 
@@ -41,6 +46,37 @@ vi.mock("../navigation/DirtyStateContext", () => ({
 }));
 
 describe("TrackballPrecisionSettings", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(useTrackballPrecision).mockImplementation(() => defaultPrecisionState());
+  });
+
+  it("shows saved only when save explicitly resolves true", async () => {
+    vi.useFakeTimers();
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save: vi.fn().mockResolvedValue(true), reload,
+    });
+    render(<TrackballPrecisionSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "保存済み" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(800));
+    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
+  });
+
+  it("does not show saved when save resolves false", async () => {
+    vi.mocked(useTrackballPrecision).mockReturnValue({
+      availability: "available", confirmed: null,
+      draft: { normalCpi: 800, precisionCpi: 200, enabled: false, selectedPosition: 0 },
+      dirty: true, saving: false, error: null, updateDraft, save: vi.fn().mockResolvedValue(false), reload,
+    });
+    render(<TrackballPrecisionSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => {});
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
   it("shows the confirmed default CPI values with constrained controls", () => {
     render(<TrackballPrecisionSettings />);
 

@@ -146,5 +146,6 @@ describe("App disconnected shell", () => {
     expect(screen.queryByText(/RPC Failed/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Raw HID/)).not.toBeInTheDocument();
     expect(screen.queryByText(/0xff60/)).not.toBeInTheDocument();
+    expect(screen.queryByText("キーボードに接続しました")).not.toBeInTheDocument();
   });
 });

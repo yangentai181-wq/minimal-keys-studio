@@ -16,10 +16,12 @@ import { ChevronDown, Undo2, Redo2, Save, Trash2 } from "lucide-react";
 import { useOsMode } from "./OsModeContext";
 import { Tooltip } from "./misc/Tooltip";
 import { GenericModal } from "./GenericModal";
+import { ActionFeedbackLabel } from "./motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "./motion/useTransientFeedback";
 
 export interface AppHeaderProps {
   connectedDeviceLabel?: string;
-  onSave?: () => void | Promise<void>;
+  onSave?: () => Promise<boolean>;
   onDiscard?: () => void | Promise<void>;
   onUndo?: () => Promise<void>;
   onRedo?: () => Promise<void>;
@@ -41,6 +43,7 @@ export const AppHeader = ({
   onResetSettings,
 }: AppHeaderProps) => {
   const [showSettingsReset, setShowSettingsReset] = useState(false);
+  const feedback = useTransientFeedback(800);
   const { osMode, setOsMode } = useOsMode();
 
   const lockState = useContext(LockStateContext);
@@ -65,6 +68,13 @@ export const AppHeader = ({
   useSub("rpc_notification.keymap.unsavedChangesStatusChanged", (unsaved) =>
     setUnsaved(unsaved)
   );
+  const handleSave = async () => {
+    try {
+      if (await onSave?.()) feedback.trigger();
+    } catch {
+      // The save callback owns the user-facing error toast.
+    }
+  };
 
   return (
     <header className="top-0 left-0 right-0 grid grid-cols-[1fr_auto_1fr] items-center justify-between h-12 max-w-full border-b border-gray-200 bg-white">
@@ -173,9 +183,10 @@ export const AppHeader = ({
           <Button
             className="flex items-center justify-center p-1.5 rounded enabled:hover:bg-base-300 disabled:opacity-50"
             isDisabled={!unsaved}
-            onPress={onSave}
+            onPress={() => void handleSave()}
           >
-            <Save className="inline-block w-4 mx-1" aria-label="保存" />
+            <Save className="inline-block w-4 mx-1" aria-hidden="true" />
+            <ActionFeedbackLabel idleLabel="保存" pendingLabel="保存中…" successLabel="保存済み" pending={false} success={feedback.active} />
           </Button>
         </Tooltip>
         <Tooltip label="破棄">

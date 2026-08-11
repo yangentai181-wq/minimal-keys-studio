@@ -4,6 +4,8 @@ import { useTrackballPrecision } from "./TrackballPrecisionContext";
 import { useConnectedPrecisionSelection } from "./useConnectedPrecisionSelection";
 import { validateDraft } from "./precision-state";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 
 const MIN_CPI = 200;
 const MAX_CPI = 3200;
@@ -91,9 +93,13 @@ function EnabledPrecisionControls({ confirmed, draftPosition, updateDraft, dirty
 }
 
 function SaveButton({ save, disabled, saving }: { save: () => Promise<boolean>; disabled: boolean; saving: boolean }) {
+  const feedback = useTransientFeedback(800);
+  const handleSave = async () => {
+    if (await save()) feedback.trigger();
+  };
   return <div className="flex justify-end">
-    <Button onPress={() => void save()} isDisabled={disabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">
-      {saving ? "保存中…" : "保存"}
+    <Button onPress={() => void handleSave()} isDisabled={disabled} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-content disabled:cursor-not-allowed disabled:opacity-40">
+      <ActionFeedbackLabel idleLabel="保存" pendingLabel="保存中…" successLabel="保存済み" pending={saving} success={feedback.active} />
     </Button>
   </div>;
 }
