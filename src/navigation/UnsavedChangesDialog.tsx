@@ -9,8 +9,8 @@ interface UnsavedChangesDialogProps {
 export function UnsavedChangesDialog({ open, busy = false, onSave, onDiscard, onCancel }: UnsavedChangesDialogProps) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="presentation">
-      <section role="dialog" aria-modal="true" aria-labelledby="unsaved-changes-title" className="w-full max-w-sm rounded-xl bg-base-100 p-5 shadow-xl">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="presentation" data-motion-kind="dialog-backdrop">
+      <section role="dialog" aria-modal="true" aria-labelledby="unsaved-changes-title" data-motion-kind="dialog" data-motion-state="enter" className="w-full max-w-sm rounded-xl bg-base-100 p-5 shadow-xl">
         <h2 id="unsaved-changes-title" className="text-base font-bold">変更を保存しますか？</h2>
         <p className="mt-2 text-sm text-base-content/70">移動すると、現在の画面は閉じます。</p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">

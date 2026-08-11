@@ -11,6 +11,9 @@ describe("UnsavedChangesDialog", () => {
     render(<UnsavedChangesDialog open onSave={onSave} onDiscard={onDiscard} onCancel={onCancel} />);
 
     expect(screen.getByText("変更を保存しますか？")).toBeInTheDocument();
+    expect(screen.getByRole("presentation")).toHaveAttribute("data-motion-kind", "dialog-backdrop");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-motion-kind", "dialog");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-motion-state", "enter");
     fireEvent.click(screen.getByRole("button", { name: "保存して移動" }));
     fireEvent.click(screen.getByRole("button", { name: "破棄して移動" }));
     fireEvent.click(screen.getByRole("button", { name: "戻る" }));

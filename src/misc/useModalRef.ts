@@ -1,4 +1,5 @@
 import { MutableRefObject, useEffect, useRef } from "react";
+import { closeDialogWithMotion } from "./dialogMotion";
 
 export function useModalRef(
   open: boolean,
@@ -6,26 +7,34 @@ export function useModalRef(
   allowCancel?: boolean
 ): MutableRefObject<HTMLDialogElement | null> {
   const ref = useRef<HTMLDialogElement | null>(null);
-
-  const reopen = async () => {
-    // We do this in a timeout so it runs after the modal has actually closed.
-    setTimeout(() => ref.current?.showModal());
-  };
+  const pendingClose = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+
+    const closeWithMotion = () => {
+      if (!dialog.open || pendingClose.current) return;
+      pendingClose.current = closeDialogWithMotion(dialog);
+    };
+
+    const handleCancel = (event: Event) => {
+      event.preventDefault();
+      if (allowCancel !== false) closeWithMotion();
+    };
+
     if (open) {
-      if (ref.current && !ref.current?.open) {
-        ref.current?.showModal();
-        if (allowCancel !== undefined && !allowCancel) {
-          ref.current?.addEventListener("cancel", reopen);
-        }
+      pendingClose.current?.();
+      pendingClose.current = undefined;
+      if (!dialog.open) {
+        dialog.showModal();
       }
+      dialog.setAttribute("data-motion-state", "enter");
+      dialog.addEventListener("cancel", handleCancel);
+
       if (closeOnOutsideClick) {
         const handleClickOutside = (e: MouseEvent) => {
-          const target = e.target as HTMLDialogElement | null;
-          if (!target) return;
-
-          const { top, left, width, height } = target.getBoundingClientRect();
+          const { top, left, width, height } = dialog.getBoundingClientRect();
           const clickedInDialog =
             top <= e.clientY &&
             e.clientY <= top + height &&
@@ -33,19 +42,27 @@ export function useModalRef(
             e.clientX <= left + width;
 
           if (!clickedInDialog) {
-            target.close();
+            closeWithMotion();
           }
         };
 
         document.addEventListener("mousedown", handleClickOutside);
         return () => {
           document.removeEventListener("mousedown", handleClickOutside);
+          dialog.removeEventListener("cancel", handleCancel);
+          pendingClose.current?.();
+          pendingClose.current = undefined;
         };
       }
     } else {
-      ref.current?.close();
-      ref.current?.removeEventListener("cancel", reopen);
+      closeWithMotion();
     }
+
+    return () => {
+      dialog.removeEventListener("cancel", handleCancel);
+      pendingClose.current?.();
+      pendingClose.current = undefined;
+    };
   }, [open, closeOnOutsideClick, allowCancel]);
 
   return ref;

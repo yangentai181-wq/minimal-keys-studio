@@ -15,6 +15,7 @@ export const GenericModal = React.forwardRef(
       <dialog
         ref={ref}
         onClose={onClose}
+        data-motion-kind="dialog"
         className={`rounded-2xl border border-base-300 bg-base-100 p-5 text-base-content shadow-xl backdrop:bg-base-200 ${className}`}
       >
         {children}
