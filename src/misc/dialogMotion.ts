@@ -12,7 +12,8 @@ export function closeDialogWithMotion(
     clearTimeout(timeout);
   };
 
-  const finish = () => {
+  const finish = (event?: Event) => {
+    if (event && event.target !== dialog) return;
     if (finished) return;
     finished = true;
     cleanup();
@@ -20,8 +21,8 @@ export function closeDialogWithMotion(
   };
 
   dialog.setAttribute("data-motion-state", "closing");
-  dialog.addEventListener("animationend", finish, { once: true });
-  const timeout = setTimeout(finish, durationMs);
+  dialog.addEventListener("animationend", finish);
+  const timeout = setTimeout(() => finish(), durationMs);
 
   return () => {
     if (finished) return;

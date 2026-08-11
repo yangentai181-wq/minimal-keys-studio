@@ -20,8 +20,21 @@
   to { opacity: 0; transform: translateY(8px); }
 }
 
+@keyframes motion-backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes motion-backdrop-closing {
+  to { opacity: 0; }
+}
+
 [data-motion-state="enter"] {
   animation: motion-enter var(--motion-view) cubic-bezier(0, 0, 0.2, 1);
+}
+
+[data-motion-kind="dialog"][data-motion-state="enter"] {
+  animation: motion-enter var(--motion-dialog-in) cubic-bezier(0, 0, 0.2, 1);
 }
 
 [data-motion-state="confirmed"] {
@@ -30,6 +43,14 @@
 
 [data-motion-state="closing"] {
   animation: motion-closing var(--motion-dialog-out) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+dialog[data-motion-kind="dialog"]::backdrop {
+  animation: motion-backdrop-enter var(--motion-dialog-in) cubic-bezier(0, 0, 0.2, 1);
+}
+
+dialog[data-motion-kind="dialog"][data-motion-state="closing"]::backdrop {
+  animation: motion-backdrop-closing var(--motion-dialog-out) cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .motion-tab-indicator {

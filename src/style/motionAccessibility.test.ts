@@ -36,6 +36,21 @@ describe("motion accessibility", () => {
     );
   });
 
+  it("uses dialog-specific entry timing and fades only native dialog backdrops", () => {
+    expect(motionCss).toContain(
+      '[data-motion-kind="dialog"][data-motion-state="enter"]'
+    );
+    expect(motionCss).toContain(
+      "animation: motion-enter var(--motion-dialog-in) cubic-bezier(0, 0, 0.2, 1)"
+    );
+    expect(motionCss).toContain('dialog[data-motion-kind="dialog"]::backdrop');
+    expect(motionCss).toContain("animation: motion-backdrop-enter var(--motion-dialog-in)");
+    expect(motionCss).toContain(
+      'dialog[data-motion-kind="dialog"][data-motion-state="closing"]::backdrop'
+    );
+    expect(motionCss).toContain("animation: motion-backdrop-closing var(--motion-dialog-out)");
+  });
+
   it("uses a 4px view entrance and a 160ms sliding tab indicator", () => {
     expect(motionCss).toContain("from { opacity: 0; transform: translateY(4px); }");
     expect(motionCss).toContain(".motion-tab-indicator");
@@ -71,5 +86,12 @@ describe("motion accessibility", () => {
     expect(keycapRule).toContain("transition-duration: var(--motion-return)");
     expect(keycapPressRule).toContain("transition-property: transform, box-shadow, border-color, background-color");
     expect(keycapPressRule).toContain("transition-duration: var(--motion-press)");
+  });
+
+  it("reduces dialog and backdrop animation time to avoid a long motion wait", () => {
+    const reducedMotion = motionCss.split("@media (prefers-reduced-motion: reduce)")[1];
+
+    expect(reducedMotion).toContain("animation-duration: 1ms !important");
+    expect(reducedMotion).toContain("*::before, *::after");
   });
 });

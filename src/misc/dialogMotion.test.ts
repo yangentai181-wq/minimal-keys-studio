@@ -32,6 +32,23 @@ describe("closeDialogWithMotion", () => {
     vi.useRealTimers();
   });
 
+  it("ignores an animation end from a child element", () => {
+    vi.useFakeTimers();
+    const dialog = document.createElement("dialog");
+    const child = document.createElement("div");
+    dialog.append(child);
+    dialog.close = vi.fn();
+    Object.defineProperty(dialog, "open", { configurable: true, value: true });
+
+    closeDialogWithMotion(dialog, 140);
+    child.dispatchEvent(new Event("animationend", { bubbles: true }));
+
+    expect(dialog.close).not.toHaveBeenCalled();
+    dialog.dispatchEvent(new Event("animationend"));
+    expect(dialog.close).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
   it("cancels a pending close and clears the closing state", () => {
     vi.useFakeTimers();
     const dialog = document.createElement("dialog");
