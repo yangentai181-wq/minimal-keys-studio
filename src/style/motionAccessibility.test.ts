@@ -93,5 +93,8 @@ describe("motion accessibility", () => {
 
     expect(reducedMotion).toContain("animation-duration: 1ms !important");
     expect(reducedMotion).toContain("*::before, *::after");
+    expect(reducedMotion).toContain(
+      'dialog[data-motion-kind="dialog"]::backdrop {\n    animation-duration: 1ms !important;'
+    );
   });
 });

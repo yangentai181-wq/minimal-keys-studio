@@ -90,6 +90,10 @@ button:not(.keycap):not(:disabled):active,
     transform: none !important;
   }
 
+  dialog[data-motion-kind="dialog"]::backdrop {
+    animation-duration: 1ms !important;
+  }
+
   .motion-tab-indicator {
     transition: none !important;
   }
