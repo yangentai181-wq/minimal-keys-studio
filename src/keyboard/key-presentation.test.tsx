@@ -1,12 +1,24 @@
-import { renderHook } from "@testing-library/react";
+import { render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { buildKeyPresentation } from "./key-presentation";
 import { useKeyPresentation } from "./useKeyPresentation";
+import { Key } from "./Key";
 
 const layout = { keys: [{ x: 0, y: 0, width: 100, height: 100 }] };
 const behaviors = { 1: { id: 1, displayName: "Momentary Layer" } };
 
 describe("buildKeyPresentation", () => {
+  it("keeps keycap motion metadata on enabled and disabled keys", () => {
+    const { rerender } = render(<Key width={1} height={1} oneU={48}>A</Key>);
+
+    const key = screen.getByRole("button", { name: "A" });
+    expect(key).toHaveClass("keycap");
+    expect(key).toHaveAttribute("data-motion-kind", "keycap");
+
+    rerender(<Key width={1} height={1} oneU={48} disabled>A</Key>);
+    expect(screen.getByRole("button", { name: "A" })).toBeDisabled();
+  });
+
   it("builds a stable key presentation with layer names computed outside the key loop", () => {
     const result = buildKeyPresentation({
       layout: layout as never,

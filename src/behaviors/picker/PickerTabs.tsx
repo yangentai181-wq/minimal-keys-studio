@@ -70,30 +70,32 @@ export function PickerTabs({
         data-testid="picker-tab-content"
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
       >
-        {activeTab === "actions" && (
-          <ActionsTab
-            keyPosition={keyPosition}
-            behaviors={behaviors}
-            layers={layers}
-            osMode={osMode}
-            onApplyBinding={onApplyBinding}
-          />
-        )}
-        {activeTab === "letters" && (
-          <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "layers" && (
-          <LayersTab behaviors={behaviors} layers={layers} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "modifiers" && (
-          <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "japanese" && (
-          <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "system" && (
-          <SystemTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
-        )}
+        <div key={activeTab} data-motion-state="enter" data-motion-view={activeTab}>
+          {activeTab === "actions" && (
+            <ActionsTab
+              keyPosition={keyPosition}
+              behaviors={behaviors}
+              layers={layers}
+              osMode={osMode}
+              onApplyBinding={onApplyBinding}
+            />
+          )}
+          {activeTab === "letters" && (
+            <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
+          )}
+          {activeTab === "layers" && (
+            <LayersTab behaviors={behaviors} layers={layers} onApplyBinding={onApplyBinding} />
+          )}
+          {activeTab === "modifiers" && (
+            <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />
+          )}
+          {activeTab === "japanese" && (
+            <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />
+          )}
+          {activeTab === "system" && (
+            <SystemTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
+          )}
+        </div>
       </div>
     </div>
   );

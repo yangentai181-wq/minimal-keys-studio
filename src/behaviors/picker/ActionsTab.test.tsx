@@ -89,6 +89,17 @@ describe("ActionsTab", () => {
     expect(onApply).toHaveBeenCalledWith({ behaviorId: 2, param1: 0x01, param2: 0 });
   });
 
+  it("marks action choices without changing their applied binding", () => {
+    const onApply = vi.fn();
+    render(<ActionsTab behaviors={mockBehaviors} layers={[]} osMode="mac" onApplyBinding={onApply} />);
+
+    const copy = screen.getByRole("button", { name: /コピー/ });
+    expect(copy).toHaveAttribute("data-motion-kind", "choice");
+
+    fireEvent.click(copy);
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 1, param1: 134676486, param2: 0 });
+  });
+
   it("calls onApplyBinding for mouse wheel scroll", () => {
     const onApply = vi.fn();
     render(<ActionsTab behaviors={mockBehaviors} layers={[]} osMode="mac" onApplyBinding={onApply} />);

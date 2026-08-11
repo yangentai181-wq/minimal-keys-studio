@@ -5,6 +5,7 @@ import type {
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { getBehaviorDescription } from "./behavior-descriptions";
 import { formatBindingDetail } from "./binding-display";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 import { PickerTabs } from "./picker/PickerTabs";
 
 export interface BehaviorBindingPickerProps {
@@ -37,6 +38,7 @@ export const BehaviorBindingPicker = ({
   keyPosition,
   modifierFlags = 0,
 }: BehaviorBindingPickerProps) => {
+  const { active: feedbackActive, trigger: triggerFeedback } = useTransientFeedback(220);
   const onBindingChangedRef = useRef(onBindingChanged);
   onBindingChangedRef.current = onBindingChanged;
 
@@ -49,7 +51,8 @@ export const BehaviorBindingPicker = ({
   const handleApplyBinding = useCallback((newBinding: BehaviorBinding) => {
     const applied = applyModifierFlags(newBinding, modFlagsRef.current, behaviorsRef.current);
     onBindingChangedRef.current(applied);
-  }, []);
+    triggerFeedback();
+  }, [triggerFeedback]);
 
   // Current binding display
   const currentBehavior = behaviors.find((b) => b.id === binding.behaviorId);
@@ -63,7 +66,11 @@ export const BehaviorBindingPicker = ({
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5">
       {currentBehavior && currentDesc && (
-        <div className="flex items-center gap-2 rounded-md border-2 border-primary/50 bg-primary/5 px-2 py-1 text-sm">
+        <div
+          data-testid="current-binding-feedback"
+          data-motion-state={feedbackActive ? "confirmed" : undefined}
+          className="flex items-center gap-2 rounded-md border-2 border-primary/50 bg-primary/5 px-2 py-1 text-sm"
+        >
           <span className="text-primary font-medium">現在の設定:</span>
           <span className="font-bold">{currentDesc.label}</span>
           {bindingDetail && (

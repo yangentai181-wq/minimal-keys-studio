@@ -178,6 +178,7 @@ export function LettersTab({ behaviors, onApplyBinding }: LettersTabProps) {
         {activeKeys.map((key) => (
           <button
             key={key.modifier ? `s${key.hidId}` : key.hidId}
+            data-motion-kind="choice"
             className="rounded-md border border-base-300 bg-white px-1.5 py-1.5 text-center text-sm transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
             onClick={() => handleKeyClick(key)}
           >

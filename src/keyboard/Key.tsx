@@ -111,12 +111,13 @@ export const Key = ({
     <>
       <button
         ref={buttonRef}
-        className={`keycap group relative flex flex-col justify-center items-center transition-all duration-150 text-sm border ${
+        data-motion-kind="keycap"
+        className={`keycap group relative flex flex-col justify-center items-center transition-[transform,box-shadow,border-color,background-color] duration-150 text-sm border ${
           disabled ? "cursor-not-allowed opacity-50 " : "cursor-pointer "
         }${
           selected
             ? "bg-primary text-primary-content border-primary/30 shadow-[0_1px_2px_rgba(0,0,0,0.2)] scale-[0.97] ring-2 ring-primary/40"
-            : "bg-white text-base-content border-gray-300 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:scale-105 hover:-translate-y-0.5"
+            : "bg-white text-base-content border-gray-300 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:scale-[1.02] hover:-translate-y-px"
         }`}
         style={{
           width: `${pixelWidth}px`,

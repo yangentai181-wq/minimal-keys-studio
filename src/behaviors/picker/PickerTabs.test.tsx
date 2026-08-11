@@ -64,6 +64,8 @@ describe("PickerTabs", () => {
     expect(screen.getByText("文字・記号")).toBeDefined();
     expect(content).toContainElement(screen.getByRole("button", { name: "A" }));
     expect(content).toContainElement(screen.getByRole("button", { name: "Z" }));
+    expect(content.firstElementChild).toHaveAttribute("data-motion-state", "enter");
+    expect(content.firstElementChild).toHaveAttribute("data-motion-view", "letters");
   });
 
   it("タブ切替はbindingを適用せず、候補選択時だけ適用する", () => {

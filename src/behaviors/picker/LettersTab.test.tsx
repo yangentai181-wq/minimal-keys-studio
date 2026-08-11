@@ -32,6 +32,17 @@ describe("LettersTab", () => {
     });
   });
 
+  it("marks key choices without changing their applied binding", () => {
+    const onApply = vi.fn();
+    render(<LettersTab behaviors={mockBehaviors} onApplyBinding={onApply} />);
+
+    const key = screen.getByRole("button", { name: "A" });
+    expect(key).toHaveAttribute("data-motion-kind", "choice");
+
+    fireEvent.click(key);
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 1, param1: 458756, param2: 0 });
+  });
+
   it("switches to number subcategory", () => {
     const onApply = vi.fn();
     render(<LettersTab behaviors={mockBehaviors} onApplyBinding={onApply} />);
