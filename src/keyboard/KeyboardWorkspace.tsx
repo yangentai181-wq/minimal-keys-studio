@@ -93,14 +93,28 @@ export function KeyboardWorkspace({
       </header>
 
       <div className="min-h-0 flex-1 p-2">
-        <div hidden={monitorSelected} className="h-full min-h-0">
+        <div
+          hidden={monitorSelected}
+          data-testid={monitorSelected ? undefined : "keyboard-workspace-content"}
+          data-motion-view="editor"
+          data-motion-state={monitorSelected ? undefined : "enter"}
+          className="h-full min-h-0"
+        >
           {editor}
         </div>
         {monitorSelected && (
-          <KeyboardMonitorSurface
-            monitorStore={monitorStore}
-            monitorActive={monitorActive}
-          />
+          <div
+            key="monitor"
+            data-testid="keyboard-workspace-content"
+            data-motion-view="monitor"
+            data-motion-state="enter"
+            className="h-full min-h-0"
+          >
+            <KeyboardMonitorSurface
+              monitorStore={monitorStore}
+              monitorActive={monitorActive}
+            />
+          </div>
         )}
       </div>
     </main>

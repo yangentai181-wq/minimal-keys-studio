@@ -51,6 +51,10 @@ describe("KeyboardWorkspace", () => {
     const editorButton = screen.getByRole("button", { name: "編集" });
     const monitorButton = screen.getByRole("button", { name: "リアルタイム" });
     expect(editorButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("keyboard-workspace-content")).toHaveAttribute(
+      "data-motion-state",
+      "enter",
+    );
     expect(screen.getAllByRole("grid")).toHaveLength(1);
 
     fireEvent.change(screen.getByLabelText("編集メモ"), {
@@ -59,6 +63,14 @@ describe("KeyboardWorkspace", () => {
     fireEvent.click(monitorButton);
 
     expect(monitorButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("keyboard-workspace-content")).toHaveAttribute(
+      "data-motion-view",
+      "monitor",
+    );
+    expect(screen.getByTestId("keyboard-workspace-content")).toHaveAttribute(
+      "data-motion-state",
+      "enter",
+    );
     expect(screen.getAllByRole("grid")).toHaveLength(1);
     expect(
       screen.getByRole("grid", { name: "minimal-keys 実配列モニター" }),
@@ -67,6 +79,14 @@ describe("KeyboardWorkspace", () => {
     fireEvent.click(editorButton);
 
     expect(screen.getByLabelText("編集メモ")).toHaveValue("保持");
+    expect(screen.getByTestId("keyboard-workspace-content")).toHaveAttribute(
+      "data-motion-view",
+      "editor",
+    );
+    expect(screen.getByTestId("keyboard-workspace-content")).toHaveAttribute(
+      "data-motion-state",
+      "enter",
+    );
     expect(screen.getAllByRole("grid")).toHaveLength(1);
   });
 

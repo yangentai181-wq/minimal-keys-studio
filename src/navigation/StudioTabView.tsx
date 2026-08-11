@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Fragment, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   BatteryMedium,
   Bluetooth,
@@ -11,6 +11,7 @@ import {
   Timer,
 } from "lucide-react";
 import type { StudioTabId } from "./StudioSessionNavigation";
+import { useSlidingTabIndicator } from "./useSlidingTabIndicator";
 
 export interface TabDef {
   id: StudioTabId;
@@ -84,9 +85,20 @@ export function StudioTabView({
   onSelectTab,
   renderTab,
 }: StudioTabViewProps): ReactNode {
+  const { containerRef, registerItem, indicatorStyle } = useSlidingTabIndicator(activeTab);
+
   return (
     <>
-      <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
+      <nav
+        ref={containerRef}
+        className="relative flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1"
+      >
+        <div
+          aria-hidden="true"
+          data-testid="studio-tab-indicator"
+          className="motion-tab-indicator pointer-events-none absolute rounded-md bg-primary/10"
+          style={indicatorStyle ?? undefined}
+        />
         {TAB_GROUPS.map((group, groupIndex) => (
           <div key={groupIndex} className="flex items-center gap-0.5">
             {groupIndex > 0 && <div className="mx-2 h-6 w-px bg-gray-300" />}
@@ -94,9 +106,10 @@ export function StudioTabView({
               <button
                 key={tab.id}
                 type="button"
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-all ${
+                ref={registerItem(tab.id)}
+                className={`relative z-10 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-all ${
                   activeTab === tab.id
-                    ? "bg-primary/10 font-medium text-primary"
+                    ? "font-medium text-primary"
                     : "text-base-content/60 hover:bg-base-200 hover:text-base-content"
                 }`}
                 onClick={() => onSelectTab(tab.id)}
@@ -108,8 +121,14 @@ export function StudioTabView({
           </div>
         ))}
       </nav>
-      <div className="h-full min-h-0 overflow-hidden">
-        <Fragment key={activeTab}>{renderTab(activeTab)}</Fragment>
+      <div
+        key={activeTab}
+        data-testid="studio-tab-content"
+        data-motion-view={activeTab}
+        data-motion-state="enter"
+        className="h-full min-h-0 overflow-hidden"
+      >
+        {renderTab(activeTab)}
       </div>
     </>
   );
