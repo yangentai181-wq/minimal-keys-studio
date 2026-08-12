@@ -18,6 +18,7 @@ import { Tooltip } from "./misc/Tooltip";
 import { GenericModal } from "./GenericModal";
 import { ActionFeedbackLabel } from "./motion/ActionFeedbackLabel";
 import { useTransientFeedback } from "./motion/useTransientFeedback";
+import { BrandLockup } from "./brand/BrandLockup";
 
 export interface AppHeaderProps {
   connectedDeviceLabel?: string;
@@ -86,8 +87,7 @@ export const AppHeader = ({
   return (
     <header className="top-0 left-0 right-0 grid grid-cols-[1fr_auto_1fr] items-center justify-between h-12 max-w-full border-b border-gray-200 bg-white">
       <div className="flex px-3 items-center gap-2">
-        <img src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`} alt="Logo" className="h-8 rounded" />
-        <p className="font-semibold text-base">minimal-keys カスタマイズ</p>
+        <BrandLockup size="compact" />
       </div>
       <GenericModal ref={showSettingsRef} className="max-w-[50vw]">
         <h2 className="my-2 text-lg">設定を初期化</h2>

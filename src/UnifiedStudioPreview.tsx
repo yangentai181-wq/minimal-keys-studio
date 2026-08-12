@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
 import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
+import { BrandLockup } from "./brand/BrandLockup";
 import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { createMonitorStore } from "./monitor/monitorStore";
@@ -227,21 +228,7 @@ export function UnifiedStudioPreview() {
       <div className="min-h-dvh bg-base-200 text-base-content">
       <header className="border-b border-base-300 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 lg:px-6">
-          <div className="flex items-center gap-3">
-            <img
-              src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`}
-              alt="minimal-keys"
-              className="h-11 w-11 rounded-lg"
-            />
-            <div>
-              <p className="truncate whitespace-nowrap text-xs font-bold uppercase text-accent">
-                minimal-keys studio
-              </p>
-              <h1 className="truncate whitespace-nowrap text-xl font-bold tracking-normal text-base-content">
-                エディタ / モニタ統合
-              </h1>
-            </div>
-          </div>
+          <BrandLockup tagline="エディタ / モニタ統合" />
           <div className="flex rounded-lg border border-base-300 bg-base-200 p-1">
             <button
               type="button"

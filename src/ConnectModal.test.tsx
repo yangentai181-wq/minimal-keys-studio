@@ -46,6 +46,14 @@ describe("normalizeConnectionError", () => {
 });
 
 describe("ConnectModal browser transports", () => {
+  it("presents Key Studio and states the current supported keyboard", () => {
+    render(<ConnectModal open transports={[]} onTransportCreated={vi.fn()} />);
+
+    expect(screen.getByText("Key Studio")).toBeInTheDocument();
+    expect(screen.getByText("現在はminimal-keysに対応")).toBeInTheDocument();
+    expect(screen.queryByText("minimal-keys カスタマイズ")).not.toBeInTheDocument();
+  });
+
   it("starts a simple transport from the button click and shows connection state", async () => {
     const transport = {} as RpcTransport;
     let resolveConnect: ((transport: RpcTransport) => void) | undefined;

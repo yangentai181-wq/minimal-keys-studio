@@ -63,4 +63,12 @@ describe("AppHeader save feedback", () => {
 
     expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
   });
+
+  it("uses Key Studio as the product brand while leaving the device label separate", () => {
+    render(<OsModeProvider><AppHeader connectedDeviceLabel="minimal-keys_R" /></OsModeProvider>);
+
+    expect(screen.getByText("Key Studio")).toBeInTheDocument();
+    expect(screen.getByText("minimal-keys_R")).toBeInTheDocument();
+    expect(screen.queryByText("minimal-keys カスタマイズ")).not.toBeInTheDocument();
+  });
 });

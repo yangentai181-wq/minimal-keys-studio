@@ -6,6 +6,8 @@ import { useModalRef } from "./misc/useModalRef";
 import { GenericModal } from "./GenericModal";
 import type { AvailableDevice } from "./tauri";
 import { normalizeConnectionError } from "./copy/connectionErrors";
+import { BrandLockup } from "./brand/BrandLockup";
+import identity from "./brand/identity.json";
 
 export type TransportFactory = {
   label: string;
@@ -488,21 +490,7 @@ export const ConnectModal = ({
       className="w-[min(92vw,34rem)] p-0 backdrop:bg-base-200"
     >
       <div className="border-b border-base-300 px-5 py-5">
-        <div className="flex items-center gap-3">
-          <img
-            src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`}
-            alt="minimal-keys"
-            className="h-12 w-12 rounded-xl shadow-sm"
-          />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-              minimal-keys studio
-            </p>
-            <h1 className="text-xl font-bold text-base-content">
-              minimal-keys カスタマイズ
-            </h1>
-          </div>
-        </div>
+        <BrandLockup tagline={identity.supportedDeviceCopy} />
         <p className="mt-4 text-sm leading-6 text-base-content/65">
           接続後にキーマップ、トラックボール、コンボ、Bluetooth設定を編集できます。
         </p>
