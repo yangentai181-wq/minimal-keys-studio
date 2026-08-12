@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && npm run verify:local-fonts",
+    "build": "tsc && vite build && npm run verify:local-fonts && npm run verify:brand",
     "verify:local-fonts": "node scripts/verify-local-fonts.mjs dist",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
-    "verify:brand-assets": "node scripts/verify-brand-assets.mjs"
+    "verify:brand-assets": "node scripts/verify-brand-assets.mjs",
+    "verify:brand": "node scripts/verify-brand-contract.mjs && npm run verify:brand-assets"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.1",

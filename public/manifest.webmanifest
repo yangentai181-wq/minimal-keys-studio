@@ -1,7 +1,7 @@
 {
-  "name": "Minimal Keys Studio",
-  "short_name": "Minimal Keys",
-  "description": "minimal-keys keyboard monitor and customization app.",
+  "name": "Key Studio",
+  "short_name": "Key Studio",
+  "description": "プロ向けキーボード設定・モニタリングツール。現在はminimal-keysに対応。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
