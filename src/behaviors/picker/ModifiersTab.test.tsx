@@ -72,8 +72,34 @@ describe("ModifiersTab", () => {
     fireEvent.click(screen.getByText("適用する"));
     expect(onApply).toHaveBeenCalledWith({
       behaviorId: 20,
-      param1: hid_usage_from_page_and_id(7, 224), // Left Ctrl HID usage
+      param1: 0x01, // Left Ctrl modifier bitmask
       param2: hid_usage_from_page_and_id(7, 4),   // A HID usage
+    });
+  });
+
+  it.each([
+    ["Ctrl (左)", 0x01],
+    ["Shift (左)", 0x02],
+    ["Alt/Option (左)", 0x04],
+    ["⌘ Cmd (左)", 0x08],
+    ["Ctrl (右)", 0x10],
+    ["Shift (右)", 0x20],
+    ["Alt/Option (右)", 0x40],
+    ["⌘ Cmd (右)", 0x80],
+  ])("mod-tap mode: %s uses modifier bitmask %#x", (label, bitmask) => {
+    const onApply = vi.fn();
+    render(<ModifiersTab behaviors={mockBehaviors} layers={[]} osMode="mac" onApplyBinding={onApply} />);
+    fireEvent.click(screen.getByText("Mod-Tap"));
+    fireEvent.click(screen.getByText(label));
+    fireEvent.change(screen.getByRole("combobox", { name: "タップキーを選択" }), {
+      target: { value: screen.getByRole("option", { name: "A" }).getAttribute("value")! },
+    });
+    fireEvent.click(screen.getByText("適用する"));
+
+    expect(onApply).toHaveBeenCalledWith({
+      behaviorId: 20,
+      param1: bitmask,
+      param2: hid_usage_from_page_and_id(7, 4),
     });
   });
 

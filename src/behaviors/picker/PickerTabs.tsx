@@ -46,6 +46,14 @@ export function PickerTabs({
   }
 
   function handleContentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.matches("input, select, textarea") || target.isContentEditable)
+    ) {
+      return;
+    }
+
     const { currentTarget } = event;
     if (event.key === "Home") {
       event.preventDefault();

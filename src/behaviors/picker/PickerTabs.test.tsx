@@ -141,6 +141,36 @@ describe("PickerTabs", () => {
     expect(outer.scrollTop).toBe(25);
   });
 
+  it.each(["ArrowDown", "PageDown", "Home"])(
+    "タップキー選択中の%sを候補スクロールが横取りしない",
+    (key) => {
+      render(
+        <div style={{ display: "flex", flexDirection: "column", height: "8rem" }}>
+          <OsModeProvider>
+            <PickerTabs
+              keyPosition={37}
+              behaviors={fakeBehaviors}
+              layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+              onApplyBinding={() => {}}
+            />
+          </OsModeProvider>
+        </div>,
+      );
+
+      fireEvent.click(screen.getByText("修飾キー"));
+      fireEvent.click(screen.getByText("Mod-Tap"));
+      fireEvent.click(screen.getByText("Ctrl (左)"));
+
+      const content = screen.getByTestId("picker-tab-content");
+      const select = screen.getByRole("combobox", { name: "タップキーを選択" });
+      content.scrollTop = 25;
+      select.focus();
+
+      expect(fireEvent.keyDown(select, { key })).toBe(true);
+      expect(content.scrollTop).toBe(25);
+    },
+  );
+
   it("タブ切替はbindingを適用せず、候補選択時だけ適用する", () => {
     const onApplyBinding = vi.fn();
 

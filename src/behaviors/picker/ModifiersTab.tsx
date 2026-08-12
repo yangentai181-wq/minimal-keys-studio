@@ -114,7 +114,7 @@ export function ModifiersTab({
       if (behaviorId === undefined) return;
       onApplyBinding({
         behaviorId,
-        param1: hid_usage_from_page_and_id(KB, selectedModifier.hidId),
+        param1: selectedModifier.bitmask,
         param2: encodeTapKey(selectedTapKey),
       });
     }
