@@ -1,6 +1,7 @@
 import { useModalRef } from "./useModalRef";
 
 import NOTICE from "../../NOTICE?raw";
+import identity from "../brand/identity.json";
 import { GenericModal } from "../GenericModal";
 
 export interface LicenseNoticeModalProps {
@@ -23,7 +24,7 @@ export const LicenseNoticeModal = ({
       <div>
         <div className="flex justify-between items-start">
           <p className="mr-2">
-            Key Studioには、Apache 2.0で公開されたZMK Studio由来のコードが含まれています。以下は同梱している原文のNOTICEです。
+            {identity.productName}には、Apache 2.0で公開されたZMK Studio由来のコードが含まれています。以下は同梱している原文のNOTICEです。
           </p>
           <button
             type="button"

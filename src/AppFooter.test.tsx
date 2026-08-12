@@ -1,8 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AppFooter } from "./AppFooter";
+import identity from "./brand/identity.json";
 
-it("shows Key Studio first and keeps ZMK credits accessible", () => {
+const originalProductName = identity.productName;
+
+beforeEach(() => {
+  identity.productName = "Identity Test Studio";
+});
+
+afterEach(() => {
+  identity.productName = originalProductName;
+});
+
+it("shows the identity product name first and keeps ZMK credits accessible", () => {
   const onShowAbout = vi.fn();
   const onShowLicenseNotice = vi.fn();
 
@@ -13,7 +24,7 @@ it("shows Key Studio first and keeps ZMK credits accessible", () => {
     />,
   );
 
-  expect(screen.getByText("Key Studio")).toBeInTheDocument();
+  expect(screen.getByText(identity.productName)).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "ZMK Contributorsへの謝辞" }),
   ).toBeInTheDocument();

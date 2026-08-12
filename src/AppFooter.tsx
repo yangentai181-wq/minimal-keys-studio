@@ -1,3 +1,5 @@
+import identity from "./brand/identity.json";
+
 export interface AppFooterProps {
   onShowAbout: () => void;
   onShowLicenseNotice: () => void;
@@ -10,7 +12,7 @@ export const AppFooter = ({
   return (
     <div className="grid justify-center p-1 bg-base-200">
       <div>
-        <span>Key Studio</span> —{" "}
+        <span>{identity.productName}</span> —{" "}
         <button
           type="button"
           className="hover:text-primary hover:underline"

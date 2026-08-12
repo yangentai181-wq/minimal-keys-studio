@@ -189,7 +189,7 @@ export const AboutModal = ({ open, onClose }: AboutModalProps) => {
             {identity.supportedDeviceCopy}
           </p>
           <p className="mt-3 text-sm leading-6">
-            Key StudioはZMK Studioを基盤に、minimal-keys向けの編集・モニタリング機能を統合したアプリです。
+            {identity.productName}はZMK Studioを基盤に、minimal-keys向けの編集・モニタリング機能を統合したアプリです。
           </p>
         </section>
         <button
