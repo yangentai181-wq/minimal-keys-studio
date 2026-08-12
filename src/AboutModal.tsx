@@ -40,6 +40,7 @@ import mekiboDarkMode from "./assets/mekibo-dark-mode.png";
 
 import splitkb from "./assets/splitkb.png";
 import splitkbDarkMode from "./assets/splitkb-dark-mode.png";
+import identity from "./brand/identity.json";
 import { GenericModal } from "./GenericModal";
 import { ExternalLink } from "./misc/ExternalLink";
 
@@ -181,6 +182,26 @@ export const AboutModal = ({ open, onClose }: AboutModalProps) => {
   return (
     <GenericModal ref={ref} className="min-w-min w-[70vw]" onClose={onClose}>
       <div className="flex justify-between items-start">
+        <section>
+          <h2 className="text-xl font-bold">{identity.productName}</h2>
+          <p>{identity.description}</p>
+          <p className="text-sm text-base-content/60">
+            {identity.supportedDeviceCopy}
+          </p>
+          <p className="mt-3 text-sm leading-6">
+            Key StudioはZMK Studioを基盤に、minimal-keys向けの編集・モニタリング機能を統合したアプリです。
+          </p>
+        </section>
+        <button
+          type="button"
+          className="p-1.5 rounded-md bg-gray-100 text-black hover:bg-gray-300"
+          onClick={onClose}
+        >
+          Close
+        </button>
+      </div>
+      <section className="mt-6">
+        <h3 className="text-lg font-semibold">ZMKへの謝辞</h3>
         <p>
           The ZMK Project:{" "}
           <ExternalLink href="https://zmk.dev/">website</ExternalLink>,{" "}
@@ -192,21 +213,12 @@ export const AboutModal = ({ open, onClose }: AboutModalProps) => {
             Discord Server
           </ExternalLink>
         </p>
-        <button
-          className="p-1.5 rounded-md bg-gray-100 text-black hover:bg-gray-300"
-          onClick={onClose}
-        >
-          Close
-        </button>
-      </div>
-      <div>
         <p className="py-1 mr-2">
           ZMK Studio is made possible thanks to the generous donation of time
           from our contributors, as well as the financial sponsorship from the
           following vendors:
         </p>
-      </div>
-      <div className="grid gap-2 auto-rows-auto grid-cols-[auto_minmax(min-content,1fr)] justify-items-center items-center">
+        <div className="grid gap-2 auto-rows-auto grid-cols-[auto_minmax(min-content,1fr)] justify-items-center items-center">
         {sponsors.map((s) => {
           const heightVariants = {
             [SponsorSize.Large]: "h-16",
@@ -248,7 +260,8 @@ export const AboutModal = ({ open, onClose }: AboutModalProps) => {
             </React.Fragment>
           );
         })}
-      </div>
+        </div>
+      </section>
     </GenericModal>
   );
 };
