@@ -64,8 +64,10 @@ function decodeBinding(reader: _m0.Reader, length: number): Binding {
 function encodeComboConfig(combo: ComboConfig): Uint8Array {
   const w = _m0.Writer.create();
   if (combo.comboId !== 0) w.uint32(8).uint32(combo.comboId);
-  for (const pos of combo.keyPositions) {
-    w.uint32(16).uint32(pos);
+  if (combo.keyPositions.length > 0) {
+    w.uint32(18).fork();
+    for (const pos of combo.keyPositions) w.uint32(pos);
+    w.ldelim();
   }
   if (combo.timeoutMs !== 0) w.uint32(24).uint32(combo.timeoutMs);
   if (combo.binding) w.uint32(34).bytes(encodeBinding(combo.binding));
@@ -84,7 +86,16 @@ function decodeComboConfig(reader: _m0.Reader, length: number): ComboConfig {
     const tag = reader.uint32();
     switch (tag >>> 3) {
       case 1: c.comboId = reader.uint32(); break;
-      case 2: c.keyPositions.push(reader.uint32()); break;
+      case 2: {
+        if ((tag & 7) === 2) {
+          const packedLength = reader.uint32();
+          const packedEnd = reader.pos + packedLength;
+          while (reader.pos < packedEnd) c.keyPositions.push(reader.uint32());
+        } else {
+          c.keyPositions.push(reader.uint32());
+        }
+        break;
+      }
       case 3: c.timeoutMs = reader.uint32(); break;
       case 4: c.binding = decodeBinding(reader, reader.uint32()); break;
       case 5: c.layerMask = reader.uint32(); break;

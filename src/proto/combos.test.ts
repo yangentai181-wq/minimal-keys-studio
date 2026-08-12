@@ -15,9 +15,9 @@ const missionControl: ComboConfig = {
 };
 
 describe("runtime combo protocol", () => {
-  it("encodes the F+J Mission Control request as the exact 21-byte payload", () => {
+  it("encodes F+J as the packed repeated uint32 payload required by proto3", () => {
     expect([...encodeSetCombo(missionControl)]).toEqual([
-      10, 19, 10, 17, 8, 1, 16, 13, 16, 18, 24, 50,
+      10, 19, 10, 17, 8, 1, 18, 2, 13, 18, 24, 50,
       34, 7, 8, 1, 16, 210, 128, 156, 8,
     ]);
     expect(encodeSetCombo(missionControl)).toHaveLength(21);
@@ -34,9 +34,9 @@ describe("runtime combo protocol", () => {
     };
 
     expect([...encodeSetCombo(maximum)]).toEqual([
-      10, 47, 10, 45,
+      10, 45, 10, 43,
       8, 255, 255, 255, 255, 15,
-      16, 0, 16, 1, 16, 2, 16, 3,
+      18, 4, 0, 1, 2, 3,
       24, 232, 7,
       34, 18,
       8, 255, 255, 255, 255, 15,
@@ -77,9 +77,9 @@ describe("runtime combo protocol", () => {
     expect(response[operation]?.success).toBe(success);
   });
 
-  it("decodes a GetAll fixture without exposing a test-only codec API", () => {
+  it("decodes packed key positions returned by the firmware", () => {
     const response = decodeResponse(Uint8Array.from([
-      34, 19, 10, 17, 8, 1, 16, 13, 16, 18, 24, 50,
+      34, 19, 10, 17, 8, 1, 18, 2, 13, 18, 24, 50,
       34, 7, 8, 1, 16, 210, 128, 156, 8,
     ]));
 

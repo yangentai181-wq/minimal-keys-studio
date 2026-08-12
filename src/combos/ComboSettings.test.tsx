@@ -38,7 +38,9 @@ function encodeCombo(overrides: Partial<{ comboId: number; keys: number[]; behav
   const config = { comboId: 1, keys: [13, 18], behaviorId: 1, param1: 0x01070052, param2: 0, timeoutMs: 50, layerMask: 0, slowRelease: false, ...overrides };
   const binding = Writer.create().uint32(8).uint32(config.behaviorId).uint32(16).uint32(config.param1).uint32(24).uint32(config.param2).finish();
   const writer = Writer.create().uint32(8).uint32(config.comboId);
-  for (const key of config.keys) writer.uint32(16).uint32(key);
+  const keys = Writer.create();
+  for (const key of config.keys) keys.uint32(key);
+  writer.uint32(18).bytes(keys.finish());
   return writer.uint32(24).uint32(config.timeoutMs).uint32(34).bytes(binding)
     .uint32(40).uint32(config.layerMask).uint32(48).bool(config.slowRelease).finish();
 }
@@ -280,7 +282,7 @@ describe("ComboSettings save confirmation", () => {
 
     await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(2));
     expect([...mocks.subsystem!.callRPC.mock.calls[1][0]]).toEqual([
-      10, 19, 10, 17, 8, 1, 16, 13, 16, 18, 24, 50,
+      10, 19, 10, 17, 8, 1, 18, 2, 13, 18, 24, 50,
       34, 7, 8, 1, 16, 210, 128, 156, 8,
     ]);
   });
