@@ -15,6 +15,7 @@ import {
 import { StudioConnectionOverview } from "./StudioConnectionOverview";
 import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
 import { BrandLockup } from "./brand/BrandLockup";
+import identity from "./brand/identity.json";
 import { MinimalKeysMonitorLayout } from "./monitor/MinimalKeysMonitorLayout";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { createMonitorStore } from "./monitor/monitorStore";
@@ -254,7 +255,7 @@ export function UnifiedStudioPreview() {
         editorAvailable
         connectionTitle="エディタ / モニタ統合"
         connectionBody="Raw HIDのライブ入力とStudio RPCの編集状態を同じ画面で扱います。"
-        deviceName="minimal-keys"
+        deviceName={identity.compatibility.deviceName}
       />
 
       <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4 pb-28 xl:grid-cols-[240px_minmax(0,1fr)_320px] xl:px-6 xl:pb-6">

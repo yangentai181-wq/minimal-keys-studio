@@ -78,6 +78,59 @@ describe("Key Studio repository brand contract", () => {
     });
   });
 
+  it.each([
+    ["bundle identifier", "bundleIdentifier", "com.example.changed", "Identity compatibility bundleIdentifier: expected com.hyhy-masa.minimal-keys-customize, received com.example.changed"],
+    ["main binary", "mainBinaryName", "changed-binary", "Identity compatibility mainBinaryName: expected minimal-keys-customize, received changed-binary"],
+    ["npm package", "npmPackageName", "changed-package", "Identity compatibility npmPackageName: expected minimal-keys-studio, received changed-package"],
+    ["Vite base", "viteBasePath", "/changed/", "Identity compatibility viteBasePath: expected /minimal-keys-studio/, received /changed/"],
+    ["keymap format", "keymapFormat", "changed-keymap", "Identity compatibility keymapFormat: expected minimal-keys-studio-keymap, received changed-keymap"],
+    ["device name", "deviceName", "changed-device", "Device name: expected minimal-keys, received changed-device"],
+  ])("rejects an identity %s mutation", (_name, key, value, expectedViolation) => {
+    withFixture((fixture) => {
+      const identityPath = join(fixture, "src/brand/identity.json");
+      const identity = JSON.parse(readFileSync(identityPath, "utf8"));
+      identity.compatibility[key] = value;
+      writeFileSync(identityPath, `${JSON.stringify(identity, null, 2)}\n`);
+
+      expect(findBrandContractViolations(fixture)).toContain(expectedViolation);
+    });
+  });
+
+  it.each([
+    ["Tauri binary", "src-tauri/tauri.conf.json", "minimal-keys-customize", "changed-binary", "Main binary name: expected minimal-keys-customize, received changed-binary"],
+    ["npm package", "package.json", "minimal-keys-studio", "changed-package", "npm package name: expected minimal-keys-studio, received changed-package"],
+    ["Vite base", "vite.config.ts", "/minimal-keys-studio/", "/changed/", "Vite base path: missing base: isTauri ? \"/\" : \"/minimal-keys-studio/\""],
+  ])("rejects a protected %s consumer mutation", (_name, relativePath, from, to, expectedViolation) => {
+    withFixture((fixture) => {
+      const path = join(fixture, relativePath);
+      writeFileSync(path, readFileSync(path, "utf8").replace(from, to));
+
+      expect(findBrandContractViolations(fixture)).toContain(expectedViolation);
+    });
+  });
+
+  it("rejects each keymap compatibility direction independently", () => {
+    withFixture((fixture) => {
+      const keymapPath = join(fixture, "src/keyboard/keymap-io.ts");
+      writeFileSync(keymapPath, readFileSync(keymapPath, "utf8").replace('format: "minimal-keys-studio-keymap",', 'format: "changed-keymap",'));
+      expect(findBrandContractViolations(fixture)).toContain("Keymap export format: missing serializer literal");
+    });
+    withFixture((fixture) => {
+      const keymapPath = join(fixture, "src/keyboard/keymap-io.ts");
+      writeFileSync(keymapPath, readFileSync(keymapPath, "utf8").replace('file.format !== "minimal-keys-studio-keymap"', 'file.format !== "changed-keymap"'));
+      expect(findBrandContractViolations(fixture)).toContain("Keymap export format: missing deserializer guard literal");
+    });
+  });
+
+  it("requires the active device display to bind to identity compatibility", () => {
+    withFixture((fixture) => {
+      const previewPath = join(fixture, "src/UnifiedStudioPreview.tsx");
+      writeFileSync(previewPath, readFileSync(previewPath, "utf8").replace("deviceName={identity.compatibility.deviceName}", 'deviceName="minimal-keys"'));
+
+      expect(findBrandContractViolations(fixture)).toContain("Device name consumer binding: missing deviceName={identity.compatibility.deviceName}");
+    });
+  });
+
   it("rejects stale metadata and active story display names", () => {
     withFixture((fixture) => {
       const indexPath = join(fixture, "index.html");

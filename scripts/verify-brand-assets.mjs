@@ -20,17 +20,32 @@ function filesIn(directory, root = directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) files.push(...filesIn(path, root));
-    else if (entry.isFile()) files.push(relative(root, path));
+    else if (entry.isFile()) files.push(toManifestPath(relative(root, path)));
   }
   return files.sort();
 }
 
-function ownedAssetPaths(root) {
+export function toManifestPath(path) {
+  const normalized = path.replaceAll("\\", "/");
+  if (/^(?:[A-Za-z]:)?\//.test(normalized) || normalized === ".." || normalized.startsWith("../")) {
+    throw new Error(`Manifest paths must be relative: ${path}`);
+  }
+  return normalized.replace(/^\.\//, "");
+}
+
+export function ownedAssetManifestPaths({ publicFiles, tauriFiles }) {
   return [
     "design/brand/key-studio-icon.svg",
-    ...filesIn(resolve(root, "public/icons")).map((path) => `public/icons/${path}`),
-    ...filesIn(resolve(root, "src-tauri/icons")).map((path) => `src-tauri/icons/${path}`),
+    ...publicFiles.map((path) => `public/icons/${toManifestPath(path)}`),
+    ...tauriFiles.map((path) => `src-tauri/icons/${toManifestPath(path)}`),
   ].sort();
+}
+
+function ownedAssetPaths(root) {
+  return ownedAssetManifestPaths({
+    publicFiles: filesIn(resolve(root, "public/icons")),
+    tauriFiles: filesIn(resolve(root, "src-tauri/icons")),
+  });
 }
 
 function hash(path) {

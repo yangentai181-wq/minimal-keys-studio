@@ -60,6 +60,7 @@ export function findBrandContractViolations(root) {
   includes(viteConfig, `base: isTauri ? "/" : "${COMPATIBILITY.viteBasePath}"`, "Vite base path");
   if (!new RegExp(`return\\s*\\{\\s*format: "${COMPATIBILITY.keymapFormat}"`, "s").test(keymapSource)) violations.push("Keymap export format: missing serializer literal");
   if (!new RegExp(`file\\.format !== "${COMPATIBILITY.keymapFormat}"`).test(keymapSource)) violations.push("Keymap export format: missing deserializer guard literal");
+  includes(text(root, "src/UnifiedStudioPreview.tsx"), "deviceName={identity.compatibility.deviceName}", "Device name consumer binding");
   includes(releaseWorkflow, `releaseName: '${PRODUCT_NAME} \${{ github.ref_name }}'`, "Release display name");
   if (!notice.startsWith("ZMK Studio")) violations.push("NOTICE must retain upstream ZMK Studio attribution");
 

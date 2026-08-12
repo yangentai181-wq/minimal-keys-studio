@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { pngDimensions, verifyBrandAssets } from "./verify-brand-assets.mjs";
+import { ownedAssetManifestPaths, pngDimensions, toManifestPath, verifyBrandAssets } from "./verify-brand-assets.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -25,6 +25,24 @@ function withFixture(assertion: (fixture: string) => void) {
 }
 
 describe("Key Studio icon assets", () => {
+  it("normalizes Windows separators before adding manifest prefixes", () => {
+    expect(toManifestPath("src-tauri\\icons\\android\\mipmap-hdpi\\ic_launcher.png")).toBe(
+      "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+    );
+  });
+
+  it("builds the same manifest ownership set from Windows-style relative paths", () => {
+    expect(ownedAssetManifestPaths({
+      publicFiles: ["key-studio-icon.svg"],
+      tauriFiles: ["android\\mipmap-hdpi\\ic_launcher.png", "icon.ico"],
+    })).toEqual([
+      "design/brand/key-studio-icon.svg",
+      "public/icons/key-studio-icon.svg",
+      "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+      "src-tauri/icons/icon.ico",
+    ]);
+  });
+
   it("keeps every generated asset aligned with the SVG source", () => {
     expect(verifyBrandAssets(root)).toEqual([]);
   });
