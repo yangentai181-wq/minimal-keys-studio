@@ -100,6 +100,45 @@ describe("PickerTabs", () => {
     expect(content.scrollTop).toBe(0);
   });
 
+  it("フォーカス済み候補からのキー操作も候補領域だけをスクロールする", () => {
+    render(
+      <div
+        data-testid="outer-scroll-container"
+        style={{ display: "flex", flexDirection: "column", height: "8rem", overflowY: "auto" }}
+      >
+        <OsModeProvider>
+          <PickerTabs
+            keyPosition={37}
+            behaviors={fakeBehaviors}
+            layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+            onApplyBinding={() => {}}
+          />
+        </OsModeProvider>
+      </div>
+    );
+
+    const outer = screen.getByTestId("outer-scroll-container");
+    const content = screen.getByTestId("picker-tab-content");
+    const candidate = screen.getByRole("button", { name: /^Tab/ });
+    Object.defineProperty(content, "clientHeight", { configurable: true, value: 80 });
+    outer.scrollTop = 25;
+    content.scrollTop = 0;
+    candidate.focus();
+
+    expect(fireEvent.keyDown(candidate, { key: "PageDown" })).toBe(false);
+    expect(content.scrollTop).toBeGreaterThan(0);
+    expect(outer.scrollTop).toBe(25);
+
+    const afterPageDown = content.scrollTop;
+    expect(fireEvent.keyDown(candidate, { key: "ArrowDown" })).toBe(false);
+    expect(content.scrollTop).toBeGreaterThan(afterPageDown);
+    expect(outer.scrollTop).toBe(25);
+
+    expect(fireEvent.keyDown(candidate, { key: "Home" })).toBe(false);
+    expect(content.scrollTop).toBe(0);
+    expect(outer.scrollTop).toBe(25);
+  });
+
   it("タブ切替はbindingを適用せず、候補選択時だけ適用する", () => {
     const onApplyBinding = vi.fn();
 
