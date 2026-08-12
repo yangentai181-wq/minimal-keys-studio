@@ -18,7 +18,7 @@ export const Standard: Story = {
 
 export const IconScale: Story = {
   render: () => (
-    <div className="flex items-end gap-6 bg-base-200 p-8">
+    <div className="flex flex-wrap items-end gap-6 bg-base-200 p-8">
       {[16, 32, 128, 512].map((size) => (
         <figure key={size} className="grid gap-2 text-center text-sm">
           <img
