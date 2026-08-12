@@ -90,7 +90,7 @@ export function PickerTabs({
           aria-label="キー割り当て候補"
           tabIndex={0}
           onKeyDown={handleContentKeyDown}
-          className="absolute inset-0 overflow-y-auto overscroll-contain pb-2 [scrollbar-gutter:stable]"
+          className="absolute inset-0 overflow-y-auto overscroll-contain pb-2.5 [scrollbar-gutter:stable]"
         >
           <div key={activeTab} data-motion-state="enter" data-motion-view={activeTab}>
             {activeTab === "actions" && (

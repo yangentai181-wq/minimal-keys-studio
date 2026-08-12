@@ -36,7 +36,7 @@ describe("PickerTabs", () => {
       "inset-0",
       "overflow-y-auto",
       "overscroll-contain",
-      "pb-2",
+      "pb-2.5",
       "[scrollbar-gutter:stable]",
     );
     expect(content).toHaveAttribute("aria-label", "キー割り当て候補");
