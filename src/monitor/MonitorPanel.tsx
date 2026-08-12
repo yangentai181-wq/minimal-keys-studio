@@ -6,7 +6,7 @@ import { Activity, Bluetooth, Cable, MousePointer2, X } from "lucide-react";
 import type { ConnectionDescription } from "../connection/coordinator";
 import { isLayerActive } from "../connection/rawHidFrames";
 import { LayerPicker } from "../keyboard/LayerPicker";
-import { AUTO_MOUSE_LAYER_INDEX } from "../keyboard/minimal-keys-layers";
+import { AUTO_MOUSE_LAYER_ID } from "../keyboard/minimal-keys-layers";
 import type { MonitorStore, PointerSample } from "./monitorStore";
 import { useMonitorSnapshot } from "./useMonitorSnapshot";
 
@@ -33,7 +33,7 @@ function MonitorLiveContent({ monitorStore }: { monitorStore: MonitorStore }) {
   const snapshot = useMonitorSnapshot(monitorStore);
   const layers = MONITOR_LAYER_NAMES.map((name, id) => ({ id, name }));
   const pressedList = [...snapshot.pressed].sort((a, b) => a - b);
-  const autoMouseActive = isLayerActive(snapshot.activeLayerMask, AUTO_MOUSE_LAYER_INDEX);
+  const autoMouseActive = isLayerActive(snapshot.activeLayerMask, AUTO_MOUSE_LAYER_ID);
   const pointerSummary = usePointerSummary(snapshot.pointer, formatPointerDetails);
 
   return (

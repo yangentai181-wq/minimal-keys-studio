@@ -45,7 +45,7 @@ import {
   downloadJson,
   openFilePicker,
 } from "./keymap-io";
-import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer } from "./minimal-keys-layers";
+import { canChangeUserLayerStructure, canEditUserLayer, canMoveUserLayer, hasPrecisionLayer, isPrecisionLayerId } from "./minimal-keys-layers";
 import { publishKeymapChanged } from "./keymap-events";
 import { runGuardedKeymapWrite } from "./keymap-operation-guards";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
@@ -197,6 +197,8 @@ export default function Keyboard() {
     (keymap) => keymap?.keymap?.getKeymap,
     true
   );
+  const keymapRef = useRef<Keymap | undefined>(keymap);
+  keymapRef.current = keymap;
   usePublishMonitorKeymap(keymap);
 
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
@@ -364,14 +366,18 @@ export default function Keyboard() {
   );
 
   const moveLayer = useCallback(
-    (start: number, end: number) => {
-      if (!canMoveUserLayer(start, end)) return;
-      const doMove = async (startIndex: number, destIndex: number) => {
-        if (!conn.conn) {
+    (startLayerId: number, destinationLayerId: number) => {
+      if (!canMoveUserLayer(startLayerId, destinationLayerId)) return;
+      const doMove = async (movingLayerId: number, targetLayerId: number) => {
+        const currentKeymap = keymapRef.current;
+        if (!conn.conn || !currentKeymap) {
           return;
         }
 
-        const resp = await runGuardedKeymapWrite(canMoveUserLayer(startIndex, destIndex), () => call_rpc(conn.conn!, {
+        const startIndex = currentKeymap.layers.findIndex((layer) => layer.id === movingLayerId);
+        const destIndex = currentKeymap.layers.findIndex((layer) => layer.id === targetLayerId);
+        const canMove = startIndex >= 0 && destIndex >= 0 && canMoveUserLayer(movingLayerId, targetLayerId);
+        const resp = await runGuardedKeymapWrite(canMove, () => call_rpc(conn.conn!, {
           keymap: { moveLayer: { startIndex, destIndex } },
         }));
 
@@ -385,8 +391,8 @@ export default function Keyboard() {
       };
 
       undoRedo?.(async () => {
-        await doMove(start, end);
-        return () => doMove(end, start);
+        await doMove(startLayerId, destinationLayerId);
+        return () => doMove(destinationLayerId, startLayerId);
       });
     },
     [undoRedo, conn.conn, setKeymap]
@@ -457,7 +463,9 @@ export default function Keyboard() {
         throw new Error("Not connected");
       }
 
-      const resp = await runGuardedKeymapWrite(canEditUserLayer(layerIndex) && canChangeUserLayerStructure(keymap.layers), () => call_rpc(conn.conn!, {
+        const layerId = keymap.layers[layerIndex]?.id;
+        const canRemove = layerId !== undefined && canEditUserLayer(layerId) && canChangeUserLayerStructure(keymap.layers);
+        const resp = await runGuardedKeymapWrite(canRemove, () => call_rpc(conn.conn!, {
         keymap: { removeLayer: { layerIndex } },
       }));
 
@@ -485,7 +493,8 @@ export default function Keyboard() {
         throw new Error("Not connected");
       }
 
-      const resp = await runGuardedKeymapWrite(canEditUserLayer(atIndex) && canChangeUserLayerStructure(keymap?.layers ?? []), () => call_rpc(conn.conn!, {
+        const canRestore = canEditUserLayer(layerId) && canChangeUserLayerStructure(keymap?.layers ?? []);
+        const resp = await runGuardedKeymapWrite(canRestore, () => call_rpc(conn.conn!, {
         keymap: { restoreLayer: { layerId, atIndex } },
       }));
 
@@ -511,8 +520,8 @@ export default function Keyboard() {
     }
 
     const index = selectedLayerIndex;
-    if (!canEditUserLayer(index) || !canChangeUserLayerStructure(keymap.layers)) return;
     const layerId = keymap.layers[index].id;
+    if (!canEditUserLayer(layerId) || !canChangeUserLayerStructure(keymap.layers)) return;
     undoRedo?.(async () => {
       await doRemove(index);
       return () => doRestore(layerId, index);
@@ -521,14 +530,13 @@ export default function Keyboard() {
 
   const changeLayerName = useCallback(
     (id: number, oldName: string, newName: string) => {
-      if (!keymap || !canEditUserLayer(keymap.layers.findIndex((layer) => layer.id === id))) return;
+      if (!keymap || !canEditUserLayer(id)) return;
       async function changeName(layerId: number, name: string) {
         if (!conn.conn) {
           throw new Error("Not connected");
         }
 
-        const layerIndex = keymap?.layers.findIndex((layer) => layer.id === layerId) ?? -1;
-        const resp = await runGuardedKeymapWrite(canEditUserLayer(layerIndex), () => call_rpc(conn.conn!, {
+        const resp = await runGuardedKeymapWrite(canEditUserLayer(layerId), () => call_rpc(conn.conn!, {
           keymap: { setLayerProps: { layerId, name } },
         }));
 
@@ -597,7 +605,14 @@ export default function Keyboard() {
     const behaviorList = Object.values(behaviors);
     const keyCount = layouts[selectedPhysicalLayoutIndex]?.keys?.length ?? 0;
     const maxLayers = keymap.layers.length + (keymap.availableLayers ?? 0);
-    const result = deserializeKeymap(json, behaviorList, keyCount, maxLayers);
+    const runtimeUserLayers = keymap.layers.filter((layer) => !isPrecisionLayerId(layer.id));
+    const result = deserializeKeymap(
+      json,
+      behaviorList,
+      keyCount,
+      maxLayers,
+      keymap.layers.map((layer) => layer.id),
+    );
 
     if (!result.ok) {
       const err = result.error;
@@ -624,9 +639,10 @@ export default function Keyboard() {
     try {
       for (let li = 0; li < result.layers.length; li++) {
         const importedLayer = result.layers[li];
-        if (li < keymap.layers.length) {
-          const layerId = keymap.layers[li].id;
-          if (importedLayer.name !== keymap.layers[li].name) {
+        if (li < runtimeUserLayers.length) {
+          const runtimeLayer = runtimeUserLayers[li];
+          const layerId = runtimeLayer.id;
+          if (importedLayer.name !== runtimeLayer.name) {
             await call_rpc(conn.conn, {
               keymap: { setLayerProps: { layerId, name: importedLayer.name } },
             });
@@ -685,7 +701,6 @@ export default function Keyboard() {
               layers={keymap.layers}
               selectedLayerIndex={selectedLayerIndex}
               onLayerClicked={setSelectedLayerIndex}
-              showInactiveAutoMouseLayer={false}
               onLayerMoved={moveLayer}
               canAdd={canChangeUserLayerStructure(keymap.layers) && (keymap.availableLayers || 0) > 0}
               canRemove={canChangeUserLayerStructure(keymap.layers) && (keymap.layers?.length || 0) > 1}

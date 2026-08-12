@@ -29,4 +29,15 @@ describe("PhysicalLayout", () => {
     fireEvent.click(disabled);
     expect(onPositionClicked).not.toHaveBeenCalled();
   });
+
+  it("renders hold-action positions with an orange border and accessibility text", () => {
+    render(
+      <PhysicalLayout
+        positions={[{ id: "hold-key", x: 0, y: 0, width: 1, height: 1, hasHoldAction: true, children: "A" }]}
+      />,
+    );
+
+    const key = screen.getByRole("button", { name: /A.*長押し動作あり/ });
+    expect(key).toHaveClass("border-2", "border-orange-500");
+  });
 });

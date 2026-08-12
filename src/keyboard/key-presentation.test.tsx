@@ -72,6 +72,24 @@ describe("buildKeyPresentation", () => {
     );
   });
 
+  it.each([
+    ["Layer-Tap", true],
+    ["LAYER_TAP_MKP", true],
+    ["Mod-Tap", true],
+    ["Hold-Tap", true],
+    ["Key Press", false],
+  ])("marks %s bindings as hold actions: %s", (displayName, hasHoldAction) => {
+    const result = buildKeyPresentation({
+      layout: layout as never,
+      keymap: { layers: [{ id: 4, name: "Base", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] }] } as never,
+      behaviors: { 1: { id: 1, displayName } } as never,
+      selectedLayerIndex: 0,
+      os: "mac",
+    });
+
+    expect(result[0].hasHoldAction).toBe(hasHoldAction);
+  });
+
   it("changes presentation when its keymap, behavior, layer, layout, or OS inputs change", () => {
     const input = {
       layout: layout as never,

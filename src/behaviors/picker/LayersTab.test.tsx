@@ -25,12 +25,53 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
     expect(screen.getByText("一時レイヤー")).toBeTruthy();
     expect(screen.getByText("レイヤー切替")).toBeTruthy();
     expect(screen.getByText("レイヤー / タップ")).toBeTruthy();
+    expect(screen.getByText("押している間スクロール")).toBeTruthy();
+    expect(screen.getByText("押している間ポインター精密")).toBeTruthy();
+  });
+
+  it("applies scroll hold action with the selected tap key", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={[...layers, { id: 7, index: 3, name: "Scroll" }]} osMode="mac" onApplyBinding={onApply} />);
+
+    fireEvent.click(screen.getByText("押している間スクロール"));
+    fireEvent.change(screen.getByRole("combobox", { name: "タップキーを選択" }), { target: { value: "0" } });
+    fireEvent.click(screen.getByText("適用する"));
+
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 12, param1: 7, param2: (7 << 16) + 44 });
+  });
+
+  it("disables a missing fixed functional layer with a Japanese reason", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={layers} osMode="mac" onApplyBinding={onApply} />);
+
+    expect(screen.getByText("ポインター精密用レイヤーがありません")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "押している間ポインター精密" })).toHaveAttribute("disabled");
+  });
+
+  it("associates a disabled functional action with its reason", () => {
+    const onApply = vi.fn();
+    render(<LayersTab behaviors={mockBehaviors} layers={layers} osMode="mac" onApplyBinding={onApply} />);
+
+    const button = screen.getByRole("button", { name: "押している間ポインター精密" });
+    const reason = screen.getByText("ポインター精密用レイヤーがありません");
+    expect(button).toHaveAttribute("aria-describedby", reason.id);
+  });
+
+  it("disables functional actions when Layer-Tap is unavailable", () => {
+    const onApply = vi.fn();
+    const behaviorsWithoutLayerTap = mockBehaviors.filter((behavior) => behavior.displayName !== "Layer-Tap");
+    render(<LayersTab behaviors={behaviorsWithoutLayerTap} layers={[...layers, { id: 7, index: 3, name: "Scroll" }, { id: 8, index: 4, name: "Precision" }]} osMode="mac" onApplyBinding={onApply} />);
+
+    expect(screen.getByRole("button", { name: "押している間スクロール" })).toHaveAttribute("disabled");
+    expect(screen.getByRole("button", { name: "押している間ポインター精密" })).toHaveAttribute("disabled");
+    expect(screen.getAllByText("Layer-Tap が利用できません")).toHaveLength(2);
   });
 
   it("shows layer selection after behavior click", () => {
@@ -39,6 +80,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -54,6 +96,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -75,6 +118,7 @@ describe("LayersTab", () => {
           { id: 42, index: 0, name: "Symbols" },
           { id: 0, index: 1, name: "Base" },
         ]}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -94,6 +138,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -112,6 +157,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -131,6 +177,7 @@ describe("LayersTab", () => {
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -148,12 +195,44 @@ describe("LayersTab", () => {
     });
   });
 
+  it("Layer-Tap: clears an unapplied tap key when OS mode changes", () => {
+    const onApply = vi.fn();
+    const { rerender } = render(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        osMode="mac"
+        onApplyBinding={onApply}
+      />,
+    );
+    fireEvent.click(screen.getByText("レイヤー / タップ"));
+    fireEvent.click(screen.getByText("Symbols"));
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "タップキーを選択" }),
+      { target: { value: "20" } },
+    );
+    expect(screen.getByText("適用する")).not.toHaveAttribute("disabled");
+
+    rerender(
+      <LayersTab
+        behaviors={mockBehaviors}
+        layers={layers}
+        osMode="windows"
+        onApplyBinding={onApply}
+      />,
+    );
+
+    expect(screen.getByText("適用する")).toHaveAttribute("disabled");
+    expect(screen.getByRole("option", { name: "Win (左)" })).toBeTruthy();
+  });
+
   it("LAYER_TAP_MKP: applies selected layer plus mouse button", () => {
     const onApply = vi.fn();
     render(
       <LayersTab
         behaviors={mockBehaviors}
         layers={layers}
+        osMode="mac"
         onApplyBinding={onApply}
       />,
     );
@@ -170,17 +249,18 @@ describe("LayersTab", () => {
 
   describe("layer role labels", () => {
     const layersWithRoles = [
-      { id: 0, index: 0, name: "Base" },
-      { id: 4, index: 4, name: "AutoMouse" },
-      { id: 7, index: 7, name: "Scroll" },
+      { id: 7, index: 0, name: "Scroll" },
+      { id: 0, index: 1, name: "Base" },
+      { id: 4, index: 2, name: "AutoMouse" },
     ];
 
-    it("shows （スクロール） suffix for scroll layer (index 7)", () => {
+    it("shows （スクロール） suffix for scroll layer ID 7", () => {
       const onApply = vi.fn();
       render(
         <LayersTab
           behaviors={mockBehaviors}
           layers={layersWithRoles}
+          osMode="mac"
           onApplyBinding={onApply}
         />,
       );
@@ -188,12 +268,13 @@ describe("LayersTab", () => {
       expect(screen.getByText("Scroll（スクロール）")).toBeTruthy();
     });
 
-    it("shows （自動マウス） suffix for auto mouse layer (index 4)", () => {
+    it("shows （自動マウス） suffix for auto mouse layer ID 4", () => {
       const onApply = vi.fn();
       render(
         <LayersTab
           behaviors={mockBehaviors}
           layers={layersWithRoles}
+          osMode="mac"
           onApplyBinding={onApply}
         />,
       );
@@ -201,12 +282,13 @@ describe("LayersTab", () => {
       expect(screen.getByText("AutoMouse（自動マウス）")).toBeTruthy();
     });
 
-    it("shows no role suffix for plain layer (index 0)", () => {
+    it("shows no role suffix for plain layer ID 0", () => {
       const onApply = vi.fn();
       render(
         <LayersTab
           behaviors={mockBehaviors}
           layers={layersWithRoles}
+          osMode="mac"
           onApplyBinding={onApply}
         />,
       );
@@ -215,19 +297,19 @@ describe("LayersTab", () => {
     });
   });
 
-  it("omits the internal precision layer by array index for every layer behavior", () => {
+  it("omits the internal precision layer ID for every layer behavior", () => {
     const onApply = vi.fn();
-    const layersWithInternal = Array.from({ length: 9 }, (_, index) => ({
-      id: index === 8 ? 91 : index + 20,
-      index,
-      name: index === 8 ? "Precision" : `Layer ${index}`,
-    }));
-    render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} onApplyBinding={onApply} />);
+    const layersWithInternal = [
+      { id: 7, index: 0, name: "Scroll" },
+      { id: 8, index: 1, name: "Precision" },
+      { id: 0, index: 2, name: "Base" },
+    ];
+    render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} osMode="mac" onApplyBinding={onApply} />);
 
     fireEvent.click(screen.getByText("レイヤー切替"));
 
     expect(screen.queryByText("Precision")).toBeNull();
-    fireEvent.click(screen.getByText("Layer 7（スクロール）"));
-    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 27, param2: 0 });
+    fireEvent.click(screen.getByText("Scroll（スクロール）"));
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 7, param2: 0 });
   });
 });

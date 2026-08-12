@@ -10,7 +10,7 @@ import {
 } from "react-aria-components";
 import { useModalRef } from "../misc/useModalRef";
 import { GenericModal } from "../GenericModal";
-import { getMinimalKeysLayerRole, hasPrecisionLayer, isPrecisionLayerIndex } from "./minimal-keys-layers";
+import { getMinimalKeysLayerRole, hasPrecisionLayer, isPrecisionLayerId } from "./minimal-keys-layers";
 
 interface Layer {
   id: number;
@@ -18,7 +18,7 @@ interface Layer {
 }
 
 export type LayerClickCallback = (index: number) => void;
-export type LayerMovedCallback = (index: number, destination: number) => void;
+export type LayerMovedCallback = (layerId: number, destinationLayerId: number) => void;
 
 interface LayerPickerProps {
   layers: Array<Layer>;
@@ -106,8 +106,8 @@ const EditLabelModal = ({
   );
 };
 
-const layerRoleBadge = (index: number) => {
-  const role = getMinimalKeysLayerRole(index);
+const layerRoleBadge = (layerId: number) => {
+  const role = getMinimalKeysLayerRole(layerId);
   if (role === "autoMouse") {
     return {
       label: "Auto Mouse",
@@ -152,8 +152,8 @@ export const LayerPicker = ({
         selected: i === selectedLayerIndex,
       }))
       .filter((item) => {
-        if (isPrecisionLayerIndex(item.index)) return false;
-        const role = getMinimalKeysLayerRole(item.index);
+        if (isPrecisionLayerId(item.id)) return false;
+        const role = getMinimalKeysLayerRole(item.id);
         return (
           showInactiveAutoMouseLayer ||
           role !== "autoMouse" ||
@@ -196,7 +196,7 @@ export const LayerPicker = ({
       const startItem = layer_items.find((l) => e.keys.has(l.id));
       const endItem = layer_items.find((l) => l.id === e.target.key);
       if (startItem && endItem) {
-        onLayerMoved?.(startItem.index, endItem.index);
+        onLayerMoved?.(startItem.id, endItem.id);
       }
     },
   });
@@ -269,7 +269,7 @@ export const LayerPicker = ({
                 </span>
               )}
               {(() => {
-                const badge = layerRoleBadge(layer_item.index);
+                const badge = layerRoleBadge(layer_item.id);
                 if (!badge) return null;
                 return (
                   <span

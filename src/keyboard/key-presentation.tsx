@@ -23,6 +23,10 @@ type LayerName = {
   name: string;
 };
 
+export function isHoldActionBehavior(displayName: string): boolean {
+  return ["Layer-Tap", "LAYER_TAP_MKP", "Mod-Tap", "Hold-Tap"].includes(displayName);
+}
+
 function hidParamLabel(param: number): string {
   const [rawPage, id] = hid_usage_page_and_id_from_usage(param);
   return getHidKeyDescription(rawPage & 0xff, id).roleName;
@@ -120,6 +124,6 @@ export function buildKeyPresentation({ layout, keymap, behaviors, selectedLayerI
     const binding = layer.bindings[index];
     const displayName = behaviors[binding.behaviorId]?.displayName || "Unknown";
     const display = keyDisplay(binding, displayName, layerNames);
-    return { id: `${layer.id}-${index}`, header: display.header, x: key.x / 100, y: key.y / 100, width: key.width / 100, height: key.height / 100, r: (key.r || 0) / 100, rx: (key.rx || 0) / 100, ry: (key.ry || 0) / 100, children: display.children, tooltipData: resolveTooltipData(binding, behaviorList, index, os) };
+    return { id: `${layer.id}-${index}`, header: display.header, x: key.x / 100, y: key.y / 100, width: key.width / 100, height: key.height / 100, r: (key.r || 0) / 100, rx: (key.rx || 0) / 100, ry: (key.ry || 0) / 100, children: display.children, tooltipData: resolveTooltipData(binding, behaviorList, index, os), hasHoldAction: isHoldActionBehavior(displayName) };
   });
 }

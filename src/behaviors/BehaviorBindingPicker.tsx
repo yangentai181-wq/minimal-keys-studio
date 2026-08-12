@@ -7,6 +7,31 @@ import { getBehaviorDescription } from "./behavior-descriptions";
 import { formatBindingDetail } from "./binding-display";
 import { useTransientFeedback } from "../motion/useTransientFeedback";
 import { PickerTabs } from "./picker/PickerTabs";
+import type { TapKeyItem } from "./picker/common-tap-keys";
+import { getHidKeyDescription } from "../keyboard/key-descriptions";
+
+const KEYBOARD_USAGE_PAGE = 7;
+
+function currentTapKeyFromBinding(
+  behaviorName: string | undefined,
+  param2: number,
+): TapKeyItem | undefined {
+  if (behaviorName !== "Mod-Tap" && behaviorName !== "Layer-Tap") {
+    return undefined;
+  }
+
+  const encoded = param2 >>> 0;
+  const page = (encoded >>> 16) & 0xff;
+  if (page !== KEYBOARD_USAGE_PAGE) return undefined;
+
+  const hidId = encoded & 0xffff;
+  const modifier = (encoded >>> 24) & 0xff;
+  return {
+    label: getHidKeyDescription(page, hidId).roleName,
+    hidId,
+    ...(modifier === 0 ? {} : { modifier }),
+  };
+}
 
 export interface BehaviorBindingPickerProps {
   binding: BehaviorBinding;
@@ -62,6 +87,10 @@ export const BehaviorBindingPicker = ({
   const bindingDetail = currentBehavior
     ? formatBindingDetail(currentBehavior.displayName, binding, layers)
     : "";
+  const currentTapKey = currentTapKeyFromBinding(
+    currentBehavior?.displayName,
+    binding.param2,
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5">
@@ -82,6 +111,7 @@ export const BehaviorBindingPicker = ({
         keyPosition={keyPosition ?? -1}
         behaviors={behaviors}
         layers={layers}
+        currentTapKey={currentTapKey}
         onApplyBinding={handleApplyBinding}
       />
     </div>

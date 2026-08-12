@@ -57,19 +57,19 @@ describe("serializeKeymap", () => {
     expect(result.keymap.layers[0].bindings[1].param2).toBe(0x7002c);
   });
 
-  it("exports minimal-keys auto mouse and scroll layer metadata when those fixed layers exist", () => {
+  it("exports minimal-keys auto mouse and scroll layer metadata by ID after reordering", () => {
     const keymapWithFixedLayers = {
       ...sampleKeymap,
-      layers: Array.from({ length: 8 }, (_, index) => ({
-        id: index,
-        name: index === 4 ? "Mouse" : index === 7 ? "Scroll" : `Layer ${index}`,
+      layers: [7, 0, 4].map((id) => ({
+        id,
+        name: id === 4 ? "Mouse" : id === 7 ? "Scroll" : "Base",
         bindings: sampleKeymap.layers[0].bindings,
       })),
     };
     const result = serializeKeymap(keymapWithFixedLayers, mockBehaviors, "1.0.0");
     expect(result.minimalKeys).toEqual({
-      autoMouseLayerIndex: 4,
-      scrollLayerIndex: 7,
+      autoMouseLayerId: 4,
+      scrollLayerId: 7,
     });
   });
 
@@ -78,19 +78,19 @@ describe("serializeKeymap", () => {
     expect(result.minimalKeys).toBeUndefined();
   });
 
-  it("omits the device-only precision layer from exported user data", () => {
+  it("omits the device-only precision layer ID from exported user data after reordering", () => {
     const keymapWithPrecisionLayer = {
       ...sampleKeymap,
-      layers: Array.from({ length: 9 }, (_, index) => ({
-        id: index === 8 ? 91 : index + 20,
-        name: index === 8 ? "Precision" : `Layer ${index}`,
+      layers: [0, 8, 4, 7].map((id) => ({
+        id,
+        name: id === 8 ? "Precision" : `Layer ${id}`,
         bindings: sampleKeymap.layers[0].bindings,
       })),
     };
 
     const result = serializeKeymap(keymapWithPrecisionLayer, mockBehaviors, "1.0.0");
 
-    expect(result.keymap.layers).toHaveLength(8);
+    expect(result.keymap.layers).toHaveLength(3);
     expect(result.keymap.layers.map((layer) => layer.name)).not.toContain("Precision");
   });
 
@@ -122,6 +122,35 @@ describe("deserializeKeymap", () => {
     expect(result.layers[0].name).toBe("Base");
     expect(result.layers[0].bindings[0]).toEqual({ behaviorId: 1, param1: 0x70004, param2: 0 });
     expect(result.layers[0].bindings[1]).toEqual({ behaviorId: 2, param1: 1, param2: 0x7002c });
+  });
+
+  it("round-trips a Precision Layer-Tap reference using its persistent layer ID", () => {
+    const keymapWithPrecisionLayer = {
+      ...sampleKeymap,
+      layers: [0, 1, 2, 3, 4, 5, 6, 7, 8].map((id) => ({
+        id,
+        name: id === 8 ? "Precision" : `Layer ${id}`,
+        bindings: [{ behaviorId: 2, param1: 8, param2: 0x7002c }],
+      })),
+    };
+
+    const exported = serializeKeymap(keymapWithPrecisionLayer, mockBehaviors, "1.0.0");
+    const result = deserializeKeymap(
+      JSON.stringify(exported),
+      mockBehaviors,
+      1,
+      9,
+      keymapWithPrecisionLayer.layers.map((layer) => layer.id),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      layers: expect.arrayContaining([
+        expect.objectContaining({
+          bindings: [{ behaviorId: 2, param1: 8, param2: 0x7002c }],
+        }),
+      ]),
+    });
   });
 
   it("rejects invalid JSON", () => {

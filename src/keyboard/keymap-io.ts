@@ -2,7 +2,8 @@ import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import {
   getMinimalKeysLayerMetadata,
-  PRECISION_LAYER_INDEX,
+  PRECISION_LAYER_ID,
+  isPrecisionLayerId,
   type MinimalKeysLayerMetadata,
 } from "./minimal-keys-layers";
 
@@ -80,11 +81,11 @@ export function serializeKeymap(
     version: 1,
     exportDate: new Date().toISOString(),
     appVersion,
-    ...(minimalKeys.autoMouseLayerIndex !== null || minimalKeys.scrollLayerIndex !== null
+    ...(minimalKeys.autoMouseLayerId !== null || minimalKeys.scrollLayerId !== null
       ? { minimalKeys }
       : {}),
     keymap: {
-      layers: keymap.layers.filter((_layer, index) => index !== PRECISION_LAYER_INDEX).map((layer) => ({
+      layers: keymap.layers.filter((layer) => !isPrecisionLayerId(layer.id)).map((layer) => ({
         name: layer.name,
         bindings: layer.bindings.map((b) => ({
           behaviorName: behaviorIdToName.get(b.behaviorId) ?? `Unknown(${b.behaviorId})`,
@@ -101,6 +102,7 @@ export function deserializeKeymap(
   deviceBehaviors: GetBehaviorDetailsResponse[],
   deviceKeyCount: number,
   maxLayers: number,
+  validLayerIds?: Iterable<number>,
 ): ImportResult {
   let data: unknown;
   try {
@@ -130,8 +132,9 @@ export function deserializeKeymap(
   }
 
   const exportLayers = km.layers as unknown[];
+  const validLayerIdSet = validLayerIds ? new Set(validLayerIds) : undefined;
 
-  const maxUserLayers = maxLayers > PRECISION_LAYER_INDEX ? maxLayers - 1 : maxLayers;
+  const maxUserLayers = maxLayers > PRECISION_LAYER_ID ? maxLayers - 1 : maxLayers;
   if (exportLayers.length > maxUserLayers) {
     return {
       ok: false,
@@ -191,7 +194,10 @@ export function deserializeKeymap(
         continue;
       }
 
-      if (LAYER_BEHAVIOR_NAMES.includes(b.behaviorName) && b.param1 >= exportLayers.length) {
+      if (
+        LAYER_BEHAVIOR_NAMES.includes(b.behaviorName) &&
+        !(validLayerIdSet ? validLayerIdSet.has(b.param1) : b.param1 < exportLayers.length)
+      ) {
         return {
           ok: false,
           error: {

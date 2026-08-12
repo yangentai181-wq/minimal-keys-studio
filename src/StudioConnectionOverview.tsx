@@ -5,7 +5,7 @@ import { useBehaviorMap } from "./behaviors/BehaviorsContext";
 import { isLayerActive } from "./connection/rawHidFrames";
 import { useMonitorKeymap } from "./keyboard/MonitorKeymapContext";
 import { MINIMAL_KEYS_KEY_COUNT } from "./keyboard/minimal-keys-layout";
-import { AUTO_MOUSE_LAYER_INDEX } from "./keyboard/minimal-keys-layers";
+import { AUTO_MOUSE_LAYER_ID } from "./keyboard/minimal-keys-layers";
 import { MONITOR_LAYER_NAMES } from "./monitor/layerNames";
 import { resolveFactoryMonitorKeyLabel } from "./monitor/minimalKeysMonitorLabels";
 import { type MonitorStore } from "./monitor/monitorStore";
@@ -137,7 +137,7 @@ function MonitorSummary({
     : undefined;
   const layerName = liveLayerName || MONITOR_LAYER_NAMES[layerId] || `L${layerId}`;
   const pointerSummary = usePointerSummary(monitor.pointer);
-  const autoMouseActive = isLayerActive(monitor.activeLayerMask, AUTO_MOUSE_LAYER_INDEX);
+  const autoMouseActive = isLayerActive(monitor.activeLayerMask, AUTO_MOUSE_LAYER_ID);
   const statusItems = [
     {
       active: monitorActive,

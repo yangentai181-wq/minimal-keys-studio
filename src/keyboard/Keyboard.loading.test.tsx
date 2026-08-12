@@ -11,6 +11,10 @@ const rpc = vi.hoisted(() => ({
     availableLayers: 0,
   },
 }));
+const keymapIO = vi.hoisted(() => ({
+  openFilePicker: vi.fn(),
+  deserializeKeymap: vi.fn(),
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -29,6 +33,12 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/keymap", () => ({
 }));
 
 vi.mock("../rpc/logging", () => ({ call_rpc: rpc.call }));
+vi.mock("./keymap-io", () => ({
+  downloadJson: vi.fn(),
+  openFilePicker: keymapIO.openFilePicker,
+  serializeKeymap: vi.fn(),
+  deserializeKeymap: keymapIO.deserializeKeymap,
+}));
 vi.mock("../rpc/useConnectedDeviceData", () => ({
   useConnectedDeviceData: () => [rpc.keymap, vi.fn()],
 }));
@@ -42,7 +52,7 @@ vi.mock("../rpc/LockStateContext", async () => {
 });
 vi.mock("../undoRedo", async () => {
   const { createContext } = await import("react");
-  return { UndoRedoContext: createContext(undefined) };
+  return { UndoRedoContext: createContext((operation: () => Promise<unknown>) => { void operation(); }) };
 });
 vi.mock("../misc/Toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("../OsModeContext", () => ({ useOsMode: () => ({ osMode: "mac" }) }));
@@ -63,15 +73,20 @@ vi.mock("./PhysicalLayoutPicker", () => ({ PhysicalLayoutPicker: () => <div>レ�
 vi.mock("./LayerPicker", () => ({
   LayerPicker: ({
     onLayerClicked,
+    onLayerMoved,
     selectionLocked,
   }: {
     onLayerClicked?: (index: number) => void;
+    onLayerMoved?: (startLayerId: number, destinationLayerId: number) => void;
     selectionLocked?: boolean;
   }) => (
     <div>
       <span>レイヤー</span>
       <button type="button" onClick={() => onLayerClicked?.(2)}>
         Layer 2
+      </button>
+      <button type="button" onClick={() => onLayerMoved?.(4, 7)}>
+        Move Auto Mouse to Scroll
       </button>
       <output data-testid="layer-selection-locked">
         {selectionLocked ? "locked" : "editable"}
@@ -105,6 +120,8 @@ describe("Keyboard loading", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     rpc.call.mockReset();
+    keymapIO.openFilePicker.mockReset();
+    keymapIO.deserializeKeymap.mockReset();
     rpc.keymap.layers = [];
   });
 
@@ -178,5 +195,66 @@ describe("Keyboard loading", () => {
     expect(screen.getByTestId("layer-selection-locked")).toHaveTextContent("editable");
     fireEvent.click(screen.getByRole("button", { name: "Layer 2" }));
     expect(screen.getByTestId("selected-layer-index")).toHaveTextContent("2");
+  });
+
+  it("resolves reordered layer IDs to current RPC positions", async () => {
+    rpc.keymap.layers = [
+      { id: 7, name: "Scroll", bindings: [] },
+      { id: 0, name: "Base", bindings: [] },
+      { id: 4, name: "Auto Mouse", bindings: [] },
+    ];
+    rpc.call.mockImplementation((_connection, request) => {
+      if ("keymap" in request && "getPhysicalLayouts" in request.keymap) {
+        return Promise.resolve(layoutResponse([{ keys: [] }]));
+      }
+      return Promise.resolve({
+        keymap: {
+          moveLayer: {
+            ok: { ...rpc.keymap, maxLayerNameLength: 16 },
+          },
+        },
+      });
+    });
+    renderKeyboard();
+
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "Move Auto Mouse to Scroll" }));
+
+    await act(async () => { await Promise.resolve(); });
+    expect(rpc.call).toHaveBeenCalledWith(expect.anything(), {
+      keymap: { moveLayer: { startIndex: 2, destIndex: 0 } },
+    });
+  });
+
+  it("imports user layers into reordered non-Precision runtime layers", async () => {
+    rpc.keymap.layers = [
+      { id: 0, name: "Base", bindings: [] },
+      { id: 8, name: "Precision", bindings: [] },
+      { id: 4, name: "Auto Mouse", bindings: [] },
+      { id: 7, name: "Scroll", bindings: [] },
+    ];
+    rpc.call.mockResolvedValue(layoutResponse([{ keys: [{}] }]));
+    keymapIO.openFilePicker.mockResolvedValue("{} ");
+    keymapIO.deserializeKeymap.mockReturnValue({
+      ok: true,
+      layers: [
+        { name: "Base", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+        { name: "Auto Mouse", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+        { name: "Scroll", bindings: [{ behaviorId: 1, param1: 0, param2: 0 }] },
+      ],
+    });
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    renderKeyboard();
+
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "読込" }));
+    await act(async () => { await Promise.resolve(); });
+
+    const writes = rpc.call.mock.calls
+      .map(([, request]) => request)
+      .filter((request) => "keymap" in request && "setLayerBinding" in request.keymap)
+      .map((request) => request.keymap.setLayerBinding.layerId);
+    expect(writes).toEqual([0, 4, 7]);
+    expect(writes).not.toContain(8);
   });
 });

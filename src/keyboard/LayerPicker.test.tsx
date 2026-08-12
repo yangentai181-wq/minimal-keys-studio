@@ -3,11 +3,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { LayerPicker } from "./LayerPicker";
 
 describe("LayerPicker minimal-keys layer badges", () => {
-  it("marks fixed auto mouse and scroll layers", () => {
-    const layers = Array.from({ length: 8 }, (_, index) => ({
-      id: index,
-      name: index === 4 ? "Mouse" : index === 7 ? "Scroll" : `Layer ${index}`,
-    }));
+  it("marks fixed auto mouse and scroll layers after reordering", () => {
+    const layers = [
+      { id: 7, name: "Scroll" },
+      { id: 0, name: "Base" },
+      { id: 4, name: "Mouse" },
+    ];
 
     render(
       <LayerPicker
@@ -43,15 +44,16 @@ describe("LayerPicker minimal-keys layer badges", () => {
   });
 
   it("hides the inactive auto mouse layer in monitor display", () => {
-    const layers = Array.from({ length: 8 }, (_, index) => ({
-      id: index,
-      name: index === 4 ? "Mouse" : index === 7 ? "Scroll" : `Layer ${index}`,
-    }));
+    const layers = [
+      { id: 0, name: "Base" },
+      { id: 4, name: "Mouse" },
+      { id: 7, name: "Scroll" },
+    ];
 
     render(
       <LayerPicker
         layers={layers}
-        selectedLayerIndex={0}
+      selectedLayerIndex={0}
         showInactiveAutoMouseLayer={false}
       />,
     );
@@ -61,15 +63,16 @@ describe("LayerPicker minimal-keys layer badges", () => {
   });
 
   it("shows the auto mouse layer when it is the active layer", () => {
-    const layers = Array.from({ length: 8 }, (_, index) => ({
-      id: index,
-      name: index === 4 ? "Mouse" : index === 7 ? "Scroll" : `Layer ${index}`,
-    }));
+    const layers = [
+      { id: 0, name: "Base" },
+      { id: 4, name: "Mouse" },
+      { id: 7, name: "Scroll" },
+    ];
 
     render(
       <LayerPicker
         layers={layers}
-        selectedLayerIndex={4}
+      selectedLayerIndex={1}
         showInactiveAutoMouseLayer={false}
       />,
     );
@@ -98,11 +101,11 @@ describe("LayerPicker minimal-keys layer badges", () => {
     );
   });
 
-  it("does not expose the internal precision layer for selection or editing", () => {
-    const layers = Array.from({ length: 9 }, (_, index) => ({
-      id: index === 8 ? 91 : index + 20,
-      name: index === 8 ? "Precision" : `Layer ${index}`,
-    }));
+  it("does not expose the internal precision layer ID for selection or editing", () => {
+    const layers = [
+      { id: 8, name: "Precision" },
+      { id: 0, name: "Base" },
+    ];
 
     render(<LayerPicker layers={layers} selectedLayerIndex={0} onLayerClicked={vi.fn()} />);
 
@@ -111,7 +114,7 @@ describe("LayerPicker minimal-keys layer badges", () => {
   });
 
   it("disables add and remove controls when the reserved layer is present", () => {
-    const layers = Array.from({ length: 9 }, (_, index) => ({ id: index + 20, name: `Layer ${index}` }));
+    const layers = [{ id: 0, name: "Base" }, { id: 8, name: "Precision" }];
     const reason = "精密モード用レイヤーを保護するため、レイヤーの追加と削除はできません";
 
     render(<LayerPicker layers={layers} selectedLayerIndex={0} canAdd canRemove onAddClicked={vi.fn()} onRemoveClicked={vi.fn()} layerOperationsLockedMessage={reason} />);

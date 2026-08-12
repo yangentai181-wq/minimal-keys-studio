@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_from_page_and_id } from "../../hid-usages";
@@ -42,7 +42,7 @@ function getModifiers(os: import("../use-cases").UserOS): ModifierItem[] {
   }));
 }
 
-import type { TapKeyItem } from "./common-tap-keys";
+import { encodeTapKey, type TapKeyItem } from "./common-tap-keys";
 import { TapKeySelect } from "./TapKeySelect";
 
 type Mode = "standalone" | "mod-tap";
@@ -51,15 +51,25 @@ interface ModifiersTabProps {
   behaviors: GetBehaviorDetailsResponse[];
   layers: { id: number; name: string }[];
   osMode: import("../use-cases").UserOS;
+  currentTapKey?: TapKeyItem;
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
-export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTabProps) {
+export function ModifiersTab({
+  behaviors,
+  osMode,
+  currentTapKey,
+  onApplyBinding,
+}: ModifiersTabProps) {
   const [mode, setMode] = useState<Mode>("standalone");
   const [selectedModifier, setSelectedModifier] = useState<ModifierItem | null>(null);
   const [selectedTapKey, setSelectedTapKey] = useState<TapKeyItem | null>(null);
 
   const modifiers = useMemo(() => getModifiers(osMode), [osMode]);
+
+  useEffect(() => {
+    setSelectedTapKey(null);
+  }, [osMode]);
 
   const behaviorIdMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -102,14 +112,10 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
       if (selectedTapKey === null) return;
       const behaviorId = behaviorIdMap["Mod-Tap"];
       if (behaviorId === undefined) return;
-      let param2 = hid_usage_from_page_and_id(KB, selectedTapKey.hidId);
-      if (selectedTapKey.modifier) {
-        param2 = (selectedTapKey.modifier << 24) | param2;
-      }
       onApplyBinding({
         behaviorId,
         param1: hid_usage_from_page_and_id(KB, selectedModifier.hidId),
-        param2,
+        param2: encodeTapKey(selectedTapKey),
       });
     }
   };
@@ -164,7 +170,12 @@ export function ModifiersTab({ behaviors, osMode, onApplyBinding }: ModifiersTab
 
       {/* Tap key selection for Mod-Tap */}
       {mode === "mod-tap" && selectedModifier && (
-        <TapKeySelect selected={selectedTapKey} onChange={handleTapKeyClick} />
+        <TapKeySelect
+          osMode={osMode}
+          selected={selectedTapKey}
+          currentExternal={currentTapKey}
+          onChange={handleTapKeyClick}
+        />
       )}
 
       {/* Apply button */}
