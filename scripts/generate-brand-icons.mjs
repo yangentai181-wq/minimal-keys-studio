@@ -1,9 +1,33 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const commandRoot = resolve(import.meta.dirname, "..");
+
+function filesIn(directory, root = directory) {
+  const files = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) files.push(...filesIn(path, root));
+    else if (entry.isFile()) files.push(relative(root, path));
+  }
+  return files.sort();
+}
+
+export function writeBrandIconAssetManifest(root) {
+  const files = [
+    "design/brand/key-studio-icon.svg",
+    ...filesIn(resolve(root, "public/icons")).map((path) => `public/icons/${path}`),
+    ...filesIn(resolve(root, "src-tauri/icons")).map((path) => `src-tauri/icons/${path}`),
+  ].sort();
+  const assets = Object.fromEntries(files.map((path) => [
+    path,
+    createHash("sha256").update(readFileSync(resolve(root, path))).digest("hex"),
+  ]));
+  writeFileSync(resolve(root, "design/brand/key-studio-icon-assets.json"), `${JSON.stringify({ assets }, null, 2)}\n`);
+}
 
 export function generateBrandIcons(root, destinations = {}) {
   const source = resolve(root, "design/brand/key-studio-icon.svg");
@@ -37,6 +61,10 @@ export function generateBrandIcons(root, destinations = {}) {
       cwd: commandRoot,
       stdio: "inherit",
     });
+  }
+
+  if (destinations.tauriIcons === undefined && destinations.publicIcons === undefined) {
+    writeBrandIconAssetManifest(root);
   }
 }
 

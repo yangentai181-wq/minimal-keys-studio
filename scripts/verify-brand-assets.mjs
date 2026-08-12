@@ -1,9 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { extname, join, relative, resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { generateBrandIcons } from "./generate-brand-icons.mjs";
+
+const MANIFEST_PATH = "design/brand/key-studio-icon-assets.json";
 
 export function pngDimensions(path) {
   const png = readFileSync(path);
@@ -20,6 +23,18 @@ function filesIn(directory, root = directory) {
     else if (entry.isFile()) files.push(relative(root, path));
   }
   return files.sort();
+}
+
+function ownedAssetPaths(root) {
+  return [
+    "design/brand/key-studio-icon.svg",
+    ...filesIn(resolve(root, "public/icons")).map((path) => `public/icons/${path}`),
+    ...filesIn(resolve(root, "src-tauri/icons")).map((path) => `src-tauri/icons/${path}`),
+  ].sort();
+}
+
+function hash(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
 function icnsContentsMatch(generatedPath, actualPath, scratchDirectory) {
@@ -50,7 +65,7 @@ function compareGeneratedDirectory(violations, generatedDirectory, actualDirecto
     const displayPath = relative(root, resolve(actualDirectory, relativePath));
     if (!actualFiles.has(relativePath)) violations.push(`Missing generated asset: ${displayPath}`);
     else if (!generatedFiles.has(relativePath)) violations.push(`Unexpected generated asset: ${displayPath}`);
-    else if (extname(relativePath) === ".icns"
+    else if (relativePath.endsWith(".icns")
       ? !icnsContentsMatch(resolve(generatedDirectory, relativePath), resolve(actualDirectory, relativePath), scratchDirectory)
       : !readFileSync(resolve(generatedDirectory, relativePath)).equals(readFileSync(resolve(actualDirectory, relativePath)))) {
       violations.push(`Generated asset differs: ${displayPath}`);
@@ -58,7 +73,24 @@ function compareGeneratedDirectory(violations, generatedDirectory, actualDirecto
   }
 }
 
-export function verifyBrandAssets(root) {
+function verifyFixedAssetHashes(root, violations) {
+  const manifestPath = resolve(root, MANIFEST_PATH);
+  if (!existsSync(manifestPath)) {
+    violations.push(`Missing ${MANIFEST_PATH}`);
+    return;
+  }
+  const expectedAssets = JSON.parse(readFileSync(manifestPath, "utf8")).assets;
+  const expectedPaths = Object.keys(expectedAssets).sort();
+  const actualPaths = ownedAssetPaths(root);
+  if (JSON.stringify(actualPaths) !== JSON.stringify(expectedPaths)) violations.push("Brand asset manifest does not list exactly the owned derived assets");
+  for (const path of expectedPaths) {
+    const actualPath = resolve(root, path);
+    if (!existsSync(actualPath)) violations.push(`Missing asset: ${path}`);
+    else if (hash(actualPath) !== expectedAssets[path]) violations.push(`Asset hash mismatch: ${path}`);
+  }
+}
+
+export function verifyBrandAssets(root, { mode = process.platform === "darwin" ? "macos" : "non-macos" } = {}) {
   const violations = [];
   const sourcePath = resolve(root, "design/brand/key-studio-icon.svg");
   const identityPath = resolve(root, "src/brand/identity.json");
@@ -75,26 +107,23 @@ export function verifyBrandAssets(root) {
   if (!existsSync(publicSvgPath) || !readFileSync(sourcePath).equals(readFileSync(publicSvgPath))) violations.push("Public SVG must be a byte-equal generated copy");
 
   const expectedPngs = new Map([
-    ["public/icons/icon-192.png", 192],
-    ["public/icons/icon-512.png", 512],
-    ["public/icons/maskable-512.png", 512],
-    ["public/icons/apple-touch-icon.png", 180],
-    ["src-tauri/icons/icon.png", 1024],
-    ["src-tauri/icons/32x32.png", 32],
-    ["src-tauri/icons/128x128.png", 128],
-    ["src-tauri/icons/128x128@2x.png", 256],
+    ["public/icons/icon-192.png", 192], ["public/icons/icon-512.png", 512], ["public/icons/maskable-512.png", 512], ["public/icons/apple-touch-icon.png", 180],
+    ["src-tauri/icons/icon.png", 1024], ["src-tauri/icons/32x32.png", 32], ["src-tauri/icons/128x128.png", 128], ["src-tauri/icons/128x128@2x.png", 256],
   ]);
   for (const [relativePath, size] of expectedPngs) {
     const path = resolve(root, relativePath);
-    if (!existsSync(path)) {
-      violations.push(`Missing ${relativePath}`);
-      continue;
+    if (!existsSync(path)) violations.push(`Missing ${relativePath}`);
+    else {
+      const dimensions = pngDimensions(path);
+      if (dimensions.width !== size || dimensions.height !== size) violations.push(`${relativePath} must be ${size}×${size}`);
     }
-    const dimensions = pngDimensions(path);
-    if (dimensions.width !== size || dimensions.height !== size) violations.push(`${relativePath} must be ${size}×${size}`);
   }
-
   if (violations.length > 0) return violations;
+
+  if (mode === "non-macos") {
+    verifyFixedAssetHashes(root, violations);
+    return violations;
+  }
 
   const temporaryRoot = mkdtempSync(join(tmpdir(), "key-studio-brand-assets-"));
   try {

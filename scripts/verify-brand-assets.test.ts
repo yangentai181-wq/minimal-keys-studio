@@ -11,6 +11,7 @@ function fixtureRoot() {
   for (const relativePath of ["design/brand", "public/icons", "src-tauri/icons", "src/brand/identity.json"]) {
     cpSync(resolve(root, relativePath), resolve(fixture, relativePath), { recursive: true });
   }
+  cpSync(resolve(root, "design/brand/key-studio-icon-assets.json"), resolve(fixture, "design/brand/key-studio-icon-assets.json"));
   return fixture;
 }
 
@@ -34,6 +35,16 @@ describe("Key Studio icon assets", () => {
       writeFileSync(iconPath, Buffer.concat([readFileSync(iconPath), Buffer.from("stale")]));
 
       expect(verifyBrandAssets(fixture)).toContain("Generated asset differs: src-tauri/icons/icon.ico");
+    });
+  });
+
+  it("checks fixed asset hashes without invoking macOS generators outside macOS", () => {
+    withFixture((fixture) => {
+      writeFileSync(resolve(fixture, "src-tauri/icons/icon.ico"), "tampered");
+
+      expect(verifyBrandAssets(fixture, { mode: "non-macos" })).toContain(
+        "Asset hash mismatch: src-tauri/icons/icon.ico",
+      );
     });
   });
 

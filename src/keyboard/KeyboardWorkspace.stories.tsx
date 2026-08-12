@@ -189,7 +189,7 @@ function IntegratedFrame(args: React.ComponentProps<typeof KeyboardWorkspace>) {
   return (
     <div className="grid h-screen min-h-[600px] grid-rows-[48px_64px_40px_minmax(0,1fr)_28px] overflow-hidden bg-[#F8FAFC] text-base-content">
       <header className="flex items-center border-b border-base-300 bg-white px-4 text-sm font-bold">
-        minimal-keys カスタマイズ
+        Key Studio
       </header>
       <section className="flex items-center gap-3 border-b border-base-300 bg-base-200 px-3">
         <strong className="text-sm">接続状態</strong>
