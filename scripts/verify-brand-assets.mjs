@@ -1,6 +1,9 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { extname, join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { generateBrandIcons } from "./generate-brand-icons.mjs";
 
 export function pngDimensions(path) {
   const png = readFileSync(path);
@@ -9,16 +12,65 @@ export function pngDimensions(path) {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
+function filesIn(directory, root = directory) {
+  const files = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) files.push(...filesIn(path, root));
+    else if (entry.isFile()) files.push(relative(root, path));
+  }
+  return files.sort();
+}
+
+function icnsContentsMatch(generatedPath, actualPath, scratchDirectory) {
+  const extracted = mkdtempSync(join(scratchDirectory, "icns-"));
+  try {
+    const generatedIconset = resolve(extracted, "generated.iconset");
+    const actualIconset = resolve(extracted, "actual.iconset");
+    try {
+      execFileSync("iconutil", ["-c", "iconset", generatedPath, "-o", generatedIconset], { stdio: "ignore" });
+      execFileSync("iconutil", ["-c", "iconset", actualPath, "-o", actualIconset], { stdio: "ignore" });
+    } catch {
+      return false;
+    }
+    const generatedFiles = filesIn(generatedIconset);
+    const actualFiles = filesIn(actualIconset);
+    return generatedFiles.length === actualFiles.length
+      && generatedFiles.every((file, index) => file === actualFiles[index]
+        && readFileSync(resolve(generatedIconset, file)).equals(readFileSync(resolve(actualIconset, file))));
+  } finally {
+    rmSync(extracted, { recursive: true, force: true });
+  }
+}
+
+function compareGeneratedDirectory(violations, generatedDirectory, actualDirectory, root, scratchDirectory) {
+  const generatedFiles = new Set(filesIn(generatedDirectory));
+  const actualFiles = new Set(filesIn(actualDirectory));
+  for (const relativePath of new Set([...generatedFiles, ...actualFiles])) {
+    const displayPath = relative(root, resolve(actualDirectory, relativePath));
+    if (!actualFiles.has(relativePath)) violations.push(`Missing generated asset: ${displayPath}`);
+    else if (!generatedFiles.has(relativePath)) violations.push(`Unexpected generated asset: ${displayPath}`);
+    else if (extname(relativePath) === ".icns"
+      ? !icnsContentsMatch(resolve(generatedDirectory, relativePath), resolve(actualDirectory, relativePath), scratchDirectory)
+      : !readFileSync(resolve(generatedDirectory, relativePath)).equals(readFileSync(resolve(actualDirectory, relativePath)))) {
+      violations.push(`Generated asset differs: ${displayPath}`);
+    }
+  }
+}
+
 export function verifyBrandAssets(root) {
   const violations = [];
   const sourcePath = resolve(root, "design/brand/key-studio-icon.svg");
+  const identityPath = resolve(root, "src/brand/identity.json");
   const publicSvgPath = resolve(root, "public/icons/key-studio-icon.svg");
   if (!existsSync(sourcePath)) return [`Missing ${sourcePath}`];
+  if (!existsSync(identityPath)) return [`Missing ${identityPath}`];
 
   const source = readFileSync(sourcePath, "utf8");
+  const identity = JSON.parse(readFileSync(identityPath, "utf8"));
   if (!source.includes('viewBox="0 0 1024 1024"')) violations.push("SVG viewBox must be 1024×1024");
-  if (!source.includes("#F97316")) violations.push("SVG must contain approved orange #F97316");
-  if (!source.includes("#0D9488")) violations.push("SVG must contain approved teal #0D9488");
+  if (!source.includes(identity.colors.orange)) violations.push(`SVG must contain identity orange ${identity.colors.orange}`);
+  if (!source.includes(identity.colors.teal)) violations.push(`SVG must contain identity teal ${identity.colors.teal}`);
   if ((source.match(/width="104" height="104"/g) ?? []).length !== 9) violations.push("SVG must contain exactly nine key faces");
   if (!existsSync(publicSvgPath) || !readFileSync(sourcePath).equals(readFileSync(publicSvgPath))) violations.push("Public SVG must be a byte-equal generated copy");
 
@@ -42,9 +94,17 @@ export function verifyBrandAssets(root) {
     if (dimensions.width !== size || dimensions.height !== size) violations.push(`${relativePath} must be ${size}×${size}`);
   }
 
-  for (const relativePath of ["src-tauri/icons/icon.icns", "src-tauri/icons/icon.ico"]) {
-    const path = resolve(root, relativePath);
-    if (!existsSync(path) || statSync(path).size === 0) violations.push(`Missing or empty ${relativePath}`);
+  if (violations.length > 0) return violations;
+
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "key-studio-brand-assets-"));
+  try {
+    const generatedTauriIcons = resolve(temporaryRoot, "tauri-icons");
+    const generatedPublicIcons = resolve(temporaryRoot, "public-icons");
+    generateBrandIcons(root, { tauriIcons: generatedTauriIcons, publicIcons: generatedPublicIcons });
+    compareGeneratedDirectory(violations, generatedTauriIcons, resolve(root, "src-tauri/icons"), root, temporaryRoot);
+    compareGeneratedDirectory(violations, generatedPublicIcons, resolve(root, "public/icons"), root, temporaryRoot);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
   }
   return violations;
 }
