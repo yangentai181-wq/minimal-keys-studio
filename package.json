@@ -13,7 +13,9 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
+    "verify:brand-assets": "node scripts/verify-brand-assets.mjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.1",
