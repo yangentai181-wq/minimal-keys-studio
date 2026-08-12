@@ -38,6 +38,11 @@ export function findBrandContractViolations(root) {
   };
 
   equal(identity.productName, PRODUCT_NAME, "Identity product name");
+  equal(identity.description, DESCRIPTION, "Identity description");
+  equal(identity.supportedDeviceCopy, SUPPORTED_DEVICE_COPY, "Identity supported-device copy");
+  equal(identity.iconPath, "icons/key-studio-icon.svg", "Identity icon path");
+  equal(identity.colors?.orange, "#F97316", "Identity orange");
+  equal(identity.colors?.teal, "#0D9488", "Identity teal");
   for (const [key, expected] of Object.entries(COMPATIBILITY)) {
     equal(identity.compatibility[key], expected, key === "deviceName" ? "Device name" : `Identity compatibility ${key}`);
   }

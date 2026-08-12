@@ -48,6 +48,36 @@ describe("Key Studio repository brand contract", () => {
     expect(packageJson.scripts.build).toContain("verify:brand");
   });
 
+  it.each([
+    ["product name", "productName", "Wrong Studio", "Identity product name: expected Key Studio, received Wrong Studio"],
+    ["description", "description", "Wrong description", "Identity description: expected プロ向けキーボード設定・モニタリングツール, received Wrong description"],
+    ["supported-device copy", "supportedDeviceCopy", "Wrong support", "Identity supported-device copy: expected 現在はminimal-keysに対応, received Wrong support"],
+    ["icon path", "iconPath", "icons/wrong.svg", "Identity icon path: expected icons/key-studio-icon.svg, received icons/wrong.svg"],
+  ])("rejects an identity %s mutation", (_name, key, value, expectedViolation) => {
+    withFixture((fixture) => {
+      const identityPath = join(fixture, "src/brand/identity.json");
+      const identity = JSON.parse(readFileSync(identityPath, "utf8"));
+      identity[key] = value;
+      writeFileSync(identityPath, `${JSON.stringify(identity, null, 2)}\n`);
+
+      expect(findBrandContractViolations(fixture)).toContain(expectedViolation);
+    });
+  });
+
+  it.each([
+    ["orange", "#000000", "Identity orange: expected #F97316, received #000000"],
+    ["teal", "#000000", "Identity teal: expected #0D9488, received #000000"],
+  ])("rejects an identity %s color mutation", (color, value, expectedViolation) => {
+    withFixture((fixture) => {
+      const identityPath = join(fixture, "src/brand/identity.json");
+      const identity = JSON.parse(readFileSync(identityPath, "utf8"));
+      identity.colors[color] = value;
+      writeFileSync(identityPath, `${JSON.stringify(identity, null, 2)}\n`);
+
+      expect(findBrandContractViolations(fixture)).toContain(expectedViolation);
+    });
+  });
+
   it("rejects coordinated changes to compatibility contracts and device name", () => {
     withFixture((fixture) => {
       const identityPath = join(fixture, "src/brand/identity.json");

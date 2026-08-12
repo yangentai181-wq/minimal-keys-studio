@@ -17,7 +17,7 @@ export function BrandLockup({
     <div className={`flex items-center ${compact ? "gap-2" : "gap-3"} ${className}`.trim()}>
       <img
         src={`${import.meta.env.BASE_URL}${identity.iconPath}`}
-        alt={identity.productName}
+        alt=""
         className={compact ? "h-8 w-8 rounded-lg" : "h-12 w-12 rounded-xl shadow-sm"}
       />
       <div className="min-w-0">

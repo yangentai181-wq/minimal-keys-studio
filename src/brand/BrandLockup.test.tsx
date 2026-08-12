@@ -8,7 +8,11 @@ describe("BrandLockup", () => {
 
     expect(screen.getByText("Key Studio")).toBeInTheDocument();
     expect(screen.getByText("現在はminimal-keysに対応")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Key Studio" })).toHaveAttribute(
+    expect(document.querySelector("img")).toHaveAttribute(
+      "alt",
+      "",
+    );
+    expect(document.querySelector("img")).toHaveAttribute(
       "src",
       expect.stringContaining("icons/key-studio-icon.svg"),
     );
