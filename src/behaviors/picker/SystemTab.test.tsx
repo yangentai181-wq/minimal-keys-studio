@@ -36,6 +36,38 @@ describe("SystemTab", () => {
     expect(onApply).toHaveBeenCalledWith({ behaviorId: 31, param1: 0, param2: 0 });
   });
 
+  it("orders None and Transparent first regardless of API response order", () => {
+    render(
+      <SystemTab
+        behaviors={[
+          { id: 33, displayName: "Reset", metadata: [] },
+          { id: 31, displayName: "Transparent", metadata: [] },
+          { id: 30, displayName: "None", metadata: [] },
+        ]}
+        onApplyBinding={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getAllByRole("button").slice(0, 3).map((button) => button.textContent),
+    ).toEqual([
+      "無効このキーを無効化する。押しても何も起きない",
+      "透過このレイヤーでは何も割り当てず、下のレイヤーの割り当てをそのまま使う",
+      "リセットキーボードを再起動する",
+    ]);
+  });
+
+  it("does not synthesize Transparent when the API omits it", () => {
+    render(
+      <SystemTab
+        behaviors={[{ id: 30, displayName: "None", metadata: [] }]}
+        onApplyBinding={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^透過/ })).not.toBeInTheDocument();
+  });
+
   it("renders Bluetooth operations", () => {
     const onApply = vi.fn();
     render(<SystemTab behaviors={mockBehaviors} onApplyBinding={onApply} />);

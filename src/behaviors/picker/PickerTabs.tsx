@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { useOsMode } from "../../OsModeContext";
@@ -42,8 +42,22 @@ export function PickerTabs({
     setActiveTab(tabId);
   }
 
+  function handleContentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const { currentTarget } = event;
+    if (event.key === "Home") {
+      event.preventDefault();
+      currentTarget.scrollTop = 0;
+    } else if (event.key === "PageDown") {
+      event.preventDefault();
+      currentTarget.scrollTop += currentTarget.clientHeight;
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      currentTarget.scrollTop += 40;
+    }
+  }
+
   return (
-    <div data-testid="picker-tabs" className="flex min-h-0 flex-1 flex-col gap-1.5">
+    <div data-testid="picker-tabs" className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden">
       {/* Tab bar */}
       <div
         data-testid="picker-tab-bar"
@@ -66,35 +80,44 @@ export function PickerTabs({
 
       {/* Tab content */}
       <div
-        ref={contentRef}
-        data-testid="picker-tab-content"
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+        data-testid="picker-scroll-viewport"
+        className="relative min-h-0 flex-1 overflow-hidden"
       >
-        <div key={activeTab} data-motion-state="enter" data-motion-view={activeTab}>
-          {activeTab === "actions" && (
-            <ActionsTab
-              keyPosition={keyPosition}
-              behaviors={behaviors}
-              layers={layers}
-              osMode={osMode}
-              onApplyBinding={onApplyBinding}
-            />
-          )}
-          {activeTab === "letters" && (
-            <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
-          )}
-          {activeTab === "layers" && (
-            <LayersTab behaviors={behaviors} layers={layers} onApplyBinding={onApplyBinding} />
-          )}
-          {activeTab === "modifiers" && (
-            <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />
-          )}
-          {activeTab === "japanese" && (
-            <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />
-          )}
-          {activeTab === "system" && (
-            <SystemTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
-          )}
+        <div
+          ref={contentRef}
+          data-testid="picker-tab-content"
+          role="region"
+          aria-label="キー割り当て候補"
+          tabIndex={0}
+          onKeyDown={handleContentKeyDown}
+          className="absolute inset-0 overflow-y-auto overscroll-contain pb-2.5 [scrollbar-gutter:stable]"
+        >
+          <div key={activeTab} data-motion-state="enter" data-motion-view={activeTab}>
+            {activeTab === "actions" && (
+              <ActionsTab
+                keyPosition={keyPosition}
+                behaviors={behaviors}
+                layers={layers}
+                osMode={osMode}
+                onApplyBinding={onApplyBinding}
+              />
+            )}
+            {activeTab === "letters" && (
+              <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
+            )}
+            {activeTab === "layers" && (
+              <LayersTab behaviors={behaviors} layers={layers} onApplyBinding={onApplyBinding} />
+            )}
+            {activeTab === "modifiers" && (
+              <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />
+            )}
+            {activeTab === "japanese" && (
+              <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />
+            )}
+            {activeTab === "system" && (
+              <SystemTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
+            )}
+          </div>
         </div>
       </div>
     </div>

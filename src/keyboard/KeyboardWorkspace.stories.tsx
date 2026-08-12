@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { userEvent, within } from "@storybook/test";
+import { useState } from "react";
 
+import { BehaviorBindingPicker } from "../behaviors/BehaviorBindingPicker";
 import { MinimalKeysMonitorLayout } from "../monitor/MinimalKeysMonitorLayout";
 import { createMonitorStore } from "../monitor/monitorStore";
 import { MonitorKeymapProvider } from "./MonitorKeymapContext";
@@ -56,6 +58,47 @@ function MockEditor() {
             </button>
           ))}
         </div>
+      </section>
+    </div>
+  );
+}
+
+const systemBehaviors = [
+  { id: 10, displayName: "Key Press", metadata: [] },
+  { id: 114, displayName: "Caps Word", metadata: [] },
+  { id: 109, displayName: "External Power", metadata: [] },
+  { id: 115, displayName: "Grave/Escape", metadata: [] },
+  { id: 110, displayName: "Key Repeat", metadata: [] },
+  { id: 111, displayName: "Key Toggle", metadata: [] },
+  { id: 112, displayName: "Studio Unlock", metadata: [] },
+  { id: 113, displayName: "Reset", metadata: [] },
+  { id: 31, displayName: "Transparent", metadata: [] },
+  { id: 116, displayName: "Bootloader", metadata: [] },
+  { id: 117, displayName: "Output Selection", metadata: [] },
+  { id: 32, displayName: "Bluetooth", metadata: [] },
+  { id: 30, displayName: "None", metadata: [] },
+];
+
+function SystemPickerEditor() {
+  const [binding, setBinding] = useState({ behaviorId: 10, param1: 6, param2: 0 });
+  return (
+    <div className="grid h-full min-h-0 grid-rows-[minmax(150px,42fr)_minmax(160px,58fr)] gap-2 bg-base-300 p-2">
+      <MinimalKeysMonitorLayout
+        activeLayerMask={1}
+        pressed={new Set([16])}
+        className="h-full min-h-0 bg-white [&_[role=grid]]:!h-full [&_[role=grid]]:!min-w-0 [&_[role=grid]]:!aspect-auto"
+      />
+      <section className="min-h-0 overflow-hidden rounded-lg border border-base-300 bg-white p-2 shadow-sm">
+        <BehaviorBindingPicker
+          binding={binding}
+          behaviors={systemBehaviors}
+          layers={[
+            { id: 0, index: 0, name: "Base" },
+            { id: 1, index: 1, name: "Live" },
+          ]}
+          keyPosition={37}
+          onBindingChanged={setBinding}
+        />
       </section>
     </div>
   );
@@ -170,7 +213,10 @@ function IntegratedFrame(args: React.ComponentProps<typeof KeyboardWorkspace>) {
       <div className="min-h-0">
         <KeyboardWorkspace {...args} />
       </div>
-      <footer className="border-t border-base-300 bg-white" />
+      <footer
+        data-testid="story-app-footer"
+        className="border-t border-base-300 bg-white"
+      />
     </div>
   );
 }
@@ -192,4 +238,28 @@ export const IntegratedMonitor800x600: Story = {
       within(canvasElement).getByRole("button", { name: "リアルタイム" }),
     );
   },
+};
+
+const openSystemTab = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  await userEvent.click(within(canvasElement).getByRole("button", { name: "システム" }));
+};
+
+export const IntegratedSystemPicker800x600: Story = {
+  name: "Integrated System Picker 800x600",
+  render: (args) => <IntegratedFrame {...args} editor={<SystemPickerEditor />} />,
+  parameters: {
+    __id: "keyboard-keyboardworkspace--integrated-system-picker-800x600",
+    viewport: { viewports, defaultViewport: "desktop800x600" },
+  },
+  play: openSystemTab,
+};
+
+export const IntegratedSystemPicker1200x800: Story = {
+  name: "Integrated System Picker 1200x800",
+  render: (args) => <IntegratedFrame {...args} editor={<SystemPickerEditor />} />,
+  parameters: {
+    __id: "keyboard-keyboardworkspace--integrated-system-picker-1200x800",
+    viewport: { viewports, defaultViewport: "desktop1200x800" },
+  },
+  play: openSystemTab,
 };
