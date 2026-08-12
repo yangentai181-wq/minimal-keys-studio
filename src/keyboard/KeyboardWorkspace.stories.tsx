@@ -248,6 +248,7 @@ export const IntegratedSystemPicker800x600: Story = {
   name: "Integrated System Picker 800x600",
   render: (args) => <IntegratedFrame {...args} editor={<SystemPickerEditor />} />,
   parameters: {
+    __id: "keyboard-keyboardworkspace--integrated-system-picker-800x600",
     viewport: { viewports, defaultViewport: "desktop800x600" },
   },
   play: openSystemTab,
@@ -257,6 +258,7 @@ export const IntegratedSystemPicker1200x800: Story = {
   name: "Integrated System Picker 1200x800",
   render: (args) => <IntegratedFrame {...args} editor={<SystemPickerEditor />} />,
   parameters: {
+    __id: "keyboard-keyboardworkspace--integrated-system-picker-1200x800",
     viewport: { viewports, defaultViewport: "desktop1200x800" },
   },
   play: openSystemTab,
