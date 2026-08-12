@@ -1,0 +1,18 @@
+{
+  "productName": "Key Studio",
+  "description": "プロ向けキーボード設定・モニタリングツール",
+  "supportedDeviceCopy": "現在はminimal-keysに対応",
+  "iconPath": "icons/key-studio-icon.svg",
+  "colors": {
+    "orange": "#F97316",
+    "teal": "#0D9488"
+  },
+  "compatibility": {
+    "bundleIdentifier": "com.hyhy-masa.minimal-keys-customize",
+    "mainBinaryName": "minimal-keys-customize",
+    "npmPackageName": "minimal-keys-studio",
+    "viteBasePath": "/minimal-keys-studio/",
+    "keymapFormat": "minimal-keys-studio-keymap",
+    "deviceName": "minimal-keys"
+  }
+}
