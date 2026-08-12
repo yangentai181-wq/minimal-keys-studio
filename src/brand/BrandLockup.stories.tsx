@@ -16,8 +16,8 @@ export const Standard: Story = {
   args: { size: "standard", tagline: "現在はminimal-keysに対応" },
 };
 
-export const IconScale: Story = {
-  render: () => (
+export function IconScalePreview() {
+  return (
     <div className="flex flex-wrap items-end gap-6 bg-base-200 p-8">
       {[16, 32, 128, 512].map((size) => (
         <figure key={size} className="grid gap-2 text-center text-sm">
@@ -30,7 +30,11 @@ export const IconScale: Story = {
         </figure>
       ))}
     </div>
-  ),
+  );
+}
+
+export const IconScale: Story = {
+  render: () => <IconScalePreview />,
 };
 
 export const LightAndDarkDock: Story = {
