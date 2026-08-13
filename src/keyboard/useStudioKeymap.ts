@@ -6,6 +6,7 @@ import { ConnectionContext } from "../rpc/ConnectionContext";
 import { LockStateContext } from "../rpc/LockStateContext";
 import { call_rpc } from "../rpc/logging";
 import { useSub } from "../usePubSub";
+import { MONITOR_LAYER_NAMES } from "../monitor/layerNames";
 import { KEYMAP_CHANGED_EVENT } from "./keymap-events";
 
 export interface StudioKeymapLayer {
@@ -54,7 +55,10 @@ export function useStudioKeymap(): StudioKeymapSnapshot {
           layers: layers.map((layer, index) => ({
             id: layer.id ?? index,
             index,
-            name: layer.name ?? `Layer ${index}`,
+            name:
+              layer.name === ""
+                ? MONITOR_LAYER_NAMES[index] || `Layer ${index}`
+                : layer.name ?? `Layer ${index}`,
             bindings: layer.bindings,
           })),
           loading: false,

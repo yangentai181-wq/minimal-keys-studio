@@ -59,6 +59,27 @@ describe("useStudioKeymap", () => {
     expect(callRpc).toHaveBeenCalledWith({}, { keymap: { getKeymap: true } });
   });
 
+  it("uses readable minimal-keys names when firmware layer names are empty", async () => {
+    callRpc.mockResolvedValue({
+      keymap: {
+        getKeymap: {
+          layers: Array.from({ length: 8 }, (_, id) => ({
+            id,
+            name: "",
+            bindings: [],
+          })),
+        },
+      },
+    });
+
+    renderConsumer();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Auto Mouse/)).toBeInTheDocument();
+      expect(screen.getByText(/スクロール/)).toBeInTheDocument();
+    });
+  });
+
   it("clears layers when the connection locks", async () => {
     callRpc.mockResolvedValue({ keymap: { getKeymap: { layers: [{ id: 0, name: "Base", bindings: [] }] } } });
     const view = renderConsumer();
