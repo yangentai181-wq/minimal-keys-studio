@@ -21,7 +21,10 @@ describe("safeRpcCall", () => {
       "Save settings"
     );
     expect(result).toBeNull();
-    expect(toast).toHaveBeenCalledWith("Save settings failed", "error");
+    expect(toast).toHaveBeenCalledWith(
+      "操作を完了できませんでした。接続を確認して、もう一度お試しください。",
+      "error"
+    );
   });
 
   it("logs error to console", async () => {

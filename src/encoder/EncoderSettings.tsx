@@ -6,11 +6,43 @@ import {
 } from "../rpc/useCustomSubsystem";
 import { useToast } from "../misc/Toast";
 import * as RSR from "../proto/rsr";
-import { useLayers } from "../rpc/useLayers";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import { BehaviorBindingPicker } from "../behaviors/BehaviorBindingPicker";
 import { useBehaviorList } from "../behaviors/BehaviorsContext";
+import { useDirtyRegistration } from "../navigation/DirtyStateContext";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { ActionFeedbackLabel } from "../motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
+import { useLayers } from "../rpc/useLayers";
+
+type EncoderDraft = {
+  selectedSensorIndex: number | null;
+  selectedLayer: number;
+  cwBinding: BehaviorBinding;
+  ccwBinding: BehaviorBinding;
+};
+
+function sameBehaviorBinding(a: BehaviorBinding, b: BehaviorBinding): boolean {
+  return a.behaviorId === b.behaviorId
+    && (a.param1 ?? 0) === (b.param1 ?? 0)
+    && (a.param2 ?? 0) === (b.param2 ?? 0);
+}
+
+function sameRsrBinding(a: RSR.Binding | null, b: RSR.Binding): boolean {
+  return !!a
+    && a.behaviorId === b.behaviorId
+    && a.param1 === b.param1
+    && a.param2 === b.param2
+    && a.tapMs === b.tapMs;
+}
+
+function sameEncoderDraft(a: EncoderDraft, b: EncoderDraft): boolean {
+  return a.selectedSensorIndex === b.selectedSensorIndex
+    && a.selectedLayer === b.selectedLayer
+    && sameBehaviorBinding(a.cwBinding, b.cwBinding)
+    && sameBehaviorBinding(a.ccwBinding, b.ccwBinding);
+}
 
 export function EncoderSettings() {
   const subsystem = useCustomSubsystem(RSR.SUBSYSTEM_ID);
@@ -23,6 +55,7 @@ export function EncoderSettings() {
   const [layerBindings, setLayerBindings] = useState<RSR.LayerBindings[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<number>(0);
   const [saving, setSaving] = useState(false);
+  const feedback = useTransientFeedback(800);
   const [loading, setLoading] = useState(false);
 
   // Local editable state for CW/CCW bindings
@@ -32,6 +65,18 @@ export function EncoderSettings() {
   const [ccwBinding, setCcwBinding] = useState<BehaviorBinding>({
     behaviorId: 0, param1: 0, param2: 0,
   });
+  const draftRef = useRef<EncoderDraft>({ selectedSensorIndex, selectedLayer, cwBinding, ccwBinding });
+  draftRef.current = { selectedSensorIndex, selectedLayer, cwBinding, ccwBinding };
+  const saveVersionRef = useRef(0);
+  const pendingRestoredDraftRef = useRef<EncoderDraft | null>(null);
+  const skipBaselineApplyRef = useRef(false);
+
+  const applyDraft = useCallback((draft: EncoderDraft) => {
+    setSelectedSensorIndex(draft.selectedSensorIndex);
+    setSelectedLayer(draft.selectedLayer);
+    setCwBinding(draft.cwBinding);
+    setCcwBinding(draft.ccwBinding);
+  }, []);
 
   const callWithTimeout = useCallback(
     async (label: string, payload: Uint8Array, timeoutMs = 5000) => {
@@ -41,7 +86,9 @@ export function EncoderSettings() {
         setTimeout(() => reject(new Error(`RPC timeout: ${label}`)), timeoutMs)
       );
       const data = await Promise.race([subsystem.callRPC(payload), timeout]);
-      return RSR.decodeResponse(data);
+      const response = RSR.decodeResponse(data);
+      if (response.error) throw new Error(response.error);
+      return response;
     },
     [subsystem]
   );
@@ -88,12 +135,18 @@ export function EncoderSettings() {
           if (bindResp.getAllLayerBindings?.bindings) {
             console.debug("[Encoder] Layer bindings:", JSON.stringify(bindResp.getAllLayerBindings.bindings));
             setLayerBindings(bindResp.getAllLayerBindings.bindings);
+            const restored = pendingRestoredDraftRef.current;
+            if (restored) {
+              skipBaselineApplyRef.current = true;
+              applyDraft(restored);
+              pendingRestoredDraftRef.current = null;
+            }
           }
         }
       } catch (e) {
         if (version === discoveryVersionRef.current) {
           console.error("[Encoder] Failed to discover sensors:", e);
-          toast("Failed to discover encoder", "error");
+          toast(ERROR_MESSAGES["encoder.discover"], "error");
         }
       } finally {
         if (version === discoveryVersionRef.current) setLoading(false);
@@ -101,7 +154,7 @@ export function EncoderSettings() {
     }
 
     discoverAndLoad();
-  }, [subsystem, callWithTimeout, toast]);
+  }, [subsystem, callWithTimeout, toast, applyDraft]);
 
   // Reload bindings when user switches sensor (not on initial load)
   const loadBindingsForSensor = useCallback(async (sensorIndex: number) => {
@@ -114,17 +167,27 @@ export function EncoderSettings() {
       );
       if (resp.getAllLayerBindings?.bindings) {
         setLayerBindings(resp.getAllLayerBindings.bindings);
+        const restored = pendingRestoredDraftRef.current;
+        if (restored) {
+          skipBaselineApplyRef.current = true;
+          applyDraft(restored);
+          pendingRestoredDraftRef.current = null;
+        }
       }
     } catch (e) {
       console.error("[Encoder] Failed to load bindings:", e);
-      toast("Failed to load encoder bindings", "error");
+      toast(ERROR_MESSAGES["encoder.loadBindings"], "error");
     } finally {
       setLoading(false);
     }
-  }, [subsystem, callWithTimeout, toast]);
+  }, [subsystem, callWithTimeout, toast, applyDraft]);
 
   // Update local form state when selected layer changes
   useEffect(() => {
+    if (skipBaselineApplyRef.current) {
+      skipBaselineApplyRef.current = false;
+      return;
+    }
     const lb = layerBindings.find((b) => b.layer === selectedLayer);
     if (lb) {
       setCwBinding(rsrBindingToBehavior(lb.cwBinding));
@@ -139,62 +202,114 @@ export function EncoderSettings() {
     () => sensors.find((s) => s.index === selectedSensorIndex) ?? null,
     [sensors, selectedSensorIndex]
   );
+  const confirmedBinding = layerBindings.find((binding) => binding.layer === selectedLayer);
+  const dirty = !!confirmedBinding && (
+    !sameBehaviorBinding(cwBinding, rsrBindingToBehavior(confirmedBinding.cwBinding))
+    || !sameBehaviorBinding(ccwBinding, rsrBindingToBehavior(confirmedBinding.ccwBinding))
+  );
 
   const handleSave = useCallback(async () => {
+    feedback.clear();
     if (!subsystem || selectedSensorIndex === null) return;
+    const version = ++saveVersionRef.current;
+    const submitted: EncoderDraft = {
+      selectedSensorIndex,
+      selectedLayer,
+      cwBinding: { ...cwBinding },
+      ccwBinding: { ...ccwBinding },
+    };
     setSaving(true);
+    let failureMessage: string = ERROR_MESSAGES["encoder.save"];
     try {
-      const cwRsr = behaviorToRsrBinding(cwBinding, behaviors);
-      const ccwRsr = behaviorToRsrBinding(ccwBinding, behaviors);
+      const cwRsr = behaviorToRsrBinding(submitted.cwBinding, behaviors);
+      const ccwRsr = behaviorToRsrBinding(submitted.ccwBinding, behaviors);
 
       const cwBehavior = behaviors.find((b) => b.id === cwRsr.behaviorId);
       const ccwBehavior = behaviors.find((b) => b.id === ccwRsr.behaviorId);
-      console.debug(`[Encoder] Saving sensor=${selectedSensorIndex} layer=${selectedLayer}`);
+      console.debug(`[Encoder] Saving sensor=${submitted.selectedSensorIndex} layer=${submitted.selectedLayer}`);
       console.debug(`[Encoder] CW: behaviorId=${cwRsr.behaviorId} (${cwBehavior?.displayName ?? 'unknown'}) param1=${cwRsr.param1} param2=${cwRsr.param2} tapMs=${cwRsr.tapMs}`);
       console.debug(`[Encoder] CCW: behaviorId=${ccwRsr.behaviorId} (${ccwBehavior?.displayName ?? 'unknown'}) param1=${ccwRsr.param1} param2=${ccwRsr.param2} tapMs=${ccwRsr.tapMs}`);
-      console.debug(`[Encoder] behaviors known to Studio: ${behaviors.length} -> ${behaviors.map((b) => `${b.id}:${b.displayName}`).join(" | ")}`);
-      console.debug(`[Encoder] layers reported by FW: ${JSON.stringify(layers.map((l) => ({ id: l.id, index: l.index, name: l.name })))}`);
-      console.debug(`[Encoder] selectedLayer=${selectedLayer} (this is a layer *id*, sent verbatim to the FW)`);
 
-      const cwResp = await callWithTimeout(
-        "setLayerCwBinding",
-        RSR.encodeSetLayerCwBinding(selectedSensorIndex, selectedLayer, cwRsr)
-      );
+      let cwResp: RSR.RsrResponse;
+      try {
+        cwResp = await callWithTimeout(
+          "setLayerCwBinding",
+          RSR.encodeSetLayerCwBinding(submitted.selectedSensorIndex!, submitted.selectedLayer, cwRsr)
+        );
+      } catch (error) {
+        failureMessage = ERROR_MESSAGES["encoder.setClockwiseBinding"];
+        throw error;
+      }
       console.debug("[Encoder] CW set response:", JSON.stringify(cwResp));
-      if (cwResp.error) {
-        console.error("[Encoder] CW set error:", cwResp.error);
-        toast("Failed to set clockwise binding", "error");
+      if (!cwResp.setLayerCwBinding?.success) {
+        failureMessage = ERROR_MESSAGES["encoder.setClockwiseBinding"];
+        throw new Error("時計回りの設定を保存できませんでした");
       }
 
-      const ccwResp = await callWithTimeout(
-        "setLayerCcwBinding",
-        RSR.encodeSetLayerCcwBinding(selectedSensorIndex, selectedLayer, ccwRsr)
-      );
+      let ccwResp: RSR.RsrResponse;
+      try {
+        ccwResp = await callWithTimeout(
+          "setLayerCcwBinding",
+          RSR.encodeSetLayerCcwBinding(submitted.selectedSensorIndex!, submitted.selectedLayer, ccwRsr)
+        );
+      } catch (error) {
+        failureMessage = ERROR_MESSAGES["encoder.setCounterClockwiseBinding"];
+        throw error;
+      }
       console.debug("[Encoder] CCW set response:", JSON.stringify(ccwResp));
-      if (ccwResp.error) {
-        console.error("[Encoder] CCW set error:", ccwResp.error);
-        toast("Failed to set counter-clockwise binding", "error");
+      if (!ccwResp.setLayerCcwBinding?.success) {
+        failureMessage = ERROR_MESSAGES["encoder.setCounterClockwiseBinding"];
+        throw new Error("反時計回りの設定を保存できませんでした");
       }
 
       // Reload bindings to confirm saved values
       const resp = await callWithTimeout(
         "getAllLayerBindings",
-        RSR.encodeGetAllLayerBindings(selectedSensorIndex)
+        RSR.encodeGetAllLayerBindings(submitted.selectedSensorIndex!)
       );
-      if (resp.getAllLayerBindings?.bindings) {
-        const savedLayer = resp.getAllLayerBindings.bindings.find(
-          (b: RSR.LayerBindings) => b.layer === selectedLayer
-        );
-        console.debug(`[Encoder] Verified layer ${selectedLayer} after save:`, JSON.stringify(savedLayer));
-        setLayerBindings(resp.getAllLayerBindings.bindings);
+      if (!resp.getAllLayerBindings?.bindings) throw new Error("Encoder bindings response was missing");
+      const savedLayer = resp.getAllLayerBindings.bindings.find(
+        (b: RSR.LayerBindings) => b.layer === submitted.selectedLayer
+      );
+      if (!savedLayer) throw new Error("Encoder selected layer was missing from readback");
+      if (!sameRsrBinding(savedLayer.cwBinding, cwRsr) || !sameRsrBinding(savedLayer.ccwBinding, ccwRsr)) {
+        throw new Error("Encoder readback did not match the submitted bindings");
       }
+      console.debug(`[Encoder] Verified layer ${submitted.selectedLayer} after save:`, JSON.stringify(savedLayer));
+      if (version !== saveVersionRef.current) return;
+      const draftUnchanged = sameEncoderDraft(draftRef.current, submitted);
+      if (!draftUnchanged) skipBaselineApplyRef.current = true;
+      setLayerBindings(resp.getAllLayerBindings.bindings);
+      if (draftUnchanged) feedback.trigger();
     } catch (e) {
-      console.error("[Encoder] Failed to save:", e);
-      toast("Failed to save encoder settings", "error");
+      if (version === saveVersionRef.current) {
+        feedback.clear();
+        console.error("[Encoder] Failed to save:", e);
+        toast(failureMessage, "error");
+      }
+      throw e;
     } finally {
-      setSaving(false);
+      if (version === saveVersionRef.current) setSaving(false);
     }
-  }, [subsystem, selectedSensorIndex, selectedLayer, cwBinding, ccwBinding, callWithTimeout, behaviors, layers, toast]);
+  }, [subsystem, selectedSensorIndex, selectedLayer, cwBinding, ccwBinding, callWithTimeout, behaviors, toast, feedback]);
+
+  useDirtyRegistration("encoder", {
+    dirty,
+    save: async () => { await handleSave(); return true; },
+    discard: async () => {
+      if (!confirmedBinding) return false;
+      pendingRestoredDraftRef.current = null;
+      setCwBinding(rsrBindingToBehavior(confirmedBinding.cwBinding));
+      setCcwBinding(rsrBindingToBehavior(confirmedBinding.ccwBinding));
+      return true;
+    },
+    snapshot: (): EncoderDraft => ({ cwBinding, ccwBinding, selectedLayer, selectedSensorIndex }),
+    restore: (snapshot) => {
+      const draft = snapshot as EncoderDraft;
+      pendingRestoredDraftRef.current = draft;
+      applyDraft(draft);
+    },
+  });
 
   if (!subsystem) {
     return (
@@ -228,6 +343,7 @@ export function EncoderSettings() {
                   ? "bg-primary text-primary-content"
                   : "bg-base-300"
               }`}
+              isDisabled={saving}
               onPress={() => {
                 setSelectedSensorIndex(s.index);
                 loadBindingsForSensor(s.index);
@@ -261,6 +377,7 @@ export function EncoderSettings() {
                       ? "bg-primary text-primary-content"
                       : "bg-base-300 hover:bg-base-200"
                   }`}
+                  disabled={saving}
                   onClick={() => setSelectedLayer(layer.id)}
                 >
                   {layer.name}
@@ -310,7 +427,7 @@ export function EncoderSettings() {
               isDisabled={saving}
               onPress={handleSave}
             >
-              {saving ? "保存中..." : "保存"}
+              <ActionFeedbackLabel idleLabel="保存" pendingLabel="保存中..." successLabel="保存済み" pending={saving} success={feedback.active} />
             </Button>
           </div>
         </>
@@ -330,47 +447,21 @@ function rsrBindingToBehavior(b: RSR.Binding | null): BehaviorBinding {
   };
 }
 
-/**
- * Hold time the firmware keeps the bound behavior pressed on each detent.
- *
- * Must be > 0: behavior_queue only defers the release when `wait > 0`
- * (zmk/app/src/behavior_queue.c), so with 0 the press and the release run in
- * the same loop iteration. 5 matches the devicetree default on &rsr_trans.
- */
 const ENCODER_TAP_MS = 5;
-
-/**
- * Hold time for behaviors that emit movement *while held* rather than once.
- *
- * mouse_scroll / mouse_move are "zmk,behavior-input-two-axis": they emit
- * `speed * trigger_period_ms / 1000` units every trigger period, and the period
- * defaults to 16ms (zmk,behavior-input-two-axis.yaml). A 5ms tap therefore ends
- * before the first period elapses and produces *zero* movement — assigning
- * scroll to an encoder looked completely dead.
- *
- * 30ms clears the 16ms period with a full period of margin, so one detent always
- * yields at least one wheel unit. (The firmware's own
- * behavior_sensor_rotate_mouse_wheel_up_down node uses `tap-ms = <20>`, but that
- * node is never referenced from the keymap, so 20 is an intent, not a measured
- * value — and it leaves no margin.)
- */
 const ENCODER_TAP_MS_HELD = 30;
-
-/** Behaviors whose output depends on how long they are held (see above). */
 const HELD_BEHAVIOR_NAMES = ["mouse_scroll", "mouse_move"];
 
 function behaviorToRsrBinding(
   b: BehaviorBinding,
   behaviors: GetBehaviorDetailsResponse[],
 ): RSR.Binding {
-  const displayName = behaviors.find((x) => x.id === b.behaviorId)?.displayName;
-  const tapMs = HELD_BEHAVIOR_NAMES.includes(displayName ?? "")
-    ? ENCODER_TAP_MS_HELD
-    : ENCODER_TAP_MS;
+  const displayName = behaviors.find((behavior) => behavior.id === b.behaviorId)?.displayName;
   return {
     behaviorId: b.behaviorId,
     param1: b.param1 ?? 0,
     param2: b.param2 ?? 0,
-    tapMs,
+    tapMs: HELD_BEHAVIOR_NAMES.includes(displayName ?? "")
+      ? ENCODER_TAP_MS_HELD
+      : ENCODER_TAP_MS,
   };
 }

@@ -1,0 +1,421 @@
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Writer } from "protobufjs/minimal.js";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { DirtyRegistration } from "../navigation/DirtyStateContext";
+import * as HT from "../proto/holdtap";
+import { HoldTapSettings } from "./HoldTapSettings";
+
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  HTMLDialogElement.prototype.close = function close() { this.open = false; };
+});
+
+afterEach(() => { vi.useRealTimers(); });
+
+const mocks = vi.hoisted(() => ({
+  subsystem: null as { callRPC: ReturnType<typeof vi.fn> } | null,
+  registration: undefined as unknown,
+  toast: vi.fn(),
+  layers: [] as Array<{ id: number; index: number; name: string; bindings: Array<{ behaviorId: number; param1: number; param2: number }> }>,
+  behaviors: [] as Array<{ id: number; displayName: string; metadata: [] }>,
+}));
+
+vi.mock("../rpc/useCustomSubsystem", () => ({
+  useCustomSubsystem: () => mocks.subsystem,
+}));
+
+vi.mock("../navigation/DirtyStateContext", () => ({
+  useDirtyRegistration: (_id: string, registration: unknown) => {
+    mocks.registration = registration;
+  },
+}));
+
+vi.mock("../misc/Toast", () => ({
+  useToast: () => ({ toast: mocks.toast }),
+}));
+
+vi.mock("../keyboard/useStudioKeymap", () => ({
+  useStudioKeymap: () => ({ layers: mocks.layers, loading: false }),
+}));
+
+vi.mock("../behaviors/BehaviorsContext", () => ({
+  useBehaviorList: () => mocks.behaviors,
+}));
+
+function holdTapInfo(tappingTermMs = 200): Uint8Array {
+  return Writer.create()
+    .uint32(8).uint32(1)
+    .uint32(18).string("Home row")
+    .uint32(24).uint32(tappingTermMs)
+    .uint32(32).uint32(100)
+    .uint32(40).uint32(120)
+    .uint32(48).uint32(1)
+    .uint32(56).uint32(200)
+    .uint32(64).uint32(100)
+    .uint32(72).uint32(120)
+    .uint32(80).uint32(1)
+    .finish();
+}
+
+function listResponse(tappingTermMs = 200): Uint8Array {
+  const list = Writer.create().uint32(10).bytes(holdTapInfo(tappingTermMs)).finish();
+  return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function namedHoldTapInfo(id: number, name: string, tappingTermMs = 200): Uint8Array {
+  return Writer.create()
+    .uint32(8).uint32(id)
+    .uint32(18).string(name)
+    .uint32(24).uint32(tappingTermMs)
+    .uint32(32).uint32(100)
+    .uint32(40).uint32(120)
+    .uint32(48).uint32(1)
+    .uint32(56).uint32(200)
+    .uint32(64).uint32(100)
+    .uint32(72).uint32(120)
+    .uint32(80).uint32(1)
+    .finish();
+}
+
+function multiListResponse(secondTappingTermMs = 200): Uint8Array {
+  const list = Writer.create()
+    .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap"))
+    .uint32(10).bytes(namedHoldTapInfo(2, "my_custom_hold_tap", secondTappingTermMs))
+    .finish();
+  return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function emptyListResponse(): Uint8Array {
+  return Writer.create().uint32(18).bytes(new Uint8Array()).finish();
+}
+
+function twoKnownHoldTapsResponse(): Uint8Array {
+  const list = Writer.create()
+    .uint32(10).bytes(namedHoldTapInfo(1, "mod_tap", 210))
+    .uint32(10).bytes(namedHoldTapInfo(2, "layer_tap", 330))
+    .finish();
+  return Writer.create().uint32(18).bytes(list).finish();
+}
+
+function setTappingTermSuccess(): Uint8Array {
+  const result = Writer.create().uint32(8).bool(true).finish();
+  return Writer.create().uint32(26).bytes(result).finish();
+}
+
+function resetHoldTapSuccess(): Uint8Array {
+  const result = Writer.create().uint32(8).bool(true).finish();
+  return Writer.create().uint32(58).bytes(result).finish();
+}
+
+function errorResponse(message: string): Uint8Array {
+  const error = Writer.create().uint32(10).string(message).finish();
+  return Writer.create().uint32(10).bytes(error).finish();
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
+function registration(): DirtyRegistration {
+  return mocks.registration as DirtyRegistration;
+}
+
+describe("HoldTapSettings dirty drafts", () => {
+  beforeEach(() => {
+    mocks.registration = undefined;
+    mocks.toast.mockReset();
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(listResponse()) };
+    mocks.layers = [];
+    mocks.behaviors = [];
+  });
+
+  it("registers dirty after editing and discard restores confirmed timing values", async () => {
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    await waitFor(() => expect(registration().dirty).toBe(true));
+    await act(async () => { await expect(registration().discard()).resolves.toBe(true); });
+    await waitFor(() => expect(registration().dirty).toBe(false));
+    expect(slider).toHaveValue("200");
+  });
+
+  it("keeps the hold-tap draft dirty when an apply response fails", async () => {
+    mocks.subsystem!.callRPC
+      .mockResolvedValueOnce(errorResponse("device rejected the setting"))
+      .mockResolvedValueOnce(listResponse());
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+    await waitFor(() => expect(registration().dirty).toBe(true));
+
+    await act(async () => {
+      await expect(registration().save()).rejects.toThrow("device rejected the setting");
+    });
+    expect(slider).toHaveValue("250");
+    expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("reapplies a restored hold-tap snapshot after reconnect discovery resolves", async () => {
+    const listing = deferred<Uint8Array>();
+    mocks.subsystem!.callRPC = vi.fn().mockImplementationOnce(() => listing.promise);
+    render(<HoldTapSettings />);
+    await waitFor(() => expect(registration().restore).toBeTypeOf("function"));
+
+    await act(async () => {
+      registration().restore?.({
+        selectedId: 1,
+        tappingTerm: 330,
+        quickTap: 220,
+        requirePriorIdle: 180,
+        flavor: 3,
+      });
+      listing.resolve(listResponse(200));
+    });
+
+    await waitFor(() => expect(screen.getAllByRole("slider")[0]).toHaveValue("330"));
+    expect(registration().dirty).toBe(true);
+    expect(screen.getByRole("combobox")).toHaveValue("3");
+  });
+});
+
+describe("HoldTapSettings presentation", () => {
+  beforeEach(() => {
+    mocks.registration = undefined;
+    mocks.toast.mockReset();
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(multiListResponse()) };
+    mocks.layers = [{
+      id: 4,
+      index: 0,
+      name: "Base",
+      bindings: [{ behaviorId: 10, param1: 0, param2: 0x00070004 }],
+    }];
+    mocks.behaviors = [{ id: 10, displayName: "Mod-Tap", metadata: [] }];
+  });
+
+  it("shows used settings with affected keys and beginner-facing headings", async () => {
+    render(<HoldTapSettings />);
+
+    expect(await screen.findByRole("button", { name: /Mod-Tap.*1キー/ })).toBeInTheDocument();
+    expect(screen.getByText(/1キーで使用中/)).toBeInTheDocument();
+    expect(screen.getByText(/Base \/ A/)).toBeInTheDocument();
+    expect(screen.queryByText("My Custom Hold Tap")).not.toBeInTheDocument();
+    expect(screen.getByText("長押し判定までの時間")).toBeInTheDocument();
+    expect(screen.getByText("連打を単押しにする時間")).toBeInTheDocument();
+    expect(screen.getByText("直前の入力を待つ時間")).toBeInTheDocument();
+    expect(screen.getByText("判定方法")).toBeInTheDocument();
+    expect(screen.getAllByRole("slider")).toHaveLength(3);
+    for (const slider of screen.getAllByRole("slider")) expect(slider).toHaveAttribute("step", "10");
+  });
+
+  it("keeps an edited fallback draft when late keymap data identifies another instance as used", async () => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(twoKnownHoldTapsResponse()) };
+    mocks.layers = [];
+    mocks.behaviors = [];
+    const view = render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    mocks.layers = [{ id: 4, index: 0, name: "Base", bindings: [{ behaviorId: 20, param1: 0, param2: 0x00070004 }] }];
+    mocks.behaviors = [{ id: 20, displayName: "Layer-Tap", metadata: [] }];
+    view.rerender(<HoldTapSettings />);
+
+    expect(slider).toHaveValue("250");
+    expect(screen.getByText(/Mod-Tap/)).toBeInTheDocument();
+  });
+
+  it("automatically selects an in-use instance when late data arrives before edits", async () => {
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(twoKnownHoldTapsResponse()) };
+    mocks.layers = [];
+    mocks.behaviors = [];
+    const view = render(<HoldTapSettings />);
+    await screen.findAllByRole("slider");
+
+    mocks.layers = [{ id: 4, index: 0, name: "Base", bindings: [{ behaviorId: 20, param1: 0, param2: 0x00070004 }] }];
+    mocks.behaviors = [{ id: 20, displayName: "Layer-Tap", metadata: [] }];
+    view.rerender(<HoldTapSettings />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: /長押し設定.*Layer-Tap/ })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Layer-Tap.*1キー/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("slider")[0]).toHaveValue("330");
+    expect(screen.getByText(/1キーで使用中.*Base \/ A/)).toBeInTheDocument();
+  });
+
+  it("saves only the selected unused instance after an edit", async () => {
+    mocks.subsystem = {
+      callRPC: vi.fn()
+        .mockResolvedValueOnce(multiListResponse())
+        .mockResolvedValueOnce(setTappingTermSuccess())
+        .mockResolvedValueOnce(multiListResponse(250)),
+    };
+    render(<HoldTapSettings />);
+    fireEvent.click(await screen.findByRole("button", { name: "未使用の設定を表示" }));
+    fireEvent.click(screen.getByRole("button", { name: /My Custom Hold Tap/ }));
+    fireEvent.change(screen.getAllByRole("slider")[0], { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+    expect(screen.getByRole("button", { name: "適用済み" })).toBeEnabled();
+    expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3);
+    expect(Array.from(mocks.subsystem!.callRPC.mock.calls[1][0])).toEqual(
+      Array.from(HT.encodeSetTappingTerm(2, 250)),
+    );
+    expect(screen.getAllByRole("slider")[0]).toHaveValue("250");
+  });
+
+  it("rejects a mismatched hold-tap readback and preserves the draft", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(listResponse(240)) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(/readback/i); });
+
+    expect(slider).toHaveValue("250");
+    expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("rejects a hold-tap readback missing the selected ID and preserves the draft", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(emptyListResponse()) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(/selected/i); });
+
+    expect(slider).toHaveValue("250");
+    expect(registration().dirty).toBe(true);
+  });
+
+  it("keeps edits made after submission when the matching readback arrives", async () => {
+    const readback = deferred<Uint8Array>();
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockImplementationOnce(() => readback.promise) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+
+    const savePromise = registration().save();
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3));
+    fireEvent.change(slider, { target: { value: "260" } });
+    await act(async () => {
+      readback.resolve(listResponse(250));
+      await expect(savePromise).resolves.toBe(true);
+    });
+
+    expect(slider).toHaveValue("260");
+    expect(registration().dirty).toBe(true);
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("clears prior applied feedback when the next apply fails", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(listResponse(250))
+      .mockRejectedValueOnce(new Error("offline")) };
+    render(<HoldTapSettings />);
+    const slider = (await screen.findAllByRole("slider"))[0];
+    fireEvent.change(slider, { target: { value: "250" } });
+    await act(async () => { await expect(registration().save()).resolves.toBe(true); });
+    expect(screen.getByRole("button", { name: "適用済み" })).toBeEnabled();
+
+    fireEvent.change(slider, { target: { value: "260" } });
+    await act(async () => { await expect(registration().save()).rejects.toThrow("offline"); });
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("does not show applied feedback when the refreshed list payload is missing", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(setTappingTermSuccess())
+      .mockResolvedValueOnce(new Uint8Array()) };
+    render(<HoldTapSettings />);
+    fireEvent.change((await screen.findAllByRole("slider"))[0], { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow(); });
+    expect(screen.queryByRole("button", { name: "適用済み" })).not.toBeInTheDocument();
+  });
+
+  it("times out a never-resolving apply after 5000ms without leaving a timer", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockImplementationOnce(() => new Promise<Uint8Array>(() => undefined)) };
+    render(<HoldTapSettings />);
+    fireEvent.change((await screen.findAllByRole("slider"))[0], { target: { value: "250" } });
+    vi.useFakeTimers();
+
+    let save!: Promise<boolean>;
+    act(() => { save = registration().save(); });
+    const rejectedSave = expect(save).rejects.toThrow("RPC timeout: setTappingTerm");
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+
+    await rejectedSave;
+    expect(mocks.toast).toHaveBeenCalledWith("長押し設定を保存できませんでした。接続を確認して、もう一度お試しください。", "error");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not expose a raw RPC error through hold-tap logs", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn()
+      .mockResolvedValueOnce(listResponse())
+      .mockRejectedValueOnce(new Error("secret binding bytes 10,19")) };
+    render(<HoldTapSettings />);
+    fireEvent.change((await screen.findAllByRole("slider"))[0], { target: { value: "250" } });
+
+    await act(async () => { await expect(registration().save()).rejects.toThrow("secret binding bytes 10,19"); });
+
+    expect(error).toHaveBeenCalled();
+    expect(error.mock.calls.flat().join(" ")).not.toContain("secret binding bytes 10,19");
+    error.mockRestore();
+  });
+
+  it("resets only after the destructive confirmation is accepted", async () => {
+    mocks.layers = [];
+    mocks.behaviors = [];
+    mocks.subsystem = { callRPC: vi.fn().mockResolvedValueOnce(listResponse()) };
+    render(<HoldTapSettings />);
+    await screen.findAllByRole("slider");
+
+    fireEvent.click(screen.getByRole("button", { name: "初期値に戻す" }));
+    expect(mocks.subsystem.callRPC).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(mocks.subsystem.callRPC).toHaveBeenCalledTimes(1);
+    fireEvent.animationEnd(screen.getByRole("dialog"));
+
+    mocks.subsystem.callRPC
+      .mockResolvedValueOnce(resetHoldTapSuccess())
+      .mockResolvedValueOnce(listResponse());
+    fireEvent.click(screen.getByRole("button", { name: "初期値に戻す" }));
+    const resetButtons = screen.getAllByRole("button", { name: "初期値に戻す" });
+    fireEvent.click(resetButtons[resetButtons.length - 1]);
+
+    await waitFor(() => expect(mocks.subsystem!.callRPC).toHaveBeenCalledTimes(3));
+  });
+});

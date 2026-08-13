@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { enqueueEvent } from "./telemetry/telemetry-client.ts";
 import { installFrontendLogForwarding } from "./misc/frontendLogging.ts";
 import "./index.css";
+import "./motion/motion.css";
 
 installFrontendLogForwarding();
 

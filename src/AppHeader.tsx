@@ -5,25 +5,45 @@ import {
   MenuTrigger,
   Popover,
 } from "react-aria-components";
-import { useConnectedDeviceData } from "./rpc/useConnectedDeviceData";
-import { useSub } from "./usePubSub";
-import { useContext, useEffect, useState } from "react";
-import { useModalRef } from "./misc/useModalRef";
-import { LockStateContext } from "./rpc/LockStateContext";
+import {
+  Bluetooth,
+  ChevronDown,
+  CircleArrowUp,
+  CircleHelp,
+  Download,
+  Redo2,
+  Save,
+  Trash2,
+  Undo2,
+  Usb,
+} from "lucide-react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
-import { ConnectionContext } from "./rpc/ConnectionContext";
-import { ChevronDown, Undo2, Redo2, Save, Trash2, CircleHelp, Download, CircleArrowUp, Bluetooth, Usb } from "lucide-react";
-import { useOsMode } from "./OsModeContext";
-import { Tooltip } from "./misc/Tooltip";
-import { GenericModal } from "./GenericModal";
+
+import { BrandLockup } from "./brand/BrandLockup";
 import { FirmwareUpdateModal } from "./firmware-update/FirmwareUpdateModal";
 import { isFirmwareUpdateEnabled } from "./firmware-update/isTauri";
-import { checkForUpdate, CURRENT_APP_VERSION, type ReleaseInfo, type UpdateCheckResult } from "./update/versionCheck";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { GenericModal } from "./GenericModal";
+import { ActionFeedbackLabel } from "./motion/ActionFeedbackLabel";
+import { useTransientFeedback } from "./motion/useTransientFeedback";
+import { useModalRef } from "./misc/useModalRef";
+import { Tooltip } from "./misc/Tooltip";
+import { useOsMode } from "./OsModeContext";
+import { ConnectionContext } from "./rpc/ConnectionContext";
+import { LockStateContext } from "./rpc/LockStateContext";
+import { useConnectedDeviceData } from "./rpc/useConnectedDeviceData";
+import {
+  checkForUpdate,
+  CURRENT_APP_VERSION,
+  type ReleaseInfo,
+  type UpdateCheckResult,
+} from "./update/versionCheck";
+import { useSub } from "./usePubSub";
 
 export interface AppHeaderProps {
   connectedDeviceLabel?: string;
-  onSave?: () => void | Promise<void>;
+  onSave?: () => boolean | void | Promise<boolean | void>;
   onDiscard?: () => void | Promise<void>;
   onUndo?: () => Promise<void>;
   onRedo?: () => Promise<void>;
@@ -32,9 +52,6 @@ export interface AppHeaderProps {
   onStartTour?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
-  // Firmware-update wizard open state is owned by App (lifted for F-6) so that
-  // ConnectModal can defer to it. Optional so bare AppHeader renders/tests keep
-  // working; the button is a no-op until App wires onFwUpdateOpenChange.
   fwUpdateOpen?: boolean;
   onFwUpdateOpenChange?: (open: boolean) => void;
   isWireless?: boolean;
@@ -62,6 +79,8 @@ export const AppHeader = ({
   const [showSettingsReset, setShowSettingsReset] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const feedback = useTransientFeedback(800);
+  const saveOperationRef = useRef(0);
   const fwUpdateEnabled = firmwareUpdateEnabled ?? isFirmwareUpdateEnabled();
   const { osMode, setOsMode } = useOsMode();
 
@@ -71,7 +90,7 @@ export const AppHeader = ({
   useEffect(() => {
     if (
       (!connectionState.conn ||
-        lockState != LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED) &&
+        lockState !== LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED) &&
       showSettingsReset
     ) {
       setShowSettingsReset(false);
@@ -81,12 +100,26 @@ export const AppHeader = ({
   const showSettingsRef = useModalRef(showSettingsReset);
   const [unsaved, setUnsaved] = useConnectedDeviceData<boolean>(
     { keymap: { checkUnsavedChanges: true } },
-    (r) => r.keymap?.checkUnsavedChanges
+    (response) => response.keymap?.checkUnsavedChanges,
   );
 
-  useSub("rpc_notification.keymap.unsavedChangesStatusChanged", (unsaved) =>
-    setUnsaved(unsaved)
+  useSub("rpc_notification.keymap.unsavedChangesStatusChanged", (nextUnsaved) =>
+    setUnsaved(nextUnsaved),
   );
+
+  const handleSave = async () => {
+    const operation = ++saveOperationRef.current;
+    feedback.clear();
+    try {
+      const succeeded = await onSave?.();
+      if (operation !== saveOperationRef.current) return;
+      if (succeeded === true) feedback.trigger();
+      else feedback.clear();
+    } catch {
+      if (operation === saveOperationRef.current) feedback.clear();
+      // The save callback owns the user-facing error toast.
+    }
+  };
 
   const handleUpdateCheck = async () => {
     setIsCheckingUpdate(true);
@@ -96,7 +129,9 @@ export const AppHeader = ({
       setIsCheckingUpdate(false);
     }
   };
-  const manualAvailableUpdate = updateResult?.status === "available" ? updateResult.release : null;
+
+  const manualAvailableUpdate =
+    updateResult?.status === "available" ? updateResult.release : null;
   const updateForPopover = availableUpdate ?? manualAvailableUpdate;
   const connectionLabel = !connectedDeviceLabel
     ? "未接続"
@@ -109,7 +144,7 @@ export const AppHeader = ({
   return (
     <header className="@container flex min-h-12 max-w-full items-center justify-between border-b border-gray-200 bg-white">
       <div className="flex shrink-0 items-center gap-2 px-3">
-        <img src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`} alt="Logo" className="h-8 shrink-0 rounded" />
+        <BrandLockup size="compact" />
         <MenuTrigger>
           <Tooltip label={connectionLabel}>
             <Button
@@ -117,14 +152,21 @@ export const AppHeader = ({
               className="min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded-lg p-1 pl-2 text-center transition-all duration-100 hover:bg-base-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary rac-disabled:opacity-0"
               isDisabled={!connectedDeviceLabel}
             >
-              {isWireless === true ? <Bluetooth className="inline-block w-4" aria-hidden="true" /> : isWireless === false ? <Usb className="inline-block w-4" aria-hidden="true" /> : null}
-              <span className="w-2 h-2 rounded-full bg-success inline-block" />
+              {isWireless === true ? (
+                <Bluetooth className="inline-block w-4" aria-hidden="true" />
+              ) : isWireless === false ? (
+                <Usb className="inline-block w-4" aria-hidden="true" />
+              ) : null}
+              <span className="inline-block h-2 w-2 rounded-full bg-success" />
               <ChevronDown className="inline-block w-4" aria-hidden="true" />
             </Button>
           </Tooltip>
           <Popover>
-            <Menu className="shadow-md rounded bg-base-100 text-base-content cursor-pointer overflow-hidden">
-              <MenuItem className="cursor-default whitespace-nowrap border-b border-base-300 px-2 py-1 text-sm text-base-content/60" isDisabled>
+            <Menu className="cursor-pointer overflow-hidden rounded bg-base-100 text-base-content shadow-md">
+              <MenuItem
+                className="cursor-default whitespace-nowrap border-b border-base-300 px-2 py-1 text-sm text-base-content/60"
+                isDisabled
+              >
                 {connectedDeviceLabel}
               </MenuItem>
               <MenuItem
@@ -143,21 +185,22 @@ export const AppHeader = ({
           </Popover>
         </MenuTrigger>
       </div>
+
       <GenericModal ref={showSettingsRef} className="max-w-[50vw]">
         <h2 className="my-2 text-lg">設定を初期化</h2>
         <div>
           <p>
             設定を初期化すると、すべてのキーマップ変更が元に戻ります。続けますか？
           </p>
-          <div className="flex justify-end my-2 gap-3">
+          <div className="my-2 flex justify-end gap-3">
             <Button
-              className="rounded bg-base-200 hover:bg-base-300 px-3 py-2"
+              className="rounded bg-base-200 px-3 py-2 hover:bg-base-300"
               onPress={() => setShowSettingsReset(false)}
             >
               キャンセル
             </Button>
             <Button
-              className="rounded bg-base-200 hover:bg-base-300 px-3 py-2"
+              className="rounded bg-base-200 px-3 py-2 hover:bg-base-300"
               onPress={() => {
                 setShowSettingsReset(false);
                 onResetSettings?.();
@@ -168,18 +211,27 @@ export const AppHeader = ({
           </div>
         </div>
       </GenericModal>
+
       {fwUpdateEnabled && (
         <FirmwareUpdateModal
           open={fwUpdateOpen}
           onClose={() => onFwUpdateOpenChange?.(false)}
         />
       )}
-      <div className="flex flex-1 shrink-0 items-center justify-end gap-1 px-2" role="toolbar" aria-label="操作ツールバー">
-        <div className="mr-2 flex shrink-0 rounded-md bg-base-200 p-0.5" data-tour="os-toggle">
+
+      <div
+        className="flex flex-1 shrink-0 items-center justify-end gap-1 px-2"
+        role="toolbar"
+        aria-label="操作ツールバー"
+      >
+        <div
+          className="mr-2 flex shrink-0 rounded-md bg-base-200 p-0.5"
+          data-tour="os-toggle"
+        >
           <button
             className={`min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded px-3 py-1 text-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
               osMode === "mac"
-                ? "bg-white text-primary font-medium shadow-sm"
+                ? "bg-white font-medium text-primary shadow-sm"
                 : "text-base-content/50 hover:text-base-content"
             }`}
             onClick={() => setOsMode("mac")}
@@ -189,7 +241,7 @@ export const AppHeader = ({
           <button
             className={`min-h-11 min-w-11 shrink-0 whitespace-nowrap rounded px-3 py-1 text-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
               osMode === "windows"
-                ? "bg-white text-primary font-medium shadow-sm"
+                ? "bg-white font-medium text-primary shadow-sm"
                 : "text-base-content/50 hover:text-base-content"
             }`}
             onClick={() => setOsMode("windows")}
@@ -197,6 +249,7 @@ export const AppHeader = ({
             Windows
           </button>
         </div>
+
         <div className="flex shrink-0 items-center gap-1" data-tour="undo-redo">
           {onUndo && (
             <Tooltip label="元に戻す">
@@ -205,11 +258,10 @@ export const AppHeader = ({
                 isDisabled={!canUndo}
                 onPress={onUndo}
               >
-                <Undo2 className="inline-block w-4 mx-1" aria-label="元に戻す" />
+                <Undo2 className="mx-1 inline-block w-4" aria-label="元に戻す" />
               </Button>
             </Tooltip>
           )}
-
           {onRedo && (
             <Tooltip label="やり直し">
               <Button
@@ -217,19 +269,27 @@ export const AppHeader = ({
                 isDisabled={!canRedo}
                 onPress={onRedo}
               >
-                <Redo2 className="inline-block w-4 mx-1" aria-label="やり直し" />
+                <Redo2 className="mx-1 inline-block w-4" aria-label="やり直し" />
               </Button>
             </Tooltip>
           )}
         </div>
+
         <div className="flex shrink-0 items-center gap-1" data-tour="save-discard">
           <Tooltip label="保存">
             <Button
               className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-1.5 enabled:hover:bg-base-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
               isDisabled={!unsaved}
-              onPress={onSave}
+              onPress={() => void handleSave()}
             >
-              <Save className="inline-block w-4 mx-1" aria-label="保存" />
+              <Save className="mx-1 inline-block w-4" aria-hidden="true" />
+              <ActionFeedbackLabel
+                idleLabel="保存"
+                pendingLabel="保存中…"
+                successLabel="保存済み"
+                pending={false}
+                success={feedback.active}
+              />
             </Button>
           </Tooltip>
           <Tooltip label="破棄">
@@ -238,28 +298,44 @@ export const AppHeader = ({
               onPress={onDiscard}
               isDisabled={!unsaved}
             >
-              <Trash2 className="inline-block w-4 mx-1" aria-label="破棄" />
+              <Trash2 className="mx-1 inline-block w-4" aria-label="破棄" />
             </Button>
           </Tooltip>
         </div>
+
         {fwUpdateEnabled && (
           <Button
             aria-label="ファームウェア更新"
             className="flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-base-300 px-2 py-1.5 text-sm text-base-content/60 transition-colors enabled:hover:bg-base-200 enabled:hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             onPress={() => onFwUpdateOpenChange?.(true)}
           >
-            <Download className="inline-block w-4" />
-            <span className="hidden shrink-0 whitespace-nowrap @[52rem]:inline">ファーム更新</span>
+            <Download className="inline-block w-4" aria-hidden="true" />
+            <span className="hidden shrink-0 whitespace-nowrap @[52rem]:inline">
+              ファーム更新
+            </span>
           </Button>
         )}
+
         <MenuTrigger>
           <Button
             aria-label={availableUpdate ? "アプリの更新があります" : "アプリ更新"}
-            className={`relative inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center whitespace-nowrap rounded px-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${availableUpdate ? "bg-primary/10 text-primary font-medium" : "text-base-content/50 hover:bg-base-200"}`}
+            className={`relative inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center whitespace-nowrap rounded px-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+              availableUpdate
+                ? "bg-primary/10 font-medium text-primary"
+                : "text-base-content/50 hover:bg-base-200"
+            }`}
           >
-            <CircleArrowUp className="w-4" />
-            <span className="ml-1 hidden shrink-0 whitespace-nowrap @[52rem]:inline">{availableUpdate ? "アプリ更新あり" : "アプリ更新"}</span>
-            {availableUpdate && <span aria-label="アプリの更新があります" role="status" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-error ring-2 ring-white" />}
+            <CircleArrowUp className="w-4" aria-hidden="true" />
+            <span className="ml-1 hidden shrink-0 whitespace-nowrap @[52rem]:inline">
+              {availableUpdate ? "アプリ更新あり" : "アプリ更新"}
+            </span>
+            {availableUpdate && (
+              <span
+                aria-label="アプリの更新があります"
+                role="status"
+                className="absolute right-1 top-1 h-2 w-2 rounded-full bg-error ring-2 ring-white"
+              />
+            )}
           </Button>
           <Popover className="w-72 rounded-lg border border-base-300 bg-base-100 p-3 shadow-md">
             <div className="text-sm">現在のバージョン: {CURRENT_APP_VERSION}</div>
@@ -267,17 +343,31 @@ export const AppHeader = ({
             {updateForPopover ? (
               <div className="space-y-2 text-sm">
                 <p>新しいバージョン {updateForPopover.tagName} があります</p>
-                <button className="min-h-11 rounded bg-primary px-3 py-2 text-sm font-medium text-primary-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" onClick={() => openUrl(updateForPopover.htmlUrl).catch(() => undefined)}>ダウンロードページを開く</button>
+                <button
+                  className="min-h-11 rounded bg-primary px-3 py-2 text-sm font-medium text-primary-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  onClick={() =>
+                    openUrl(updateForPopover.htmlUrl).catch(() => undefined)
+                  }
+                >
+                  ダウンロードページを開く
+                </button>
               </div>
             ) : (
               <div className="space-y-2 text-sm">
-                <button className="min-h-11 rounded border border-primary px-3 py-2 text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50" disabled={isCheckingUpdate} onClick={handleUpdateCheck}>{isCheckingUpdate ? "確認中..." : "更新を確認"}</button>
+                <button
+                  className="min-h-11 rounded border border-primary px-3 py-2 text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
+                  disabled={isCheckingUpdate}
+                  onClick={handleUpdateCheck}
+                >
+                  {isCheckingUpdate ? "確認中..." : "更新を確認"}
+                </button>
                 {updateResult?.status === "latest" && <p>最新版です</p>}
                 {updateResult?.status === "error" && <p>確認できませんでした</p>}
               </div>
             )}
           </Popover>
         </MenuTrigger>
+
         {onStartTour && (
           <Tooltip label="使い方を見る">
             <Button
@@ -285,7 +375,7 @@ export const AppHeader = ({
               onPress={onStartTour}
               aria-label="使い方を見る"
             >
-              <CircleHelp className="inline-block w-4 mx-1" />
+              <CircleHelp className="mx-1 inline-block w-4" aria-hidden="true" />
             </Button>
           </Tooltip>
         )}

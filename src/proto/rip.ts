@@ -24,7 +24,6 @@ export interface InputProcessorInfo {
   tempLayerActivationDelayMs: number;
   tempLayerDeactivationDelayMs: number;
   activeLayers: number;
-  scrollLayers: number;
   axisSnapMode: AxisSnapMode;
   axisSnapThreshold: number;
   axisSnapTimeoutMs: number;
@@ -32,6 +31,7 @@ export interface InputProcessorInfo {
   xySwapEnabled: boolean;
   xInvert: boolean;
   yInvert: boolean;
+  scrollLayers: number;
 }
 
 export interface LayerInfo {
@@ -208,10 +208,8 @@ export function encodeSetYInvert(id: number, invert: boolean): Uint8Array {
 export function encodeSetScrollLayers(id: number, layers: number): Uint8Array {
   const inner = _m0.Writer.create();
   if (id !== 0) inner.uint32(8).uint32(id);
-  if (layers !== 0) inner.uint32(16).uint32(layers);
-  const w = _m0.Writer.create();
-  w.uint32(162).bytes(inner.finish()); // field 20
-  return w.finish();
+  if (layers !== 0) inner.uint32(16).uint32(layers >>> 0);
+  return _m0.Writer.create().uint32(162).bytes(inner.finish()).finish();
 }
 
 // --- Response decoding ---
@@ -222,9 +220,9 @@ function decodeInputProcessorInfo(reader: _m0.Reader, length: number): InputProc
     id: 0, name: "", scaleMultiplier: 0, scaleDivisor: 0,
     rotationDegrees: 0, tempLayerEnabled: false, tempLayerLayer: 0,
     tempLayerActivationDelayMs: 0, tempLayerDeactivationDelayMs: 0,
-    activeLayers: 0, scrollLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0,
+    activeLayers: 0, axisSnapMode: 0, axisSnapThreshold: 0,
     axisSnapTimeoutMs: 0, xyToScrollEnabled: false,
-    xySwapEnabled: false, xInvert: false, yInvert: false,
+    xySwapEnabled: false, xInvert: false, yInvert: false, scrollLayers: 0,
   };
   while (reader.pos < end) {
     const tag = reader.uint32();
@@ -257,7 +255,30 @@ export interface RipResponse {
   error?: string;
   getInputProcessor?: InputProcessorInfo;
   getLayerInfo?: LayerInfo[];
+  responseType?: RipResponseType;
 }
+
+export type RipResponseType =
+  | "listInputProcessors"
+  | "getInputProcessor"
+  | "setScaleMultiplier"
+  | "setScaleDivisor"
+  | "setRotation"
+  | "resetInputProcessor"
+  | "setTempLayerEnabled"
+  | "setTempLayerLayer"
+  | "setTempLayerActivationDelay"
+  | "setTempLayerDeactivationDelay"
+  | "setActiveLayers"
+  | "getLayerInfo"
+  | "setAxisSnapMode"
+  | "setAxisSnapThreshold"
+  | "setAxisSnapTimeout"
+  | "setXyToScrollEnabled"
+  | "setXySwapEnabled"
+  | "setXInvert"
+  | "setYInvert"
+  | "setScrollLayers";
 
 export function decodeResponse(data: Uint8Array): RipResponse {
   const reader = _m0.Reader.create(data);
@@ -275,7 +296,12 @@ export function decodeResponse(data: Uint8Array): RipResponse {
         }
         break;
       }
+      case 2:
+        result.responseType = "listInputProcessors";
+        reader.skipType(tag & 7);
+        break;
       case 3: { // getInputProcessor
+        result.responseType = "getInputProcessor";
         const len = reader.uint32();
         const end = reader.pos + len;
         while (reader.pos < end) {
@@ -288,7 +314,44 @@ export function decodeResponse(data: Uint8Array): RipResponse {
         }
         break;
       }
+      case 4:
+        result.responseType = "setScaleMultiplier";
+        reader.skipType(tag & 7);
+        break;
+      case 5:
+        result.responseType = "setScaleDivisor";
+        reader.skipType(tag & 7);
+        break;
+      case 6:
+        result.responseType = "setRotation";
+        reader.skipType(tag & 7);
+        break;
+      case 7:
+        result.responseType = "resetInputProcessor";
+        reader.skipType(tag & 7);
+        break;
+      case 8:
+        result.responseType = "setTempLayerEnabled";
+        reader.skipType(tag & 7);
+        break;
+      case 9:
+        result.responseType = "setTempLayerLayer";
+        reader.skipType(tag & 7);
+        break;
+      case 10:
+        result.responseType = "setTempLayerActivationDelay";
+        reader.skipType(tag & 7);
+        break;
+      case 11:
+        result.responseType = "setTempLayerDeactivationDelay";
+        reader.skipType(tag & 7);
+        break;
+      case 12:
+        result.responseType = "setActiveLayers";
+        reader.skipType(tag & 7);
+        break;
       case 13: { // getLayerInfo
+        result.responseType = "getLayerInfo";
         const len = reader.uint32();
         const end = reader.pos + len;
         const layers: LayerInfo[] = [];
@@ -314,6 +377,38 @@ export function decodeResponse(data: Uint8Array): RipResponse {
         result.getLayerInfo = layers;
         break;
       }
+      case 14:
+        result.responseType = "setAxisSnapMode";
+        reader.skipType(tag & 7);
+        break;
+      case 15:
+        result.responseType = "setAxisSnapThreshold";
+        reader.skipType(tag & 7);
+        break;
+      case 16:
+        result.responseType = "setAxisSnapTimeout";
+        reader.skipType(tag & 7);
+        break;
+      case 17:
+        result.responseType = "setXyToScrollEnabled";
+        reader.skipType(tag & 7);
+        break;
+      case 18:
+        result.responseType = "setXySwapEnabled";
+        reader.skipType(tag & 7);
+        break;
+      case 19:
+        result.responseType = "setXInvert";
+        reader.skipType(tag & 7);
+        break;
+      case 20:
+        result.responseType = "setYInvert";
+        reader.skipType(tag & 7);
+        break;
+      case 21:
+        result.responseType = "setScrollLayers";
+        reader.skipType(tag & 7);
+        break;
       default:
         reader.skipType(tag & 7);
         break;

@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 // jsdom does not implement <dialog> methods used by useModalRef
 beforeAll(() => {
@@ -16,7 +24,7 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/core", () => ({
   },
 }));
 vi.mock("./rpc/useConnectedDeviceData", () => ({
-  useConnectedDeviceData: () => [false, vi.fn()],
+  useConnectedDeviceData: () => [true, vi.fn()],
 }));
 // The firmware-update modal pulls in the ts-client via the custom-subsystem
 // hook; stub it (these header tests don't exercise it, and it is feature-flagged
@@ -228,5 +236,64 @@ describe("AppHeader firmware-update button (F-6)", () => {
     render(<AppHeader onFwUpdateOpenChange={vi.fn()} />);
 
     expect(screen.queryByRole("status", { name: "ファームウェアの更新があります" })).toBeNull();
+  });
+});
+
+describe("AppHeader save feedback", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("shows saved for 800ms only after onSave resolves true", async () => {
+    vi.useFakeTimers();
+    render(<AppHeader onSave={vi.fn().mockResolvedValue(true)} />);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "保存済み" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(800));
+    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
+  });
+
+  it("does not show saved after a rejected save", async () => {
+    render(<AppHeader onSave={vi.fn().mockRejectedValue(new Error("save failed"))} />);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => {});
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("clears saved feedback when the next save resolves false", async () => {
+    const onSave = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    render(<AppHeader onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByRole("button", { name: "保存済み" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存済み" }));
+    await act(async () => {});
+
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("ignores an older successful save after a newer attempt has failed", async () => {
+    let resolveOld!: (value: boolean) => void;
+    let resolveNew!: (value: boolean) => void;
+    const oldSave = new Promise<boolean>((resolve) => { resolveOld = resolve; });
+    const newSave = new Promise<boolean>((resolve) => { resolveNew = resolve; });
+    const onSave = vi.fn().mockReturnValueOnce(oldSave).mockReturnValueOnce(newSave);
+    render(<AppHeader onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await act(async () => { resolveNew(false); });
+    await act(async () => { resolveOld(true); });
+
+    expect(screen.queryByRole("button", { name: "保存済み" })).not.toBeInTheDocument();
+  });
+
+  it("uses Key Studio as the product brand while leaving the device label separate", () => {
+    render(<AppHeader connectedDeviceLabel="minimal-keys_R" />);
+
+    expect(screen.getByText("Key Studio")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "接続中: minimal-keys_R" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("minimal-keys カスタマイズ")).not.toBeInTheDocument();
   });
 });

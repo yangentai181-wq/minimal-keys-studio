@@ -1,5 +1,11 @@
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
+import {
+  getMinimalKeysLayerMetadata,
+  PRECISION_LAYER_ID,
+  isPrecisionLayerId,
+  type MinimalKeysLayerMetadata,
+} from "./minimal-keys-layers";
 
 export interface ExportBinding {
   behaviorName: string;
@@ -17,6 +23,7 @@ export interface KeymapExportFile {
   version: 1;
   exportDate: string;
   appVersion: string;
+  minimalKeys?: MinimalKeysLayerMetadata;
   keymap: {
     layers: ExportLayer[];
   };
@@ -51,6 +58,7 @@ const LAYER_BEHAVIOR_NAMES = [
   "Momentary Layer",
   "Toggle Layer",
   "Layer-Tap",
+  "LAYER_TAP_MKP",
   "Sticky Layer",
   "To Layer",
   "Conditional Layer",
@@ -66,13 +74,18 @@ export function serializeKeymap(
     behaviorIdToName.set(b.id, b.displayName);
   }
 
+  const minimalKeys = getMinimalKeysLayerMetadata(keymap.layers);
+
   return {
     format: "minimal-keys-studio-keymap",
     version: 1,
     exportDate: new Date().toISOString(),
     appVersion,
+    ...(minimalKeys.autoMouseLayerId !== null || minimalKeys.scrollLayerId !== null
+      ? { minimalKeys }
+      : {}),
     keymap: {
-      layers: keymap.layers.map((layer) => ({
+      layers: keymap.layers.filter((layer) => !isPrecisionLayerId(layer.id)).map((layer) => ({
         name: layer.name,
         bindings: layer.bindings.map((b) => ({
           behaviorName: behaviorIdToName.get(b.behaviorId) ?? `Unknown(${b.behaviorId})`,
@@ -89,6 +102,7 @@ export function deserializeKeymap(
   deviceBehaviors: GetBehaviorDetailsResponse[],
   deviceKeyCount: number,
   maxLayers: number,
+  validLayerIds?: Iterable<number>,
 ): ImportResult {
   let data: unknown;
   try {
@@ -118,11 +132,13 @@ export function deserializeKeymap(
   }
 
   const exportLayers = km.layers as unknown[];
+  const validLayerIdSet = validLayerIds ? new Set(validLayerIds) : undefined;
 
-  if (exportLayers.length > maxLayers) {
+  const maxUserLayers = maxLayers > PRECISION_LAYER_ID ? maxLayers - 1 : maxLayers;
+  if (exportLayers.length > maxUserLayers) {
     return {
       ok: false,
-      error: { type: "layerCount", requested: exportLayers.length, max: maxLayers },
+      error: { type: "layerCount", requested: exportLayers.length, max: maxUserLayers },
     };
   }
 
@@ -178,7 +194,10 @@ export function deserializeKeymap(
         continue;
       }
 
-      if (LAYER_BEHAVIOR_NAMES.includes(b.behaviorName) && b.param1 >= exportLayers.length) {
+      if (
+        LAYER_BEHAVIOR_NAMES.includes(b.behaviorName) &&
+        !(validLayerIdSet ? validLayerIdSet.has(b.param1) : b.param1 < exportLayers.length)
+      ) {
         return {
           ok: false,
           error: {

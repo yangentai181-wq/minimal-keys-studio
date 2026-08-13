@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bluetooth, ChevronRight, Loader2, Usb } from "lucide-react";
-
-import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
-import { UserCancelledError } from "@zmkfirmware/zmk-studio-ts-client/transport/errors";
-import { useModalRef } from "./misc/useModalRef";
-import { GenericModal } from "./GenericModal";
-import type { AvailableDevice } from "./tauri";
 import {
-  AutoConnectError,
-  autoConnectUsb,
-} from "./connect/autoConnectUsb";
+  Bluetooth,
+  Cable,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+  Usb,
+} from "lucide-react";
+import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
+
+import { BrandLockup } from "./brand/BrandLockup";
+import identity from "./brand/identity.json";
+import { AutoConnectError, autoConnectUsb } from "./connect/autoConnectUsb";
 import {
   getAutoConnectFailureText,
   usbAutoConnectSearchingText,
 } from "./connect/ja";
-import { useToast } from "./misc/Toast";
+import { normalizeConnectionError } from "./copy/connectionErrors";
+import { GenericModal } from "./GenericModal";
+import { useModalRef } from "./misc/useModalRef";
+import type { AvailableDevice } from "./tauri";
 
 export type TransportFactory = {
   label: string;
@@ -22,25 +27,132 @@ export type TransportFactory = {
   connect?: () => Promise<RpcTransport>;
   pick_and_connect?: {
     list: () => Promise<Array<AvailableDevice>>;
-    connect: (dev: AvailableDevice) => Promise<RpcTransport>;
+    connect: (device: AvailableDevice) => Promise<RpcTransport>;
   };
 };
+
+type TransportCreatedHandler = (
+  transport: RpcTransport,
+  isWireless?: boolean,
+) => boolean | void | Promise<boolean | void>;
 
 export interface ConnectModalProps {
   open?: boolean;
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => Promise<boolean>;
+  onTransportCreated: TransportCreatedHandler;
+  onConnectRightUsb?: () => Promise<void>;
+  connectionNotice?: { title: string; body: string };
 }
 
-function getConnectionErrorText(error: unknown): string {
-  if (
-    error instanceof Error &&
-    (error.message.includes("Failed to connect to any BLE profile") ||
-      error.message.includes("Unable to locate the required studio GATT service"))
-  ) {
-    return "キーボードが見つかりません。電源が入っているか確認してください";
-  }
-  return "接続できませんでした。もう一度お試しください";
+function ConnectionErrorNotice({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p
+      className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error"
+      role="alert"
+    >
+      {message}
+    </p>
+  );
+}
+
+function isWirelessTransport(transport: TransportFactory): boolean {
+  return transport.isWireless || transport.label.toUpperCase() === "BLE";
+}
+
+function getTransportCopy(transport: TransportFactory) {
+  const isBle = isWirelessTransport(transport);
+  return isBle
+    ? {
+        title: "BLEで接続",
+        connecting: "BLE 接続中...",
+        description: "補助経路。ワイヤレスで編集のみ（モニター不可）",
+        Icon: Bluetooth,
+      }
+    : {
+        title: "USBシリアルで接続",
+        connecting: "USB 接続中...",
+        description: "エディターのみ（Studio RPC）。通常は右手USBで接続",
+        Icon: Cable,
+      };
+}
+
+function RightUsbPrimary({
+  onConnect,
+  connectionNotice,
+}: {
+  onConnect: () => Promise<void>;
+  connectionNotice?: { title: string; body: string };
+}) {
+  const [connecting, setConnecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>();
+
+  const connect = useCallback(async () => {
+    setConnecting(true);
+    setErrorMessage(undefined);
+    try {
+      await onConnect();
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(normalizeConnectionError(error));
+    } finally {
+      setConnecting(false);
+    }
+  }, [onConnect]);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-base-content">
+          キーボードを接続
+        </h2>
+        <p className="mt-1 text-sm text-base-content/60">
+          右手側（ケーブルを挿す側）をUSBでつないで接続してください。
+        </p>
+      </div>
+      <ConnectionErrorNotice message={errorMessage} />
+      {connectionNotice && (
+        <div
+          className="rounded-xl border border-base-300 bg-base-200/60 px-4 py-3"
+          role="status"
+        >
+          <p className="text-sm font-semibold text-base-content">
+            {connectionNotice.title}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-base-content/70">
+            {connectionNotice.body}
+          </p>
+        </div>
+      )}
+      <button
+        className="group flex min-h-20 w-full items-center gap-3 rounded-xl border-2 border-primary/50 bg-primary/5 px-4 py-3 text-left shadow-sm transition-colors hover:border-primary hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+        type="button"
+        aria-label={
+          connecting
+            ? "右手USB 接続中..."
+            : "右手USBで接続 モニターとエディターをまとめて接続（推奨）"
+        }
+        onClick={() => void connect()}
+        disabled={connecting}
+      >
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-content">
+          {connecting ? (
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+          ) : (
+            <Usb className="h-6 w-6" aria-hidden="true" />
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-base font-bold text-base-content">
+            {connecting ? "右手USB 接続中..." : "右手USBで接続"}
+          </span>
+          <span className="mt-0.5 block text-xs text-base-content/60">
+            モニターとエディターをまとめて接続（推奨）
+          </span>
+        </span>
+      </button>
+    </div>
+  );
 }
 
 function SimpleDevicePicker({
@@ -48,63 +160,83 @@ function SimpleDevicePicker({
   onTransportCreated,
 }: {
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => Promise<boolean>;
+  onTransportCreated: TransportCreatedHandler;
 }) {
-  const { toast } = useToast();
-  const [selectedTransport, setSelectedTransport] = useState<
-    TransportFactory | undefined
-  >(undefined);
+  const [connectingLabel, setConnectingLabel] = useState<string>();
+  const [errorMessage, setErrorMessage] = useState<string>();
+  const orderedTransports = useMemo(
+    () =>
+      [...transports].sort(
+        (left, right) =>
+          Number(isWirelessTransport(left)) -
+          Number(isWirelessTransport(right)),
+      ),
+    [transports],
+  );
 
-  useEffect(() => {
-    if (!selectedTransport) {
-      return;
-    }
-
-    let ignore = false;
-
-    async function connectTransport() {
+  const connectTransport = useCallback(
+    async (selectedTransport: TransportFactory) => {
+      setConnectingLabel(selectedTransport.label);
+      setErrorMessage(undefined);
       try {
-        const transport = await selectedTransport?.connect?.();
-
-        if (!ignore) {
-          if (transport) {
-            await onTransportCreated(transport, selectedTransport?.isWireless);
-          }
-          setSelectedTransport(undefined);
+        const transport = await selectedTransport.connect?.();
+        if (transport) {
+          await onTransportCreated(transport, selectedTransport.isWireless);
         }
-      } catch (e) {
-        if (!ignore) {
-          console.error(e);
-          if (e instanceof Error && !(e instanceof UserCancelledError)) {
-            toast(getConnectionErrorText(e), "error");
-          }
-          setSelectedTransport(undefined);
-        }
+      } catch (error) {
+        console.error(error);
+        setErrorMessage(normalizeConnectionError(error));
+      } finally {
+        setConnectingLabel(undefined);
       }
-    }
+    },
+    [onTransportCreated],
+  );
 
-    connectTransport();
-
-    return () => {
-      ignore = true;
-    };
-  }, [selectedTransport, onTransportCreated, toast]);
-
-  const connections = transports.map((t) => (
-    <li key={t.label} className="list-none">
-      <button
-        className="bg-base-300 hover:bg-primary hover:text-primary-content rounded px-2 py-1"
-        type="button"
-        onClick={() => setSelectedTransport(t)}
-      >
-        {t.label}
-      </button>
-    </li>
-  ));
   return (
-    <div>
-      <p className="text-base">接続方法を選択してください</p>
-      <ul className="flex gap-3 pt-3">{connections}</ul>
+    <div className="space-y-3">
+      <ConnectionErrorNotice message={errorMessage} />
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {orderedTransports.map((transport) => {
+          const copy = getTransportCopy(transport);
+          const isConnecting = connectingLabel === transport.label;
+          const Icon = copy.Icon;
+          return (
+            <li key={transport.label} className="list-none">
+              <button
+                className="group flex min-h-16 w-full items-center gap-3 rounded-xl border border-base-300 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+                type="button"
+                aria-label={
+                  isConnecting
+                    ? copy.connecting
+                    : `${copy.title} ${copy.description}`
+                }
+                onClick={() => void connectTransport(transport)}
+                disabled={connectingLabel !== undefined}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  {isConnecting ? (
+                    <Loader2
+                      className="h-5 w-5 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-base-content">
+                    {isConnecting ? copy.connecting : copy.title}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-base-content/60">
+                    {copy.description}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -116,28 +248,32 @@ function DeviceList({
 }: {
   open: boolean;
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => Promise<boolean>;
+  onTransportCreated: TransportCreatedHandler;
 }) {
-  const { toast } = useToast();
-  const [devices, setDevices] = useState<
-    Array<[TransportFactory, AvailableDevice]>
-  >([]);
+  const [devices, setDevices] = useState<Array<[TransportFactory, AvailableDevice]>>(
+    [],
+  );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>();
 
   const loadDevices = useCallback(async () => {
     setRefreshing(true);
     const entries: Array<[TransportFactory, AvailableDevice]> = [];
-    for (const t of transports.filter((t) => t.pick_and_connect)) {
+    for (const transport of transports.filter(
+      (candidate) => candidate.pick_and_connect,
+    )) {
       try {
-        const devs = await t.pick_and_connect?.list();
-        if (!devs) continue;
+        const devicesForTransport = await transport.pick_and_connect?.list();
+        if (!devicesForTransport) continue;
         entries.push(
-          ...devs.map<[TransportFactory, AvailableDevice]>((d) => [t, d])
+          ...devicesForTransport.map<[TransportFactory, AvailableDevice]>(
+            (device) => [transport, device],
+          ),
         );
-      } catch (e) {
-        console.error(`Failed to list ${t.label} devices:`, e);
+      } catch (error) {
+        console.error(`Failed to list ${transport.label} devices:`, error);
       }
     }
     setDevices(entries);
@@ -146,63 +282,70 @@ function DeviceList({
   }, [transports]);
 
   useEffect(() => {
-    if (open) {
-      loadDevices();
-    }
-  }, [open, loadDevices]);
+    if (open) void loadDevices();
+  }, [loadDevices, open]);
 
   const connectToSelected = useCallback(async () => {
     if (selectedIndex === null) return;
     const [transport, device] = devices[selectedIndex];
     setConnecting(true);
+    setErrorMessage(undefined);
     try {
       const rpcTransport = await transport.pick_and_connect!.connect(device);
       await onTransportCreated(rpcTransport, transport.isWireless);
-    } catch (e) {
-      console.error("Failed to connect:", e);
-      toast(getConnectionErrorText(e), "error");
+    } catch (error) {
+      console.error("Failed to connect:", error);
+      setErrorMessage(normalizeConnectionError(error));
     } finally {
       setConnecting(false);
     }
-  }, [selectedIndex, devices, onTransportCreated, toast]);
+  }, [devices, onTransportCreated, selectedIndex]);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <p className="text-base">接続するデバイスを選択してください</p>
+        <div>
+          <h2 className="text-base font-semibold text-base-content">
+            接続するデバイス
+          </h2>
+          <p className="mt-1 text-sm text-base-content/60">
+            見つかったデバイスを選んで接続してください。
+          </p>
+        </div>
         <button
-          className="bg-base-300 hover:bg-primary hover:text-primary-content rounded px-2 py-1 text-sm"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-base-300 bg-white px-3 py-2 text-sm font-medium text-base-content shadow-sm hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           type="button"
-          onClick={loadDevices}
+          onClick={() => void loadDevices()}
           disabled={refreshing}
         >
+          <RefreshCw
+            className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            aria-hidden="true"
+          />
           {refreshing ? "スキャン中..." : "更新"}
         </button>
       </div>
+      <ConnectionErrorNotice message={errorMessage} />
       {devices.length === 0 && !refreshing && (
-        <p className="text-base-content/60 text-sm">
+        <p className="rounded-xl border border-base-300 bg-white px-4 py-3 text-sm text-base-content/60">
           デバイスが見つかりません。キーボードの電源が入っているか確認してください
         </p>
       )}
       {devices.length > 0 && (
-        <ul className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+        <ul className="flex max-h-60 flex-col gap-2 overflow-y-auto">
           {devices.map(([transport, device], index) => (
             <li key={`${transport.label}-${device.id}`} className="list-none">
               <button
-                className={`w-full text-left rounded px-3 py-2 flex items-center gap-2 ${
+                className={`flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
                   selectedIndex === index
-                    ? "bg-primary text-primary-content"
-                    : "bg-base-300 hover:bg-base-200"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-base-300 bg-white hover:border-primary/40 hover:bg-primary/5"
                 }`}
                 type="button"
                 onClick={() => setSelectedIndex(index)}
-                onDoubleClick={() => {
-                  setSelectedIndex(index);
-                  connectToSelected();
-                }}
               >
-                <span className="text-xs opacity-60">
-                  {transport.isWireless ? "ワイヤレス" : "USB"}
+                <span className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                  {transport.isWireless ? "BLE" : "USB"}
                 </span>
                 <span>{device.label}</span>
               </button>
@@ -211,9 +354,9 @@ function DeviceList({
         </ul>
       )}
       <button
-        className="bg-primary text-primary-content hover:bg-primary/80 rounded px-4 py-2 disabled:opacity-50"
+        className="min-h-12 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-content shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         type="button"
-        onClick={connectToSelected}
+        onClick={() => void connectToSelected()}
         disabled={selectedIndex === null || connecting}
       >
         {connecting ? "接続中..." : "接続"}
@@ -247,7 +390,6 @@ export function ConnectionMethodPanel({
   children,
 }: ConnectionMethodPanelProps) {
   const isSearching = view === "usb-searching";
-
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -261,10 +403,15 @@ export function ConnectionMethodPanel({
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-base-100">
               <Usb className="h-5 w-5" aria-hidden="true" />
             </span>
-            <ChevronRight className="h-5 w-5 text-base-content/50 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            <ChevronRight
+              className="h-5 w-5 text-base-content/50 transition-transform group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
           </span>
           <span className="mt-3 text-base font-semibold">USBでつなぐ</span>
-          <span className="mt-1 text-sm text-base-content/60">安定して使える、おすすめの方法です</span>
+          <span className="mt-1 text-sm text-base-content/60">
+            接続先を自動検出します
+          </span>
         </button>
         <button
           className="group flex min-h-32 flex-col items-start rounded-lg border border-base-300 bg-base-200/30 p-4 text-left transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-100"
@@ -275,20 +422,29 @@ export function ConnectionMethodPanel({
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-base-300 text-base-content">
               <Bluetooth className="h-5 w-5" aria-hidden="true" />
             </span>
-            <ChevronRight className="h-5 w-5 text-base-content/50 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            <ChevronRight
+              className="h-5 w-5 text-base-content/50 transition-transform group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
           </span>
-          <span className="mt-3 text-base font-semibold">ワイヤレスでつなぐ</span>
-          <span className="mt-1 text-sm text-base-content/60">ケーブルを使わずに接続します</span>
+          <span className="mt-3 text-base font-semibold">
+            ワイヤレスでつなぐ
+          </span>
+          <span className="mt-1 text-sm text-base-content/60">
+            BLEでエディターに接続します
+          </span>
         </button>
       </div>
 
       {isSearching && (
-        <div className="flex min-h-16 items-center gap-3 rounded-lg border border-primary/30 bg-base-200/30 px-4 text-sm" role="status">
+        <div
+          className="flex min-h-16 items-center gap-3 rounded-lg border border-primary/30 bg-base-200/30 px-4 text-sm"
+          role="status"
+        >
           <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
           <span>{usbAutoConnectSearchingText}</span>
         </div>
       )}
-
       {view === "usb-failed" && failureText && (
         <div className="rounded-lg border border-warning/50 bg-base-200/30 p-4">
           <p className="text-sm leading-6">{failureText}</p>
@@ -301,28 +457,17 @@ export function ConnectionMethodPanel({
           </button>
         </div>
       )}
-
       {view === "wireless" && (
-        <p className="text-sm text-base-content/60">近くのキーボードを選択してください</p>
+        <p className="text-sm text-base-content/60">
+          近くのキーボードを選択してください
+        </p>
       )}
       {view === "manual-usb" && (
-        <p className="text-sm text-base-content/60">接続するキーボードを手動で選択してください</p>
+        <p className="text-sm text-base-content/60">
+          接続するキーボードを手動で選択してください
+        </p>
       )}
       {children}
-    </div>
-  );
-}
-
-function NoTransportsPrompt() {
-  return (
-    <div className="m-4 flex flex-col gap-2">
-      <p>
-        お使いのブラウザはWeb Serial / Web Bluetoothに対応していません。Chrome（バージョン89以降）をお使いください。またはデスクトップアプリをご利用ください。
-      </p>
-
-      <div>
-        <p>minimal-keys カスタマイズを使うには、対応ブラウザまたはデスクトップアプリが必要です。</p>
-      </div>
     </div>
   );
 }
@@ -333,14 +478,12 @@ function ConnectOptions({
   open,
 }: {
   transports: TransportFactory[];
-  onTransportCreated: (t: RpcTransport, isWireless?: boolean) => Promise<boolean>;
+  onTransportCreated: TransportCreatedHandler;
   open?: boolean;
 }) {
-  const useSimplePicker = useMemo(
-    () => transports.every((t) => !t.pick_and_connect),
-    [transports]
+  const useSimplePicker = transports.every(
+    (transport) => !transport.pick_and_connect,
   );
-
   return useSimplePicker ? (
     <SimpleDevicePicker
       transports={transports}
@@ -355,10 +498,26 @@ function ConnectOptions({
   );
 }
 
+function NoTransportsPrompt() {
+  return (
+    <div className="rounded-xl border border-base-300 bg-white px-4 py-3 text-sm text-base-content/70">
+      <p>
+        お使いのブラウザはWeb Serial / Web
+        Bluetoothに対応していません。Chrome（バージョン89以降）をお使いください。またはデスクトップアプリをご利用ください。
+      </p>
+      <p className="mt-2">
+        {identity.productName}を使うには、対応ブラウザまたはデスクトップアプリが必要です。
+      </p>
+    </div>
+  );
+}
+
 export const ConnectModal = ({
   open,
   transports,
   onTransportCreated,
+  onConnectRightUsb,
+  connectionNotice,
 }: ConnectModalProps) => {
   const dialog = useModalRef(open || false, false, false);
   const [view, setView] = useState<ConnectionMethodView>("choose");
@@ -373,16 +532,15 @@ export const ConnectModal = ({
     wasOpen.current = open;
   }, [open]);
 
-  const haveTransports = useMemo(() => transports.length > 0, [transports]);
-
   const wirelessTransports = useMemo(
-    () => transports.filter((transport) => transport.isWireless),
-    [transports]
+    () => transports.filter(isWirelessTransport),
+    [transports],
   );
   const usbTransports = useMemo(
-    () => transports.filter((transport) => !transport.isWireless),
-    [transports]
+    () => transports.filter((transport) => !isWirelessTransport(transport)),
+    [transports],
   );
+  const haveTransports = transports.length > 0 || !!onConnectRightUsb;
 
   const handleUsbConnect = useCallback(async () => {
     setUsbFailureText(undefined);
@@ -391,7 +549,8 @@ export const ConnectModal = ({
     try {
       ({ transport } = await autoConnectUsb());
     } catch (error) {
-      const reason = error instanceof AutoConnectError ? error.reason : "no-response";
+      const reason =
+        error instanceof AutoConnectError ? error.reason : "no-response";
       setUsbFailureText(getAutoConnectFailureText(reason));
       setView("usb-failed");
       return;
@@ -399,52 +558,69 @@ export const ConnectModal = ({
 
     try {
       const connected = await onTransportCreated(transport, false);
-      if (connected) return;
+      if (connected !== false) return;
     } catch {
-      // Connection establishment failures use the same retryable state.
+      // Initialization failures return to the same retryable surface.
     }
-
     setUsbFailureText("接続できませんでした。もう一度お試しください");
     setView("usb-failed");
   }, [onTransportCreated]);
 
-  const deviceList =
-    view === "wireless" ? (
-      <ConnectOptions
-        transports={wirelessTransports}
-        onTransportCreated={onTransportCreated}
-        open={open}
-      />
-    ) : view === "manual-usb" ? (
-      <ConnectOptions
-        transports={usbTransports}
-        onTransportCreated={onTransportCreated}
-        open={open}
-      />
-    ) : undefined;
+  const selectedTransports =
+    view === "wireless"
+      ? wirelessTransports
+      : view === "manual-usb"
+        ? usbTransports
+        : [];
+  const methodPanel = (
+    <ConnectionMethodPanel
+      view={view}
+      failureText={usbFailureText}
+      onUsbConnect={() => void handleUsbConnect()}
+      onWirelessConnect={() => setView("wireless")}
+      onShowManualUsb={() => setView("manual-usb")}
+    >
+      {selectedTransports.length > 0 && (
+        <ConnectOptions
+          transports={selectedTransports}
+          onTransportCreated={onTransportCreated}
+          open={open}
+        />
+      )}
+    </ConnectionMethodPanel>
+  );
 
   return (
-    <GenericModal ref={dialog} className="max-w-xl">
-      <div className="flex flex-col items-center gap-3 py-2 mb-4">
-        <img src={`${import.meta.env.BASE_URL}minimal-keys-logo.png`} alt="Logo" className="h-12 rounded" />
-        <h1 className="text-xl font-semibold">minimal-keys カスタマイズ</h1>
-        <p className="text-sm text-base-content/60 text-center">
-          キーボードを接続して設定を始めましょう
+    <GenericModal
+      ref={dialog}
+      className="w-[min(92vw,34rem)] p-0 backdrop:bg-base-200"
+    >
+      <div className="border-b border-base-300 px-5 py-5">
+        <BrandLockup tagline={identity.supportedDeviceCopy} />
+        <p className="mt-4 text-sm leading-6 text-base-content/65">
+          接続後にキーマップ、トラックボール、コンボ、Bluetooth設定を編集できます。
         </p>
       </div>
-      {haveTransports ? (
-        <ConnectionMethodPanel
-          view={view}
-          failureText={usbFailureText}
-          onUsbConnect={handleUsbConnect}
-          onWirelessConnect={() => setView("wireless")}
-          onShowManualUsb={() => setView("manual-usb")}
-        >
-          {deviceList}
-        </ConnectionMethodPanel>
-      ) : (
-        <NoTransportsPrompt />
-      )}
+      <div className="px-5 py-5">
+        {!haveTransports ? (
+          <NoTransportsPrompt />
+        ) : onConnectRightUsb ? (
+          <div className="space-y-4">
+            <RightUsbPrimary
+              onConnect={onConnectRightUsb}
+              connectionNotice={connectionNotice}
+            />
+            <details className="rounded-xl border border-base-300 bg-white px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium text-base-content/70">
+                詳細な接続方法（BLE / USBシリアルのみ）
+              </summary>
+              <div className="mt-3">{methodPanel}</div>
+            </details>
+          </div>
+        ) : (
+          methodPanel
+        )}
+      </div>
     </GenericModal>
   );
 };

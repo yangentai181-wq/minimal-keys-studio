@@ -1,7 +1,8 @@
 use async_std::future::timeout;
-use futures::{channel::mpsc::channel, FutureExt, StreamExt, TryFutureExt};
+use futures::{channel::mpsc::channel, FutureExt, Stream, StreamExt, TryFutureExt};
 
 use std::collections::HashSet;
+use std::future::Future;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -12,6 +13,42 @@ use super::commands::{emit_disconnected, ConnectionCleanup, ConnectionData};
 
 const SVC_UUID: Uuid = Uuid::from_u128(0x00000000_0196_6107_c967_c5cfb1c2482a);
 const RPC_CHRC_UUID: Uuid = Uuid::from_u128(0x00000001_0196_6107_c967_c5cfb1c2482a);
+
+async fn run_notification_stream<S, T, E, Emit, Cleanup, CleanupFuture>(
+    notifications: Result<S, E>,
+    mut emit: Emit,
+    cleanup: Cleanup,
+) where
+    S: Stream<Item = Result<T, E>> + Unpin,
+    Emit: FnMut(T) -> bool,
+    Cleanup: FnOnce() -> CleanupFuture,
+    CleanupFuture: Future<Output = ()>,
+{
+    match notifications {
+        Ok(mut notifications) => {
+            while let Some(notification) = notifications.next().await {
+                match notification {
+                    Ok(value) => {
+                        if !emit(value) {
+                            crate::frontend_log::diagnostic(
+                                "[BLE] Failed to deliver a notification to the frontend",
+                            );
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        crate::frontend_log::diagnostic("[BLE] Notification stream failed");
+                        break;
+                    }
+                }
+            }
+        }
+        Err(_) => {
+            crate::frontend_log::diagnostic("[BLE] Failed to start notifications");
+        }
+    }
+    cleanup().await;
+}
 
 async fn disconnect_if_owned(adapter: &Adapter, device: &Device, connected_by_this_attempt: bool) {
     if connected_by_this_attempt {
@@ -123,18 +160,33 @@ pub async fn gatt_connect(
 
     let notify_characteristic = characteristic.clone();
     let notify_app_handle = app_handle.clone();
+    let (notify_start_tx, notify_start_rx) = tokio::sync::oneshot::channel::<()>();
     let notify_task = tauri::async_runtime::spawn(async move {
-        if let Ok(mut notifications) = notify_characteristic.notify().await {
-            while let Some(Ok(value)) = notifications.next().await {
-                let _ = notify_app_handle.emit(
-                    "connection_data",
-                    ConnectionData {
-                        generation,
-                        data: value,
-                    },
-                );
-            }
+        if notify_start_rx.await.is_err() {
+            return;
         }
+        let notifications = notify_characteristic.notify().await;
+        run_notification_stream(
+            notifications,
+            |value| {
+                notify_app_handle
+                    .emit(
+                        "connection_data",
+                        ConnectionData {
+                            generation,
+                            data: value,
+                        },
+                    )
+                    .is_ok()
+            },
+            || async {
+                let state = notify_app_handle.state::<super::commands::ActiveConnection>();
+                if state.close_if_current(generation).await {
+                    emit_disconnected(&notify_app_handle, generation);
+                }
+            },
+        )
+        .await;
     });
 
     let disconnect_app_handle = app_handle.clone();
@@ -203,6 +255,13 @@ pub async fn gatt_connect(
         )
         .await;
 
+    if notify_start_tx.send(()).is_err() {
+        if state.close_if_current(generation).await {
+            emit_disconnected(&app_handle, generation);
+        }
+        return Err("Failed to start BLE notifications".to_string());
+    }
+
     crate::frontend_log::diagnostic(format!(
         "[BLE connect] Connection established (generation {})",
         generation
@@ -267,4 +326,55 @@ pub async fn gatt_list_devices() -> Result<Vec<super::commands::AvailableDevice>
     }
 
     Ok(devices)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::{executor::block_on, stream};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn notification_stream_end_runs_connection_cleanup() {
+        block_on(async {
+            let cleaned_up = Arc::new(AtomicBool::new(false));
+            let cleanup_flag = cleaned_up.clone();
+            let notifications = stream::iter(Vec::<Result<Vec<u8>, &'static str>>::new());
+
+            run_notification_stream(
+                Ok(notifications),
+                |_| true,
+                move || async move {
+                    cleanup_flag.store(true, Ordering::SeqCst);
+                },
+            )
+            .await;
+
+            assert!(cleaned_up.load(Ordering::SeqCst));
+        });
+    }
+
+    #[test]
+    fn notification_start_failure_runs_connection_cleanup() {
+        block_on(async {
+            let cleaned_up = Arc::new(AtomicBool::new(false));
+            let cleanup_flag = cleaned_up.clone();
+            let failed_notifications = Err::<
+                futures::stream::Iter<std::vec::IntoIter<Result<Vec<u8>, &'static str>>>,
+                _,
+            >("notification unavailable");
+
+            run_notification_stream(
+                failed_notifications,
+                |_| true,
+                move || async move {
+                    cleanup_flag.store(true, Ordering::SeqCst);
+                },
+            )
+            .await;
+
+            assert!(cleaned_up.load(Ordering::SeqCst));
+        });
+    }
 }

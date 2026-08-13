@@ -4,11 +4,7 @@ use futures::channel::mpsc::Sender;
 use futures::lock::Mutex;
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
-use tauri::{
-    command,
-    ipc::{InvokeBody, Request},
-    AppHandle, Emitter, State,
-};
+use tauri::{command, AppHandle, Emitter, State};
 
 const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -155,12 +151,21 @@ impl ConnectionRegistry {
         true
     }
 
+    #[cfg(test)]
     async fn current_sender(&self) -> Option<(u64, Sender<Vec<u8>>)> {
         self.slot
             .lock()
             .await
             .as_ref()
             .map(|slot| (slot.generation, slot.sink.clone()))
+    }
+
+    async fn sender_for_generation(&self, generation: u64) -> Option<Sender<Vec<u8>>> {
+        self.slot
+            .lock()
+            .await
+            .as_ref()
+            .and_then(|slot| (slot.generation == generation).then(|| slot.sink.clone()))
     }
 }
 
@@ -208,15 +213,16 @@ pub fn emit_disconnected(app_handle: &AppHandle, generation: u64) {
 
 #[command]
 pub async fn transport_send_data(
-    req: Request<'_>,
+    generation: u64,
+    data: Vec<u8>,
     app_handle: AppHandle,
     state: State<'_, ActiveConnection>,
 ) -> Result<(), ()> {
-    let data = match req.body() {
-        InvokeBody::Raw(data) => data.clone(),
-        _ => return Err(()),
-    };
-    let (generation, mut sink) = state.registry.current_sender().await.ok_or(())?;
+    let mut sink = state
+        .registry
+        .sender_for_generation(generation)
+        .await
+        .ok_or(())?;
 
     // Never hold the lifecycle mutex across this await: a full mpsc channel
     // must not prevent another connection from opening or closing.
@@ -269,6 +275,32 @@ mod tests {
             let (_, mut current_sink) = registry.current_sender().await.expect("current sink");
             current_sink.send(vec![7]).await.unwrap();
             assert_eq!(receiver2.next().await, Some(vec![7]));
+        });
+    }
+
+    #[test]
+    fn stale_generation_cannot_acquire_the_current_sender() {
+        block_on(async {
+            let registry = ConnectionRegistry::new();
+            let first = registry.issue_generation().unwrap();
+            let (sink1, _receiver1) = channel(1);
+            registry
+                .open(first, sink1, ConnectionCleanup::new(vec![]))
+                .await;
+
+            let second = registry.issue_generation().unwrap();
+            let (sink2, mut receiver2) = channel(1);
+            registry
+                .open(second, sink2, ConnectionCleanup::new(vec![]))
+                .await;
+
+            assert!(registry.sender_for_generation(first).await.is_none());
+            let mut current = registry
+                .sender_for_generation(second)
+                .await
+                .expect("current generation sender");
+            current.send(vec![9]).await.unwrap();
+            assert_eq!(receiver2.next().await, Some(vec![9]));
         });
     }
 

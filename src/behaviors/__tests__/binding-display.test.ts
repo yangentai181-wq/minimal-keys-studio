@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatBindingDetail } from "../binding-display";
+import { mouseScrollParams } from "../../keyboard/key-descriptions";
 
 describe("formatBindingDetail", () => {
   const layers = [
@@ -28,6 +29,15 @@ describe("formatBindingDetail", () => {
     expect(result).toBe("Symbols + スペース");
   });
 
+  it("shows layer + mouse button for LAYER_TAP_MKP", () => {
+    const result = formatBindingDetail(
+      "LAYER_TAP_MKP",
+      { behaviorId: 9, param1: 1, param2: 0x01 },
+      layers,
+    );
+    expect(result).toBe("Symbols + 左クリック");
+  });
+
   it("shows mouse button for Mouse Key Press", () => {
     const result = formatBindingDetail(
       "Mouse Key Press",
@@ -35,6 +45,15 @@ describe("formatBindingDetail", () => {
       layers,
     );
     expect(result).toBe("左クリック");
+  });
+
+  it("shows wheel direction for Mouse Scroll", () => {
+    const result = formatBindingDetail(
+      "Mouse Scroll",
+      { behaviorId: 10, param1: mouseScrollParams.down, param2: 0 },
+      layers,
+    );
+    expect(result).toBe("ホイール下");
   });
 
   it("shows modifier symbols + key for Mod-Tap", () => {
@@ -53,6 +72,32 @@ describe("formatBindingDetail", () => {
       { behaviorId: 5, param1: 1, param2: 0 },
       layers,
     );
+    expect(result).toBe("Symbols");
+  });
+
+  it("looks up a layer name by persistent ID instead of array position", () => {
+    const result = formatBindingDetail(
+      "Momentary Layer",
+      { behaviorId: 5, param1: 42, param2: 0 },
+      [
+        { id: 42, index: 0, name: "Symbols" },
+        { id: 0, index: 1, name: "Base" },
+      ],
+    );
+
+    expect(result).toBe("Symbols");
+  });
+
+  it("looks up the Conditional Layer target by persistent ID", () => {
+    const result = formatBindingDetail(
+      "Conditional Layer",
+      { behaviorId: 5, param1: 42, param2: 0 },
+      [
+        { id: 42, index: 0, name: "Symbols" },
+        { id: 0, index: 1, name: "Base" },
+      ],
+    );
+
     expect(result).toBe("Symbols");
   });
 

@@ -22,7 +22,10 @@ export async function createTauriTransport(
 
   const writable = new WritableStream<Uint8Array>({
     async write(chunk) {
-      await invoke("transport_send_data", new Uint8Array(chunk));
+      await invoke("transport_send_data", {
+        generation,
+        data: Array.from(chunk),
+      });
     },
   });
 

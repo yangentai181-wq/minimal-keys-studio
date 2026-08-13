@@ -1,6 +1,7 @@
 import { useModalRef } from "./useModalRef";
 
 import NOTICE from "../../NOTICE?raw";
+import identity from "../brand/identity.json";
 import { GenericModal } from "../GenericModal";
 
 export interface LicenseNoticeModalProps {
@@ -23,11 +24,10 @@ export const LicenseNoticeModal = ({
       <div>
         <div className="flex justify-between items-start">
           <p className="mr-2">
-            ZMK Studio is released under the open source Apache 2.0 license. A
-            copy of the NOTICE file from the ZMK Studio repository is included
-            here:
+            {identity.productName}には、Apache 2.0で公開されたZMK Studio由来のコードが含まれています。以下は同梱している原文のNOTICEです。
           </p>
           <button
+            type="button"
             className="p-1.5 rounded-md bg-gray-100 text-black hover:bg-gray-300"
             onClick={onClose}
           >

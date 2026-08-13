@@ -1,0 +1,109 @@
+:root {
+  --motion-press: 90ms;
+  --motion-return: 120ms;
+  --motion-view: 160ms;
+  --motion-confirm: 220ms;
+  --motion-dialog-in: 200ms;
+  --motion-dialog-out: 140ms;
+}
+
+@keyframes motion-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-confirmed {
+  50% { transform: scale(1.02); }
+}
+
+@keyframes motion-closing {
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@keyframes motion-backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes motion-backdrop-closing {
+  to { opacity: 0; }
+}
+
+[data-motion-state="enter"] {
+  animation: motion-enter var(--motion-view) cubic-bezier(0, 0, 0.2, 1);
+}
+
+[data-motion-kind="dialog"][data-motion-state="enter"] {
+  animation: motion-enter var(--motion-dialog-in) cubic-bezier(0, 0, 0.2, 1);
+}
+
+[data-motion-state="confirmed"] {
+  animation: motion-confirmed var(--motion-confirm) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-motion-state="closing"] {
+  animation: motion-closing var(--motion-dialog-out) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+dialog[data-motion-kind="dialog"]::backdrop {
+  animation: motion-backdrop-enter var(--motion-dialog-in) cubic-bezier(0, 0, 0.2, 1);
+}
+
+dialog[data-motion-kind="dialog"][data-motion-state="closing"]::backdrop {
+  animation: motion-backdrop-closing var(--motion-dialog-out) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.motion-tab-indicator {
+  transition: left var(--motion-view) cubic-bezier(0, 0, 0.2, 1), width var(--motion-view) cubic-bezier(0, 0, 0.2, 1);
+}
+
+button:not(:disabled),
+[data-pressed]:not([data-disabled]) {
+  transition: transform var(--motion-return) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:not(.keycap):not(:disabled):active,
+[data-pressed]:not(.keycap):not([data-disabled]) {
+  transform: translateY(1px) scale(0.98);
+  transition: transform var(--motion-press) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.keycap:not(:disabled),
+.keycap[data-pressed]:not([data-disabled]) {
+  transition-property: transform, box-shadow, border-color, background-color;
+  transition-duration: var(--motion-return);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.keycap:not(:disabled):active,
+.keycap[data-pressed]:not([data-disabled]) {
+  transform: translateY(1px) scale(0.98);
+  transition-property: transform, box-shadow, border-color, background-color;
+  transition-duration: var(--motion-press);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+
+  [data-motion-state="enter"],
+  [data-motion-state="confirmed"],
+  [data-motion-state="closing"],
+  button:not(.keycap):not(:disabled):active,
+  [data-pressed]:not(.keycap):not([data-disabled]),
+  .keycap:not(:disabled):active,
+  .keycap[data-pressed]:not([data-disabled]) {
+    transform: none !important;
+  }
+
+  dialog[data-motion-kind="dialog"]::backdrop {
+    animation-duration: 1ms !important;
+  }
+
+  .motion-tab-indicator {
+    transition: none !important;
+  }
+}

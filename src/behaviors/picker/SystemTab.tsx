@@ -34,10 +34,13 @@ interface SystemTabProps {
 }
 
 export function SystemTab({ behaviors, onApplyBinding }: SystemTabProps) {
-  const availableBehaviors = useMemo(
-    () => behaviors.filter((b) => systemBehaviorNames.includes(b.displayName)),
-    [behaviors],
-  );
+  const availableBehaviors = useMemo(() => {
+    const byName = new Map(behaviors.map((behavior) => [behavior.displayName, behavior]));
+    return systemBehaviorNames.flatMap((name) => {
+      const behavior = byName.get(name);
+      return behavior ? [behavior] : [];
+    });
+  }, [behaviors]);
 
   // Separate BT from others
   const btBehavior = availableBehaviors.find((b) => b.displayName === "Bluetooth");

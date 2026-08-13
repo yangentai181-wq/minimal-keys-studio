@@ -64,8 +64,10 @@ function decodeBinding(reader: _m0.Reader, length: number): Binding {
 function encodeComboConfig(combo: ComboConfig): Uint8Array {
   const w = _m0.Writer.create();
   if (combo.comboId !== 0) w.uint32(8).uint32(combo.comboId);
-  for (const pos of combo.keyPositions) {
-    w.uint32(16).uint32(pos);
+  if (combo.keyPositions.length > 0) {
+    w.uint32(18).fork();
+    for (const pos of combo.keyPositions) w.uint32(pos);
+    w.ldelim();
   }
   if (combo.timeoutMs !== 0) w.uint32(24).uint32(combo.timeoutMs);
   if (combo.binding) w.uint32(34).bytes(encodeBinding(combo.binding));
@@ -85,14 +87,10 @@ function decodeComboConfig(reader: _m0.Reader, length: number): ComboConfig {
     switch (tag >>> 3) {
       case 1: c.comboId = reader.uint32(); break;
       case 2: {
-        // key_positions is a `repeated uint32`, which nanopb (the firmware's
-        // encoder) always sends PACKED (wire type 2: a length-delimited block
-        // of varints). The previous single read assumed the non-packed form and
-        // misread the length byte as a key position, cascading into a corrupt
-        // protobuf parse ("invalid wire type"). Handle both forms.
         if ((tag & 7) === 2) {
-          const end2 = reader.uint32() + reader.pos;
-          while (reader.pos < end2) c.keyPositions.push(reader.uint32());
+          const packedLength = reader.uint32();
+          const packedEnd = reader.pos + packedLength;
+          while (reader.pos < packedEnd) c.keyPositions.push(reader.uint32());
         } else {
           c.keyPositions.push(reader.uint32());
         }

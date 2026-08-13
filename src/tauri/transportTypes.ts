@@ -39,6 +39,12 @@ export interface ConnectionHandle {
   generation: number;
 }
 
+/** Arguments for an outbound packet, scoped to the connection that created it. */
+export interface TransportSendDataArgs {
+  generation: number;
+  data: number[];
+}
+
 /**
  * Arguments of the `transport_close` command.
  *

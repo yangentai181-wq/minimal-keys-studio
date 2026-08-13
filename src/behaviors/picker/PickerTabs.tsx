@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { useOsMode } from "../../OsModeContext";
@@ -8,6 +8,7 @@ import { LayersTab } from "./LayersTab";
 import { ModifiersTab } from "./ModifiersTab";
 import { SystemTab } from "./SystemTab";
 import { JapaneseTab } from "./JapaneseTab";
+import type { TapKeyItem } from "./common-tap-keys";
 
 type TabId = "actions" | "letters" | "layers" | "modifiers" | "japanese" | "system";
 
@@ -15,6 +16,7 @@ interface PickerTabsProps {
   keyPosition: number;
   behaviors: GetBehaviorDetailsResponse[];
   layers: { id: number; index: number; name: string }[];
+  currentTapKey?: TapKeyItem;
   onApplyBinding: (binding: BehaviorBinding) => void;
 }
 
@@ -31,32 +33,56 @@ export function PickerTabs({
   keyPosition,
   behaviors,
   layers,
+  currentTapKey,
   onApplyBinding,
 }: PickerTabsProps) {
   const { osMode } = useOsMode();
   const [activeTab, setActiveTab] = useState<TabId>("actions");
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  function selectTab(tabId: TabId) {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+    setActiveTab(tabId);
+  }
+
+  function handleContentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.matches("input, select, textarea") || target.isContentEditable)
+    ) {
+      return;
+    }
+
+    const { currentTarget } = event;
+    if (event.key === "Home") {
+      event.preventDefault();
+      currentTarget.scrollTop = 0;
+    } else if (event.key === "PageDown") {
+      event.preventDefault();
+      currentTarget.scrollTop += currentTarget.clientHeight;
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      currentTarget.scrollTop += 40;
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      {/*
-        Tab bar.
-
-        以前は overflow-x-auto で横スクロールにしていたが、幅が足りないと
-        「修飾キー」以降がウィンドウの外に隠れ、ウィンドウを広げても戻って
-        こなかった（親の箱に min-w-0 が無く、幅の変化がここまで伝わって
-        いなかった）。隠れる作りをやめ、狭いときは折り返す。
-        タブは6つしかないので、折り返しても2段で収まる。
-      */}
-      <div className="flex flex-wrap gap-0.5 bg-base-200 p-1 rounded-lg">
+    <div data-testid="picker-tabs" className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden">
+      {/* Tab bar */}
+      <div
+        data-testid="picker-tab-bar"
+        className="flex flex-wrap gap-0.5 rounded-lg bg-base-200 p-0.5"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            className={`px-3 py-1.5 text-sm rounded-md transition-all whitespace-nowrap ${
+            className={`whitespace-nowrap rounded-md px-2.5 py-1 text-sm transition-all ${
               activeTab === tab.id
                 ? "bg-white text-primary font-medium shadow-sm"
                 : "text-base-content/50 hover:text-base-content"
             }`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => selectTab(tab.id)}
           >
             {tab.label}
           </button>
@@ -64,31 +90,58 @@ export function PickerTabs({
       </div>
 
       {/* Tab content */}
-      <div className="min-h-[6rem]">
-        {activeTab === "actions" && (
-          <ActionsTab
-            keyPosition={keyPosition}
-            behaviors={behaviors}
-            layers={layers}
-            osMode={osMode}
-            onApplyBinding={onApplyBinding}
-          />
-        )}
-        {activeTab === "letters" && (
-          <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "layers" && (
-          <LayersTab behaviors={behaviors} layers={layers} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "modifiers" && (
-          <ModifiersTab behaviors={behaviors} layers={layers} osMode={osMode} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "japanese" && (
-          <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />
-        )}
-        {activeTab === "system" && (
-          <SystemTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
-        )}
+      <div
+        data-testid="picker-scroll-viewport"
+        className="relative min-h-0 flex-1 overflow-hidden"
+      >
+        <div
+          ref={contentRef}
+          data-testid="picker-tab-content"
+          role="region"
+          aria-label="キー割り当て候補"
+          tabIndex={0}
+          onKeyDown={handleContentKeyDown}
+          className="absolute inset-0 overflow-y-auto overscroll-contain pb-2.5 [scrollbar-gutter:stable]"
+        >
+          <div key={activeTab} data-motion-state="enter" data-motion-view={activeTab}>
+            {activeTab === "actions" && (
+              <ActionsTab
+                keyPosition={keyPosition}
+                behaviors={behaviors}
+                layers={layers}
+                osMode={osMode}
+                onApplyBinding={onApplyBinding}
+              />
+            )}
+            {activeTab === "letters" && (
+              <LettersTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
+            )}
+            {activeTab === "layers" && (
+              <LayersTab
+                behaviors={behaviors}
+                layers={layers}
+                osMode={osMode}
+                currentTapKey={currentTapKey}
+                onApplyBinding={onApplyBinding}
+              />
+            )}
+            {activeTab === "modifiers" && (
+              <ModifiersTab
+                behaviors={behaviors}
+                layers={layers}
+                osMode={osMode}
+                currentTapKey={currentTapKey}
+                onApplyBinding={onApplyBinding}
+              />
+            )}
+            {activeTab === "japanese" && (
+              <JapaneseTab behaviors={behaviors} osMode={osMode} onApplyBinding={onApplyBinding} />
+            )}
+            {activeTab === "system" && (
+              <SystemTab behaviors={behaviors} onApplyBinding={onApplyBinding} />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

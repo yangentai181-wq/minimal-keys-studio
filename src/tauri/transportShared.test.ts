@@ -70,6 +70,18 @@ describe("createTauriTransport", () => {
     await ownWrite;
   });
 
+  it("tags outbound data with its own connection generation", async () => {
+    const transport = await createTauriTransport("current connection", 17);
+    const writer = transport.writable.getWriter();
+
+    await writer.write(new Uint8Array([4, 2]));
+
+    expect(invoke).toHaveBeenCalledWith("transport_send_data", {
+      generation: 17,
+      data: [4, 2],
+    });
+  });
+
   it("removes listeners and closes its own generation on abort", async () => {
     const transport = await createTauriTransport("serial device", 11);
 

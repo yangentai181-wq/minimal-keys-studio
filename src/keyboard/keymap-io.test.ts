@@ -8,6 +8,7 @@ const mockBehaviors: GetBehaviorDetailsResponse[] = [
   { id: 3, displayName: "Mod-Tap", metadata: [] },
   { id: 4, displayName: "Momentary Layer", metadata: [] },
   { id: 5, displayName: "None", metadata: [] },
+  { id: 6, displayName: "LAYER_TAP_MKP", metadata: [] },
 ];
 
 const sampleKeymap = {
@@ -56,6 +57,44 @@ describe("serializeKeymap", () => {
     expect(result.keymap.layers[0].bindings[1].param2).toBe(0x7002c);
   });
 
+  it("exports minimal-keys auto mouse and scroll layer metadata by ID after reordering", () => {
+    const keymapWithFixedLayers = {
+      ...sampleKeymap,
+      layers: [7, 0, 4].map((id) => ({
+        id,
+        name: id === 4 ? "Mouse" : id === 7 ? "Scroll" : "Base",
+        bindings: sampleKeymap.layers[0].bindings,
+      })),
+    };
+    const result = serializeKeymap(keymapWithFixedLayers, mockBehaviors, "1.0.0");
+    expect(result.minimalKeys).toEqual({
+      autoMouseLayerId: 4,
+      scrollLayerId: 7,
+    });
+  });
+
+  it("omits minimal-keys metadata when fixed layers do not exist", () => {
+    const result = serializeKeymap(sampleKeymap, mockBehaviors, "1.0.0");
+    expect(result.minimalKeys).toBeUndefined();
+  });
+
+  it("omits the device-only precision layer ID from exported user data after reordering", () => {
+    const keymapWithPrecisionLayer = {
+      ...sampleKeymap,
+      layers: [0, 8, 4, 7].map((id) => ({
+        id,
+        name: id === 8 ? "Precision" : `Layer ${id}`,
+        bindings: sampleKeymap.layers[0].bindings,
+      })),
+    };
+
+    const result = serializeKeymap(keymapWithPrecisionLayer, mockBehaviors, "1.0.0");
+
+    expect(result.keymap.layers).toHaveLength(3);
+    expect(result.keymap.layers.map((layer) => layer.name)).not.toContain("Precision");
+  });
+
+
   it("handles unknown behaviorId gracefully", () => {
     const km = {
       ...sampleKeymap,
@@ -83,6 +122,35 @@ describe("deserializeKeymap", () => {
     expect(result.layers[0].name).toBe("Base");
     expect(result.layers[0].bindings[0]).toEqual({ behaviorId: 1, param1: 0x70004, param2: 0 });
     expect(result.layers[0].bindings[1]).toEqual({ behaviorId: 2, param1: 1, param2: 0x7002c });
+  });
+
+  it("round-trips a Precision Layer-Tap reference using its persistent layer ID", () => {
+    const keymapWithPrecisionLayer = {
+      ...sampleKeymap,
+      layers: [0, 1, 2, 3, 4, 5, 6, 7, 8].map((id) => ({
+        id,
+        name: id === 8 ? "Precision" : `Layer ${id}`,
+        bindings: [{ behaviorId: 2, param1: 8, param2: 0x7002c }],
+      })),
+    };
+
+    const exported = serializeKeymap(keymapWithPrecisionLayer, mockBehaviors, "1.0.0");
+    const result = deserializeKeymap(
+      JSON.stringify(exported),
+      mockBehaviors,
+      1,
+      9,
+      keymapWithPrecisionLayer.layers.map((layer) => layer.id),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      layers: expect.arrayContaining([
+        expect.objectContaining({
+          bindings: [{ behaviorId: 2, param1: 8, param2: 0x7002c }],
+        }),
+      ]),
+    });
   });
 
   it("rejects invalid JSON", () => {
@@ -129,6 +197,27 @@ describe("deserializeKeymap", () => {
     expect(result.error.type).toBe("layerCount");
   });
 
+  it("rejects a legacy nine-layer payload so the device precision layer stays untouched", () => {
+    const legacyPayload = JSON.stringify({
+      format: "minimal-keys-studio-keymap",
+      version: 1,
+      keymap: {
+        layers: Array.from({ length: 9 }, (_, index) => ({
+          name: `Layer ${index}`,
+          bindings: sampleKeymap.layers[0].bindings.map((binding) => ({
+            behaviorName: binding.behaviorId === 1 ? "Key Press" : "Layer-Tap",
+            param1: binding.param1,
+            param2: binding.param2,
+          })),
+        })),
+      },
+    });
+
+    const result = deserializeKeymap(legacyPayload, mockBehaviors, 2, 9);
+
+    expect(result).toEqual({ ok: false, error: { type: "layerCount", requested: 9, max: 8 } });
+  });
+
   it("rejects binding count mismatch", () => {
     const json = makeValidJson();
     const result = deserializeKeymap(json, mockBehaviors, 3, 5);
@@ -142,6 +231,18 @@ describe("deserializeKeymap", () => {
     exported.keymap.layers[0].bindings[1].behaviorName = "Momentary Layer";
     exported.keymap.layers[0].bindings[1].param1 = 99;
     exported.keymap.layers[0].bindings[1].param2 = 0;
+    const json = JSON.stringify(exported);
+    const result = deserializeKeymap(json, mockBehaviors, 2, 5);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.type).toBe("layerIndex");
+  });
+
+  it("rejects invalid LAYER_TAP_MKP layer index reference", () => {
+    const exported = serializeKeymap(sampleKeymap, mockBehaviors, "1.0.0");
+    exported.keymap.layers[0].bindings[0].behaviorName = "LAYER_TAP_MKP";
+    exported.keymap.layers[0].bindings[0].param1 = 99;
+    exported.keymap.layers[0].bindings[0].param2 = 0x01;
     const json = JSON.stringify(exported);
     const result = deserializeKeymap(json, mockBehaviors, 2, 5);
     expect(result.ok).toBe(false);

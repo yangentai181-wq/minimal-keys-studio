@@ -13,6 +13,11 @@ describe("LettersTab", () => {
     render(<LettersTab behaviors={mockBehaviors} onApplyBinding={onApply} />);
     expect(screen.getByText("A")).toBeTruthy();
     expect(screen.getByText("Z")).toBeTruthy();
+    const grid = screen.getByTestId("letters-key-grid");
+    expect(grid).not.toHaveClass("overflow-y-auto");
+    for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      expect(screen.getByRole("button", { name: letter })).toBeInTheDocument();
+    }
   });
 
   it("calls onApplyBinding with correct HID usage on letter click", () => {
@@ -25,6 +30,17 @@ describe("LettersTab", () => {
       param1: hid_usage_from_page_and_id(7, 25),
       param2: 0,
     });
+  });
+
+  it("marks key choices without changing their applied binding", () => {
+    const onApply = vi.fn();
+    render(<LettersTab behaviors={mockBehaviors} onApplyBinding={onApply} />);
+
+    const key = screen.getByRole("button", { name: "A" });
+    expect(key).toHaveAttribute("data-motion-kind", "choice");
+
+    fireEvent.click(key);
+    expect(onApply).toHaveBeenCalledWith({ behaviorId: 1, param1: 458756, param2: 0 });
   });
 
   it("switches to number subcategory", () => {

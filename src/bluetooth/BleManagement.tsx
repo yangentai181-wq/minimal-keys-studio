@@ -4,6 +4,8 @@ import { SubsystemUnavailable } from "../misc/SubsystemUnavailable";
 import { useCustomSubsystem } from "../rpc/useCustomSubsystem";
 import { useToast } from "../misc/Toast";
 import * as BLE from "../proto/ble";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { presentSplitConnection } from "./splitConnectionPresentation";
 
 function rpcWithTimeout(label: string, promise: Promise<Uint8Array>, timeoutMs = 5000): Promise<Uint8Array> {
   const timeout = new Promise<never>((_, reject) =>
@@ -21,6 +23,7 @@ export function BleManagement() {
   const [editingName, setEditingName] = useState<number | null>(null);
   const [nameValue, setNameValue] = useState("");
   const [loading, setLoading] = useState(false);
+  const splitConnection = splitInfo ? presentSplitConnection(splitInfo) : null;
 
   // Load profiles, split info, output priority
   useEffect(() => {
@@ -52,7 +55,7 @@ export function BleManagement() {
           setOutputPriority(od.getOutputPriority);
       } catch (e) {
         console.error("[BLE] Failed to load BLE info:", e);
-        toast("Failed to load Bluetooth info", "error");
+        toast(ERROR_MESSAGES["bluetooth.loadInfo"], "error");
       }
     }
 
@@ -63,15 +66,17 @@ export function BleManagement() {
   }, [subsystem, toast]);
 
   const refreshProfiles = useCallback(async () => {
-    if (!subsystem) return;
+    if (!subsystem) return false;
     try {
       const resp = BLE.decodeResponse(
         await rpcWithTimeout("getProfiles", subsystem.callRPC(BLE.encodeGetProfiles()))
       );
       if (resp.getProfiles) setProfiles(resp.getProfiles.profiles);
+      return true;
     } catch (e) {
       console.error("[BLE] Failed to refresh profiles:", e);
-      toast("Failed to refresh profiles", "error");
+      toast(ERROR_MESSAGES["bluetooth.refreshProfiles"], "error");
+      return false;
     }
   }, [subsystem, toast]);
 
@@ -84,7 +89,7 @@ export function BleManagement() {
         await refreshProfiles();
       } catch (e) {
         console.error("[BLE] Failed to switch profile:", e);
-        toast("Failed to switch profile", "error");
+        toast(ERROR_MESSAGES["bluetooth.switchProfile"], "error");
       } finally {
         setLoading(false);
       }
@@ -102,7 +107,7 @@ export function BleManagement() {
         await refreshProfiles();
       } catch (e) {
         console.error("[BLE] Failed to unpair profile:", e);
-        toast("Failed to unpair profile", "error");
+        toast(ERROR_MESSAGES["bluetooth.unpairProfile"], "error");
       } finally {
         setLoading(false);
       }
@@ -115,12 +120,13 @@ export function BleManagement() {
       if (!subsystem) return;
       try {
         await subsystem.callRPC(BLE.encodeSetProfileName(index, nameValue));
-        await refreshProfiles();
+        if (!await refreshProfiles()) return;
+        toast("プロファイル名を保存しました", "success");
+        setEditingName(null);
       } catch (e) {
         console.error("[BLE] Failed to set profile name:", e);
-        toast("Failed to set profile name", "error");
+        toast(ERROR_MESSAGES["bluetooth.setProfileName"], "error");
       }
-      setEditingName(null);
     },
     [subsystem, nameValue, refreshProfiles, toast]
   );
@@ -133,7 +139,7 @@ export function BleManagement() {
         setOutputPriority(priority);
       } catch (e) {
         console.error("[BLE] Failed to set output priority:", e);
-        toast("Failed to set output priority", "error");
+        toast(ERROR_MESSAGES["bluetooth.setOutputPriority"], "error");
       }
     },
     [subsystem, toast]
@@ -286,16 +292,19 @@ export function BleManagement() {
               左手 (L):{" "}
               <span
                 className={
-                  splitInfo.peripheralConnected
+                  splitConnection?.state === "connected"
                     ? "text-success"
-                    : "text-error"
+                    : "text-warning"
                 }
               >
-                {splitInfo.peripheralConnected
-                  ? "接続中"
-                  : "未接続"}
+                {splitConnection?.label}
               </span>
             </p>
+            {splitConnection && (
+              <p className="mt-1 text-xs text-base-content/60">
+                {splitConnection.detail}
+              </p>
+            )}
           </div>
         </section>
       )}

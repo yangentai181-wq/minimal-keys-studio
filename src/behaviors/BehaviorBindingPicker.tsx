@@ -5,8 +5,34 @@ import type {
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { getBehaviorDescription } from "./behavior-descriptions";
 import { formatBindingDetail } from "./binding-display";
+import { useTransientFeedback } from "../motion/useTransientFeedback";
 import { PickerTabs } from "./picker/PickerTabs";
+import type { TapKeyItem } from "./picker/common-tap-keys";
+import { getHidKeyDescription } from "../keyboard/key-descriptions";
 import { applyModifierFlags } from "./modifier-flags";
+
+const KEYBOARD_USAGE_PAGE = 7;
+
+function currentTapKeyFromBinding(
+  behaviorName: string | undefined,
+  param2: number,
+): TapKeyItem | undefined {
+  if (behaviorName !== "Mod-Tap" && behaviorName !== "Layer-Tap") {
+    return undefined;
+  }
+
+  const encoded = param2 >>> 0;
+  const page = (encoded >>> 16) & 0xff;
+  if (page !== KEYBOARD_USAGE_PAGE) return undefined;
+
+  const hidId = encoded & 0xffff;
+  const modifier = (encoded >>> 24) & 0xff;
+  return {
+    label: getHidKeyDescription(page, hidId).roleName,
+    hidId,
+    ...(modifier === 0 ? {} : { modifier }),
+  };
+}
 
 export interface BehaviorBindingPickerProps {
   binding: BehaviorBinding;
@@ -25,6 +51,7 @@ export const BehaviorBindingPicker = ({
   keyPosition,
   modifierFlags = 0,
 }: BehaviorBindingPickerProps) => {
+  const { active: feedbackActive, trigger: triggerFeedback } = useTransientFeedback(220);
   const onBindingChangedRef = useRef(onBindingChanged);
   onBindingChangedRef.current = onBindingChanged;
 
@@ -37,7 +64,8 @@ export const BehaviorBindingPicker = ({
   const handleApplyBinding = useCallback((newBinding: BehaviorBinding) => {
     const applied = applyModifierFlags(newBinding, modFlagsRef.current, behaviorsRef.current);
     onBindingChangedRef.current(applied);
-  }, []);
+    triggerFeedback();
+  }, [triggerFeedback]);
 
   // Current binding display
   const currentBehavior = behaviors.find((b) => b.id === binding.behaviorId);
@@ -47,11 +75,19 @@ export const BehaviorBindingPicker = ({
   const bindingDetail = currentBehavior
     ? formatBindingDetail(currentBehavior.displayName, binding, layers)
     : "";
+  const currentTapKey = currentTapKeyFromBinding(
+    currentBehavior?.displayName,
+    binding.param2,
+  );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-1.5">
       {currentBehavior && currentDesc && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-primary/50 bg-primary/5 text-sm">
+        <div
+          data-testid="current-binding-feedback"
+          data-motion-state={feedbackActive ? "confirmed" : undefined}
+          className="flex items-center gap-2 rounded-md border-2 border-primary/50 bg-primary/5 px-2 py-1 text-sm"
+        >
           <span className="text-primary font-medium">現在の設定:</span>
           <span className="font-bold">{currentDesc.label}</span>
           {bindingDetail && (
@@ -63,6 +99,7 @@ export const BehaviorBindingPicker = ({
         keyPosition={keyPosition ?? -1}
         behaviors={behaviors}
         layers={layers}
+        currentTapKey={currentTapKey}
         onApplyBinding={handleApplyBinding}
       />
     </div>

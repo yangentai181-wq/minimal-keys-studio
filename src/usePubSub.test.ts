@@ -1,16 +1,47 @@
-import { describe, it, expect } from "vitest";
-import { pub } from "./usePubSub";
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { pub, useSub } from "./usePubSub";
 
-describe("pub (non-hook)", () => {
-  it("is exported as a plain function (not a hook)", () => {
-    // pub should be callable outside React components
-    expect(typeof pub).toBe("function");
+describe("useSub", () => {
+  it("keeps one listener through ordinary rerenders and calls the latest callback", async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = renderHook(({ callback }) => useSub("updates", callback), {
+      initialProps: { callback: first },
+    });
+
+    rerender({ callback: second });
+    await act(async () => { await pub("updates", 42); });
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(42);
   });
 
-  it("emits events that subscribers can receive", async () => {
-    // We import useSub indirectly via the emitter — test via the module's emitter
-    // Since pub wraps emitter.emit, we verify it returns a Promise (Emittery behavior)
-    const result = pub("test-event", { data: 42 });
-    expect(result).toBeInstanceOf(Promise);
+  it("replaces the listener only when the event name changes", async () => {
+    const callback = vi.fn();
+    const { rerender } = renderHook(({ name }) => useSub(name, callback), {
+      initialProps: { name: "first" },
+    });
+
+    rerender({ name: "second" });
+    await act(async () => {
+      await pub("first", 1);
+      await pub("second", 2);
+    });
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith(2);
+  });
+
+  it("supports explicit unsubscribe and does not clean the same listener twice", async () => {
+    const callback = vi.fn();
+    const { result, unmount } = renderHook(() => useSub("updates", callback));
+
+    act(() => result.current());
+    act(() => result.current());
+    unmount();
+    await act(async () => { await pub("updates", 42); });
+
+    expect(callback).not.toHaveBeenCalled();
   });
 });

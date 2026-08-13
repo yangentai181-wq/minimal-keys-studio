@@ -1,7 +1,20 @@
 import { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_page_and_id_from_usage } from "../hid-usages";
-import { getHidKeyDescription, getMouseKeyDescription } from "../keyboard/key-descriptions";
+import {
+  getHidKeyDescription,
+  getMouseKeyDescription,
+  getMouseScrollDescription,
+} from "../keyboard/key-descriptions";
 import { formatModifierKeycode } from "../keyboard/key-label-utils";
+
+type LayerName = {
+  id: number;
+  name: string;
+};
+
+function layerNameForId(layerId: number, layers: readonly LayerName[]): string {
+  return layers.find((layer) => layer.id === layerId)?.name ?? `L${layerId}`;
+}
 
 /**
  * Format a binding's parameters into a human-readable detail string.
@@ -10,7 +23,7 @@ import { formatModifierKeycode } from "../keyboard/key-label-utils";
 export function formatBindingDetail(
   displayName: string,
   binding: BehaviorBinding,
-  layers: { id: number; index: number; name: string }[],
+  layers: readonly (LayerName & { index: number })[],
 ): string {
   switch (displayName) {
     case "Key Press": {
@@ -18,12 +31,16 @@ export function formatBindingDetail(
       return formatModifierKeycode(binding.param1);
     }
     case "Layer-Tap": {
-      // ZMK layer binding param1 = layer index (0-based position in layers array)
-      const layerName = layers[binding.param1]?.name ?? `L${binding.param1}`;
+      const layerName = layerNameForId(binding.param1, layers);
       const [rawPage, id] = hid_usage_page_and_id_from_usage(binding.param2);
       const page = rawPage & 0xff;
       const keyName = getHidKeyDescription(page, id).roleName;
       return `${layerName} + ${keyName}`;
+    }
+    case "LAYER_TAP_MKP": {
+      const layerName = layerNameForId(binding.param1, layers);
+      const mouseName = getMouseKeyDescription(binding.param2).roleName;
+      return `${layerName} + ${mouseName}`;
     }
     case "Mod-Tap": {
       const mod = formatModifierKeycode(binding.param1);
@@ -35,12 +52,15 @@ export function formatBindingDetail(
     case "Mouse Key Press": {
       return getMouseKeyDescription(binding.param1).roleName;
     }
+    case "Mouse Scroll": {
+      return getMouseScrollDescription(binding.param1).roleName;
+    }
     case "Momentary Layer":
     case "Toggle Layer":
     case "To Layer":
-    case "Sticky Layer": {
-      // ZMK layer binding param1 = layer index (0-based position in layers array)
-      return layers[binding.param1]?.name ?? `L${binding.param1}`;
+    case "Sticky Layer":
+    case "Conditional Layer": {
+      return layerNameForId(binding.param1, layers);
     }
     case "Sticky Key": {
       return formatModifierKeycode(binding.param1);

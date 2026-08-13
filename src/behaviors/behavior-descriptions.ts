@@ -83,6 +83,12 @@ const descriptions: Record<string, BehaviorDescription> = {
     description: "短く押すと通常キー、長押しでレイヤーを一時的に切り替える",
     category: "layer",
   },
+  LAYER_TAP_MKP: {
+    label: "レイヤー / マウスクリック",
+    description:
+      "短く押すとマウスクリック、長押しでレイヤーを一時的に切り替える",
+    category: "layer",
+  },
   "Momentary Layer": {
     label: "一時レイヤー",
     description: "押している間だけ指定レイヤーに切り替える。離すと元に戻る",
@@ -171,6 +177,11 @@ const descriptions: Record<string, BehaviorDescription> = {
   "Mouse Key Press": {
     label: "マウスキー",
     description: "マウスのクリックや移動をキーボードから操作する",
+    category: "basic",
+  },
+  "Mouse Scroll": {
+    label: "マウススクロール",
+    description: "マウスホイールの上下左右スクロールを送信する",
     category: "basic",
   },
   Backlight: {

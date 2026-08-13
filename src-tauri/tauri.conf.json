@@ -6,7 +6,7 @@
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist/"
   },
-  "productName": "minimal-keys カスタマイズ",
+  "productName": "Key Studio",
   "mainBinaryName": "minimal-keys-customize",
   "version": "0.6.0",
   "identifier": "com.hyhy-masa.minimal-keys-customize",
@@ -27,7 +27,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "longDescription": "",
+    "longDescription": "Key Studioはキーボード設定とリアルタイムモニタリングを統合します。現在はminimal-keysに対応しています。",
     "macOS": {
       "entitlements": "entitlements.plist",
       "exceptionDomain": "",
@@ -36,7 +36,7 @@
       "signingIdentity": "-"
     },
     "resources": [],
-    "shortDescription": "",
+    "shortDescription": "プロ向けキーボード設定・モニタリングツール",
     "targets": ["app", "dmg", "nsis"],
     "windows": {
       "nsis": {
@@ -73,7 +73,7 @@
         "minHeight": 600,
         "minWidth": 900,
         "resizable": true,
-        "title": "minimal-keys カスタマイズ",
+        "title": "Key Studio",
         "width": 1100
       }
     ]

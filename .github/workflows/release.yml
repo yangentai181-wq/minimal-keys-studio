@@ -76,7 +76,7 @@ jobs:
           VITE_FEATURE_FW_UPDATE: '1'
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'minimal-keys カスタマイズ ${{ github.ref_name }}'
+          releaseName: 'Key Studio ${{ github.ref_name }}'
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}

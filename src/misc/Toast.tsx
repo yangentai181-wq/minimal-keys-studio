@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState } from "react";
+import { Check, CircleAlert, Info } from "lucide-react";
 
 type ToastType = "success" | "error" | "info";
 
@@ -39,14 +40,20 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-4 py-2 rounded shadow-lg text-sm pointer-events-auto animate-fade-in ${
+            className={`flex items-center gap-2 px-4 py-2 rounded shadow-lg text-sm pointer-events-auto ${
               t.type === "success"
                 ? "bg-success text-success-content"
                 : t.type === "error"
                   ? "bg-error text-error-content"
                   : "bg-info text-info-content"
             }`}
+            data-motion-state="enter"
+            role={t.type === "error" ? "alert" : "status"}
+            aria-live={t.type === "error" ? undefined : "polite"}
           >
+            {t.type === "success" ? <Check aria-hidden="true" size={16} /> : null}
+            {t.type === "error" ? <CircleAlert aria-hidden="true" size={16} /> : null}
+            {t.type === "info" ? <Info aria-hidden="true" size={16} /> : null}
             {t.message}
           </div>
         ))}

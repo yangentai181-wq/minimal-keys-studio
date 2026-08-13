@@ -143,10 +143,23 @@ export function AutoMouseLayerControl() {
   const [deactivationDelayMs, setDeactivationDelayMs] = useState(500);
   const pendingDelayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingDelay = useRef<{ type: "activation" | "deactivation"; value: number } | null>(null);
+  const subsystemRef = useRef(subsystem);
+  const subsystemGeneration = useRef(0);
+  if (subsystemRef.current !== subsystem) {
+    subsystemGeneration.current += 1;
+  }
+  subsystemRef.current = subsystem;
 
   useEffect(() => {
+    const generation = subsystemGeneration.current;
+    if (pendingDelayTimer.current) {
+      clearTimeout(pendingDelayTimer.current);
+      pendingDelayTimer.current = null;
+    }
+    pendingDelay.current = null;
+    setSending(false);
+    setProcessor(null);
     if (!subsystem) {
-      setProcessor(null);
       return;
     }
     const activeSubsystem = subsystem;
@@ -155,11 +168,20 @@ export function AutoMouseLayerControl() {
       try {
         await activeSubsystem.callRPC(RIP.encodeListInputProcessors());
       } catch (error) {
-        console.error("Failed to discover trackball:", error);
+        if (generation === subsystemGeneration.current) {
+          console.error("Failed to discover trackball:", error);
+        }
       }
     }
 
-    discover();
+    void discover();
+    return () => {
+      if (pendingDelayTimer.current) {
+        clearTimeout(pendingDelayTimer.current);
+        pendingDelayTimer.current = null;
+      }
+      pendingDelay.current = null;
+    };
   }, [subsystem]);
 
   useCustomNotification(subsystem?.subsystemIndex, (payload) => {
@@ -180,28 +202,54 @@ export function AutoMouseLayerControl() {
     setDeactivationDelayMs(processor.tempLayerDeactivationDelayMs);
   }, [processor]);
 
-  useEffect(() => () => {
-    if (pendingDelayTimer.current) clearTimeout(pendingDelayTimer.current);
-  }, []);
-
   const updateSetting = useCallback(
     async (
       nextProcessor: RIP.InputProcessorInfo,
-      payload: Uint8Array
+      payload: Uint8Array,
+      expectedResponseType: RIP.RipResponseType,
     ) => {
       if (!subsystem || !processor || sending) return;
 
+      const generation = subsystemGeneration.current;
+      const activeSubsystem = subsystem;
+      const isCurrentSession = () =>
+        generation === subsystemGeneration.current &&
+        subsystemRef.current === activeSubsystem;
       const previousProcessor = processor;
       setProcessor(nextProcessor);
       setSending(true);
       try {
-        await subsystem.callRPC(payload);
+        const rawAck = await activeSubsystem.callRPC(payload, 5000);
+        if (!isCurrentSession()) return;
+        if (!(rawAck instanceof Uint8Array)) throw new Error("Empty setter response");
+        const ack = RIP.decodeResponse(rawAck);
+        if (ack.error || ack.responseType !== expectedResponseType) {
+          throw new Error(ack.error ?? "Unexpected setter response");
+        }
+
+        const rawReadback = await activeSubsystem.callRPC(
+          RIP.encodeGetInputProcessor(nextProcessor.id),
+          5000,
+        );
+        if (!isCurrentSession()) return;
+        if (!(rawReadback instanceof Uint8Array)) throw new Error("Empty readback response");
+        const readback = RIP.decodeResponse(rawReadback);
+        if (
+          readback.error ||
+          readback.responseType !== "getInputProcessor" ||
+          !readback.getInputProcessor ||
+          JSON.stringify(readback.getInputProcessor) !== JSON.stringify(nextProcessor)
+        ) {
+          throw new Error(readback.error ?? "Readback did not match the requested setting");
+        }
+        setProcessor(readback.getInputProcessor);
       } catch (error) {
+        if (!isCurrentSession()) return;
         console.error("Failed to update auto mouse layer:", error);
         setProcessor(previousProcessor);
         toast("自動マウスレイヤーの設定を更新できませんでした", "error");
       } finally {
-        setSending(false);
+        if (isCurrentSession()) setSending(false);
       }
     },
     [processor, sending, subsystem, toast]
@@ -212,7 +260,8 @@ export function AutoMouseLayerControl() {
       if (!processor) return;
       void updateSetting(
         { ...processor, tempLayerEnabled: enabled },
-        RIP.encodeSetTempLayerEnabled(processor.id, enabled)
+        RIP.encodeSetTempLayerEnabled(processor.id, enabled),
+        "setTempLayerEnabled",
       );
     },
     [processor, updateSetting]
@@ -223,7 +272,8 @@ export function AutoMouseLayerControl() {
       if (!processor) return;
       void updateSetting(
         { ...processor, tempLayerLayer: layerId },
-        RIP.encodeSetTempLayerLayer(processor.id, layerId)
+        RIP.encodeSetTempLayerLayer(processor.id, layerId),
+        "setTempLayerLayer",
       );
     },
     [processor, updateSetting]
@@ -244,7 +294,10 @@ export function AutoMouseLayerControl() {
           : { ...processor, tempLayerDeactivationDelayMs: delayMs },
         isActivation
           ? RIP.encodeSetTempLayerActivationDelay(processor.id, delayMs)
-          : RIP.encodeSetTempLayerDeactivationDelay(processor.id, delayMs)
+          : RIP.encodeSetTempLayerDeactivationDelay(processor.id, delayMs),
+        isActivation
+          ? "setTempLayerActivationDelay"
+          : "setTempLayerDeactivationDelay",
       );
     },
     [processor, updateSetting]

@@ -1,20 +1,28 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const callRPC = vi.fn();
+const mocks = vi.hoisted(() => ({
+  callRPC: vi.fn(),
+  decodeResponse: vi.fn(),
+  toast: vi.fn(),
+  currentSubsystem: null as null | {
+    subsystemIndex: number;
+    callRPC: ReturnType<typeof vi.fn>;
+  },
+}));
 let notificationHandler: ((payload: Uint8Array) => void) | undefined;
 let notification = { inputProcessorChanged: null as ReturnType<typeof processor> | null };
 
-const subsystem = {
+mocks.currentSubsystem = {
   subsystemIndex: 1,
-  callRPC,
+  callRPC: mocks.callRPC,
 };
 
 vi.mock("../rpc/useCustomSubsystem", () => ({
   useCustomNotification: (_index: number | undefined, handler: (payload: Uint8Array) => void) => {
     notificationHandler = handler;
   },
-  useCustomSubsystem: () => subsystem,
+  useCustomSubsystem: () => mocks.currentSubsystem,
 }));
 vi.mock("../rpc/useLayers", () => ({
   useLayers: () => [
@@ -22,11 +30,13 @@ vi.mock("../rpc/useLayers", () => ({
     { id: 6, index: 6, name: "マウス" },
   ],
 }));
-vi.mock("../misc/Toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("../misc/Toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("../proto/rip", () => ({
   SUBSYSTEM_ID: "cormoran_rip",
   decodeNotification: () => notification,
+  decodeResponse: mocks.decodeResponse,
   encodeListInputProcessors: () => "list",
+  encodeGetInputProcessor: () => "get",
   encodeSetTempLayerEnabled: () => "enabled",
   encodeSetTempLayerLayer: () => "layer",
   encodeSetTempLayerActivationDelay: (_id: number, delay: number) => `activation:${delay}`,
@@ -62,6 +72,14 @@ function processor() {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function renderView(overrides = {}) {
   const onEnabledChange = vi.fn();
   const onLayerChange = vi.fn();
@@ -89,7 +107,6 @@ function renderView(overrides = {}) {
 }
 
 async function renderConnectedControl() {
-  callRPC.mockResolvedValue(undefined);
   render(<AutoMouseLayerControl />);
   await act(async () => {
     notification = { inputProcessorChanged: processor() };
@@ -98,10 +115,14 @@ async function renderConnectedControl() {
 }
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   vi.useRealTimers();
   notificationHandler = undefined;
   notification = { inputProcessorChanged: null };
+  mocks.currentSubsystem = {
+    subsystemIndex: 1,
+    callRPC: mocks.callRPC,
+  };
 });
 
 describe("AutoMouseLayerControlView", () => {
@@ -142,18 +163,119 @@ describe("AutoMouseLayerControlView", () => {
 });
 
 describe("AutoMouseLayerControl", () => {
+  it("再接続前の遅延readbackで新しい接続状態を上書きしない", async () => {
+    const oldAck = deferred<Uint8Array>();
+    const oldCall = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockReturnValueOnce(oldAck.promise)
+      .mockResolvedValueOnce(new Uint8Array());
+    mocks.currentSubsystem = { subsystemIndex: 1, callRPC: oldCall };
+    mocks.decodeResponse
+      .mockReturnValueOnce({ responseType: "setTempLayerEnabled" })
+      .mockReturnValueOnce({
+        responseType: "getInputProcessor",
+        getInputProcessor: { ...processor(), tempLayerEnabled: false },
+      });
+    const view = render(<AutoMouseLayerControl />);
+    await act(async () => {
+      notification = { inputProcessorChanged: processor() };
+      notificationHandler?.(new Uint8Array());
+    });
+    fireEvent.click(screen.getByRole("switch"));
+
+    const newCall = vi.fn().mockResolvedValue(undefined);
+    mocks.currentSubsystem = { subsystemIndex: 2, callRPC: newCall };
+    view.rerender(<AutoMouseLayerControl />);
+    await act(async () => {
+      notification = {
+        inputProcessorChanged: { ...processor(), tempLayerLayer: 4 },
+      };
+      notificationHandler?.(new Uint8Array());
+      oldAck.resolve(new Uint8Array());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("switch")).toBeChecked();
+    expect(screen.getByLabelText("切り替えるレイヤー")).toHaveValue("4");
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it("再接続時に保留中の遅延設定を破棄する", async () => {
+    vi.useFakeTimers();
+    const oldCall = vi.fn().mockResolvedValue(undefined);
+    mocks.currentSubsystem = { subsystemIndex: 1, callRPC: oldCall };
+    const view = render(<AutoMouseLayerControl />);
+    await act(async () => {
+      notification = { inputProcessorChanged: processor() };
+      notificationHandler?.(new Uint8Array());
+    });
+    fireEvent.change(screen.getByLabelText("切り替わるまでの時間"), {
+      target: { value: "300" },
+    });
+
+    mocks.currentSubsystem = {
+      subsystemIndex: 2,
+      callRPC: vi.fn().mockResolvedValue(undefined),
+    };
+    view.rerender(<AutoMouseLayerControl />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(oldCall).toHaveBeenCalledTimes(1);
+  });
+
+  it("setter応答が成立しない変更を画面に残さない", async () => {
+    mocks.callRPC.mockResolvedValue(new Uint8Array());
+    mocks.decodeResponse.mockReturnValue({});
+    await renderConnectedControl();
+
+    fireEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(
+      "自動マウスレイヤーの設定を更新できませんでした",
+      "error",
+    ));
+    expect(screen.getByRole("switch")).toBeChecked();
+  });
+
+  it("setter成功後に実機値を読み戻してから変更を確定する", async () => {
+    mocks.callRPC.mockResolvedValue(new Uint8Array());
+    mocks.decodeResponse
+      .mockReturnValueOnce({ responseType: "setTempLayerEnabled" })
+      .mockReturnValueOnce({
+        responseType: "getInputProcessor",
+        getInputProcessor: { ...processor(), tempLayerEnabled: false },
+      });
+    await renderConnectedControl();
+
+    fireEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() => expect(mocks.callRPC).toHaveBeenLastCalledWith("get", 5000));
+    expect(screen.getByRole("switch")).not.toBeChecked();
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
   it("スライダー操作の直後には遅延設定を送信しない", async () => {
     vi.useFakeTimers();
     await renderConnectedControl();
 
     fireEvent.change(screen.getByLabelText("切り替わるまでの時間"), { target: { value: "200" } });
 
-    expect(callRPC).toHaveBeenCalledTimes(1);
+    expect(mocks.callRPC).toHaveBeenCalledTimes(1);
     expect(screen.getByText("200 ms")).toBeTruthy();
   });
 
   it("スライダー停止から300ms後に遅延設定を一度だけ送信する", async () => {
     vi.useFakeTimers();
+    mocks.callRPC.mockResolvedValue(new Uint8Array());
+    mocks.decodeResponse
+      .mockReturnValueOnce({ responseType: "setTempLayerActivationDelay" })
+      .mockReturnValueOnce({
+        responseType: "getInputProcessor",
+        getInputProcessor: { ...processor(), tempLayerActivationDelayMs: 300 },
+      });
     await renderConnectedControl();
 
     fireEvent.change(screen.getByLabelText("切り替わるまでの時間"), { target: { value: "200" } });
@@ -162,7 +284,7 @@ describe("AutoMouseLayerControl", () => {
       await vi.advanceTimersByTimeAsync(300);
     });
 
-    expect(callRPC).toHaveBeenCalledTimes(2);
-    expect(callRPC).toHaveBeenLastCalledWith("activation:300");
+    expect(mocks.callRPC).toHaveBeenCalledTimes(3);
+    expect(mocks.callRPC).toHaveBeenLastCalledWith("get", 5000);
   });
 });

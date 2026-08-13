@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   getHidKeyDescription,
   getMouseKeyDescription,
+  getMouseScrollDescription,
   getBehaviorRoleName,
   ENCODER_POSITION,
   ENCODER_ADJUSTABLE_OPTIONS,
+  mouseScrollParams,
 } from "./key-descriptions";
 
 describe("getHidKeyDescription", () => {
@@ -57,6 +59,19 @@ describe("getMouseKeyDescription", () => {
   });
 });
 
+describe("getMouseScrollDescription", () => {
+  it("returns description for minimal-keys scroll up/down params", () => {
+    expect(getMouseScrollDescription(mouseScrollParams.up).roleName).toBe("ホイール上");
+    expect(getMouseScrollDescription(mouseScrollParams.down).roleName).toBe("ホイール下");
+  });
+
+  it("returns fallback for unknown scroll params", () => {
+    const desc = getMouseScrollDescription(12345);
+    expect(desc.roleName).toBe("スクロール12345");
+    expect(desc.description).toBe("マウスホイール操作");
+  });
+});
+
 describe("getBehaviorRoleName", () => {
   it("returns Japanese name for layer behaviors", () => {
     expect(getBehaviorRoleName("Momentary Layer")).toBe("一時レイヤー");
@@ -70,6 +85,11 @@ describe("getBehaviorRoleName", () => {
 
   it("returns displayName for unknown behaviors", () => {
     expect(getBehaviorRoleName("Custom Thing")).toBe("Custom Thing");
+  });
+
+  it("returns Japanese names for minimal-keys advanced behaviors", () => {
+    expect(getBehaviorRoleName("LAYER_TAP_MKP")).toBe("レイヤー/マウスクリック");
+    expect(getBehaviorRoleName("Mouse Scroll")).toBe("マウススクロール");
   });
 });
 

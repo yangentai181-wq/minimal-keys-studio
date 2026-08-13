@@ -95,6 +95,7 @@ export function ActionsTab({ keyPosition, behaviors, osMode, onApplyBinding }: A
           {role.recommendations.map((rec) => (
             <button
               key={`${rec.behaviorDisplayName}-${rec.param1}-${rec.param2}`}
+              data-motion-kind="choice"
               className="flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl border border-base-300 hover:border-primary hover:bg-primary/5 hover:shadow-md transition-all min-w-[6rem]"
               onClick={() => handleRecommendationClick(rec)}
             >
@@ -115,6 +116,7 @@ export function ActionsTab({ keyPosition, behaviors, osMode, onApplyBinding }: A
       {items.map((item, i) => (
         <button
           key={i}
+          data-motion-kind="choice"
           className="flex items-center gap-3 px-3 py-2 text-sm rounded-md border border-base-300 bg-white hover:bg-primary/10 hover:border-primary/30 transition-all text-left"
           onClick={() => handleItemClick(item)}
         >

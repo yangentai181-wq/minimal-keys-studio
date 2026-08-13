@@ -5,15 +5,19 @@ import { useSub } from "../usePubSub";
 import { CustomSubsystemsContext } from "./CustomSubsystemsContext";
 import type { CustomSubsystemConnection } from "./CustomSubsystemsContext";
 
+export function useCustomSubsystems() {
+  return useContext(CustomSubsystemsContext);
+}
+
 export function useCustomSubsystem(
   identifier: string
 ): CustomSubsystemConnection | null {
   const conn = useContext(ConnectionContext);
-  const allSubsystems = useContext(CustomSubsystemsContext);
+  const { subsystems } = useCustomSubsystems();
 
   const subsystem = useMemo(
-    () => allSubsystems.find((s) => s.identifier === identifier) ?? null,
-    [allSubsystems, identifier]
+    () => subsystems.find((s) => s.identifier === identifier) ?? null,
+    [subsystems, identifier]
   );
 
   const callRPC = useCallback(

@@ -35,3 +35,7 @@ storybook-static
 # Cargo.lock IS tracked here: CI runs `cargo test --manifest-path crates/*/Cargo.toml`
 # standalone, so without the lock those runs resolve dependencies fresh every time
 # and can go red on a day nobody touched this repo.
+
+# Local Codex/Superpowers workspaces and design mockups
+.worktrees/
+.superpowers/

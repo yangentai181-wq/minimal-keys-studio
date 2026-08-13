@@ -125,6 +125,34 @@ export function getMouseKeyDescription(buttonId: number): KeyDescription {
   );
 }
 
+const MINIMAL_KEYS_SCROLL_STEP = 100;
+const encodeSigned16 = (value: number) => (value < 0 ? 0x10000 + value : value);
+const moveX = (horizontal: number) => encodeSigned16(horizontal) * 0x10000;
+const moveY = (vertical: number) => encodeSigned16(vertical);
+
+export const mouseScrollParams = {
+  up: moveY(MINIMAL_KEYS_SCROLL_STEP),
+  down: moveY(-MINIMAL_KEYS_SCROLL_STEP),
+  left: moveX(-MINIMAL_KEYS_SCROLL_STEP),
+  right: moveX(MINIMAL_KEYS_SCROLL_STEP),
+} as const;
+
+const mouseScrolls: Record<number, KeyDescription> = {
+  [mouseScrollParams.up]: { roleName: "ホイール上", description: "上方向にスクロール" },
+  [mouseScrollParams.down]: { roleName: "ホイール下", description: "下方向にスクロール" },
+  [mouseScrollParams.left]: { roleName: "ホイール左", description: "左方向にスクロール" },
+  [mouseScrollParams.right]: { roleName: "ホイール右", description: "右方向にスクロール" },
+};
+
+export function getMouseScrollDescription(scrollParam: number): KeyDescription {
+  return (
+    mouseScrolls[scrollParam] ?? {
+      roleName: `スクロール${scrollParam}`,
+      description: "マウスホイール操作",
+    }
+  );
+}
+
 // Behavior displayName → Japanese role name (for non-Key-Press behaviors)
 const behaviorRoleNames: Record<string, string> = {
   "Momentary Layer": "一時レイヤー",
@@ -149,6 +177,8 @@ const behaviorRoleNames: Record<string, string> = {
   Reset: "リセット",
   "Soft Off": "電源OFF",
   "Mouse Key Press": "マウスキー",
+  "Mouse Scroll": "マウススクロール",
+  LAYER_TAP_MKP: "レイヤー/マウスクリック",
   Macro: "マクロ",
 };
 

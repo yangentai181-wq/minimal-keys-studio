@@ -192,27 +192,20 @@ export function getTextNavItems(os: UserOS): ActionItem[] {
 
 // --- Scroll ---
 
-// These used to be `Key Press` with the Consumer-page AC Scroll usages
-// (0x233/0x234/0x236/0x237). macOS silently ignores those usages, so picking
-// "スクロール" did nothing at all — on encoders and on regular keys alike.
-//
-// The working path is ZMK's mouse_scroll (&msc), a "zmk,behavior-input-two-axis"
-// that emits INPUT_REL_WHEEL / INPUT_REL_HWHEEL. Its single parameter packs both
-// axes as signed 16-bit halves — MOVE_X(hor) in [31:16], MOVE_Y(vert) in [15:0]
-// (zmk/app/include/dt-bindings/zmk/pointing.h). Positive vert = up, per SCRL_UP.
-//
-// SCRL_VAL mirrors ZMK_POINTING_DEFAULT_SCRL_VAL as overridden in the
-// minimal-keys keymap, so scrolling assigned from Studio matches the built-in
-// SCROLL key rather than moving at a different speed.
+// Consumer-page scroll usages are ignored by macOS. minimal-keys exposes the
+// working ZMK two-axis behavior as `mouse_scroll`; its parameter packs signed
+// horizontal/vertical values into the high/low 16-bit halves.
 const SCRL_VAL = 100;
-const scrollVert = (v: number) => v & 0xffff;
-const scrollHor = (v: number) => ((v & 0xffff) << 16) >>> 0;
+const scrollVert = (value: number) => value & 0xffff;
+const scrollHor = (value: number) => ((value & 0xffff) << 16) >>> 0;
 
 export const scrollItems: ActionItem[] = [
   { label: "スクロール上", description: "画面を上にスクロール", behaviorName: "mouse_scroll", param1: scrollVert(SCRL_VAL) },
   { label: "スクロール下", description: "画面を下にスクロール", behaviorName: "mouse_scroll", param1: scrollVert(-SCRL_VAL) },
   { label: "横スクロール左", description: "画面を左にスクロール", behaviorName: "mouse_scroll", param1: scrollHor(-SCRL_VAL) },
   { label: "横スクロール右", description: "画面を右にスクロール", behaviorName: "mouse_scroll", param1: scrollHor(SCRL_VAL) },
+  { label: "ホイール上", description: "ホイールを上に回す", behaviorName: "mouse_scroll", param1: scrollVert(SCRL_VAL) },
+  { label: "ホイール下", description: "ホイールを下に回す", behaviorName: "mouse_scroll", param1: scrollVert(-SCRL_VAL) },
 ];
 
 // --- Mouse (existing) ---

@@ -10,6 +10,7 @@ use frontend_log::{frontend_log_path, log_from_frontend};
 use transport::commands::{transport_close, transport_send_data, ActiveConnection};
 
 use transport::gatt::{gatt_connect, gatt_list_devices};
+use transport::hid::{raw_hid_close, raw_hid_open, RawHidState};
 use transport::serial::{serial_connect, serial_list_devices};
 
 fn main() {
@@ -25,6 +26,7 @@ fn main() {
         })
         .manage(ActiveConnection::new())
         .manage(flash::FlashState::new())
+        .manage(RawHidState::default())
         .invoke_handler(tauri::generate_handler![
             transport_send_data,
             transport_close,
@@ -40,6 +42,8 @@ fn main() {
             flash::flash_wait_for_bootloader,
             flash::flash_write_uf2,
             flash::flash_cancel,
+            raw_hid_open,
+            raw_hid_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

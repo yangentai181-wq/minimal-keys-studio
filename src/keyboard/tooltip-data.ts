@@ -7,6 +7,7 @@ import { keyRoleMap } from "./key-roles";
 import {
   getHidKeyDescription,
   getMouseKeyDescription,
+  getMouseScrollDescription,
   getBehaviorRoleName,
   ENCODER_POSITION,
   ENCODER_ADJUSTABLE_OPTIONS,
@@ -73,7 +74,11 @@ export function resolveTooltipData(
   }
 
   // Non-Key-Press behaviors (layer, hold-tap, etc.) — detail with behavior description
-  if (displayName !== "Key Press" && displayName !== "Mouse Key Press") {
+  if (
+    displayName !== "Key Press" &&
+    displayName !== "Mouse Key Press" &&
+    displayName !== "Mouse Scroll"
+  ) {
     const desc = getBehaviorDescription(displayName);
     return {
       type: "detail",
@@ -89,6 +94,15 @@ export function resolveTooltipData(
       type: "detail",
       roleName: mouseDesc.roleName,
       description: mouseDesc.description,
+    };
+  }
+
+  if (displayName === "Mouse Scroll") {
+    const scrollDesc = getMouseScrollDescription(binding.param1);
+    return {
+      type: "detail",
+      roleName: scrollDesc.roleName,
+      description: scrollDesc.description,
     };
   }
 

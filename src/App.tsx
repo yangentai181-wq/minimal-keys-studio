@@ -1,30 +1,45 @@
-import { AppHeader } from "./AppHeader";
-import {
-  Grid3x3,
-  Timer,
-  RotateCw,
-  MousePointer2,
-  Bluetooth,
-  BatteryMedium,
-  SlidersHorizontal,
-  Combine,
-} from "lucide-react";
-
-import { create_rpc_connection } from "@zmkfirmware/zmk-studio-ts-client";
-import {
-  call_rpc,
-  callRpcOrNotify,
-  registerForceDisconnect,
-} from "./rpc/logging";
-
-import type { Notification } from "@zmkfirmware/zmk-studio-ts-client/studio";
-import { ConnectionState, ConnectionContext } from "./rpc/ConnectionContext";
 import { Dispatch, useCallback, useEffect, useRef, useState } from "react";
-import { ConnectModal, TransportFactory } from "./ConnectModal";
-
+import { create_rpc_connection } from "@zmkfirmware/zmk-studio-ts-client";
+import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
+import type { Notification } from "@zmkfirmware/zmk-studio-ts-client/studio";
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
-import { connect as serial_connect } from "@zmkfirmware/zmk-studio-ts-client/transport/serial";
-import { connect as gatt_connect } from "./transport/gatt";
+
+import { AboutModal } from "./AboutModal";
+import { AppFooter } from "./AppFooter";
+import { AppHeader } from "./AppHeader";
+import { BatteryHistory } from "./battery/BatteryHistory";
+import { BehaviorsProvider } from "./behaviors/BehaviorsContext";
+import { BleManagement } from "./bluetooth/BleManagement";
+import { ComboSettings } from "./combos/ComboSettings";
+import { ConnectModal, TransportFactory } from "./ConnectModal";
+import { RightUsbEditorShell } from "./connection/RightUsbEditorShell";
+import { useRightUsbConnection } from "./connection/useRightUsbConnection";
+import { EncoderSettings } from "./encoder/EncoderSettings";
+import { HoldTapSettings } from "./holdtap/HoldTapSettings";
+import Keyboard from "./keyboard/Keyboard";
+import { KeyboardWorkspace } from "./keyboard/KeyboardWorkspace";
+import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
+import { LicenseNoticeModal } from "./misc/LicenseNoticeModal";
+import { ToastProvider, useToast } from "./misc/Toast";
+import { MonitorPanel } from "./monitor/MonitorPanel";
+import {
+  DirtyStateProvider,
+  useDirtyRegistration,
+} from "./navigation/DirtyStateContext";
+import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation";
+import { StudioTabView } from "./navigation/StudioTabView";
+import { handleNotificationEnd } from "./notificationEnd";
+import { OsModeProvider } from "./OsModeContext";
+import { ConnectionContext, ConnectionState } from "./rpc/ConnectionContext";
+import { CustomSubsystemsProvider } from "./rpc/CustomSubsystemsProvider";
+import { requestDeviceInfo } from "./rpc/deviceInfo";
+import { LockStateContext } from "./rpc/LockStateContext";
+import { call_rpc } from "./rpc/logging";
+import * as rpcLogging from "./rpc/logging";
+import { disposeTransport } from "./rpc/transportLifecycle";
+import { DeviceSettings } from "./settings/DeviceSettings";
+import { OptInDialog } from "./telemetry/OptInDialog";
+import { TelemetryProvider, useTelemetry } from "./telemetry/TelemetryProvider";
 import {
   connect as tauri_ble_connect,
   list_devices as ble_list_devices,
@@ -33,35 +48,17 @@ import {
   connect as tauri_serial_connect,
   list_devices as serial_list_devices,
 } from "./tauri/serial";
-import Keyboard from "./keyboard/Keyboard";
+import { TrackballPrecisionProvider } from "./trackball/TrackballPrecisionContext";
 import { TrackballSettings } from "./trackball/TrackballSettings";
-import { EncoderSettings } from "./encoder/EncoderSettings";
-import { BleManagement } from "./bluetooth/BleManagement";
-import { BatteryHistory } from "./battery/BatteryHistory";
-import { DeviceSettings } from "./settings/DeviceSettings";
-import { HoldTapSettings } from "./holdtap/HoldTapSettings";
-import { ComboComingSoon } from "./combos/ComboComingSoon";
-import { BehaviorsProvider } from "./behaviors/BehaviorsContext";
-import { CustomSubsystemsProvider } from "./rpc/CustomSubsystemsProvider";
-import { UndoRedoContext, useUndoRedo } from "./undoRedo";
-import { pub, useSub } from "./usePubSub";
-import { LockState } from "@zmkfirmware/zmk-studio-ts-client/core";
-import { LockStateContext } from "./rpc/LockStateContext";
-import { UnlockModal } from "./UnlockModal";
-import { valueAfter } from "./misc/async";
-import { AppFooter } from "./AppFooter";
-import { AboutModal } from "./AboutModal";
-import { LicenseNoticeModal } from "./misc/LicenseNoticeModal";
-import { ToastProvider, useToast } from "./misc/Toast";
-import { OsModeProvider } from "./OsModeContext";
-import { TelemetryProvider, useTelemetry } from "./telemetry/TelemetryProvider";
-import { OptInDialog } from "./telemetry/OptInDialog";
-import { useTour } from "./tour/useTour";
+import { connect as gatt_connect } from "./transport/gatt";
+import { connect as serial_connect } from "./transport/serial";
 import { TourPromptDialog } from "./tour/TourPromptDialog";
-import {
-  checkForUpdate,
-  type ReleaseInfo,
-} from "./update/versionCheck";
+import { useTour } from "./tour/useTour";
+import { UndoRedoContext, useUndoRedo } from "./undoRedo";
+import { UnifiedStudioPreview } from "./UnifiedStudioPreview";
+import { checkForUpdate, type ReleaseInfo } from "./update/versionCheck";
+import { UnlockModal } from "./UnlockModal";
+import { pub, useSub } from "./usePubSub";
 
 declare global {
   interface Window {
@@ -70,7 +67,6 @@ declare global {
 }
 
 const TRANSPORTS: TransportFactory[] = [
-  // Tauri native transports (pick_and_connect pattern)
   ...(window.__TAURI_INTERNALS__
     ? [
         {
@@ -90,67 +86,72 @@ const TRANSPORTS: TransportFactory[] = [
         },
       ]
     : []),
-  // Browser Web Serial (only when not in Tauri)
   ...(!window.__TAURI_INTERNALS__ && navigator.serial
     ? [{ label: "USB", connect: serial_connect }]
     : []),
-  // Browser Web Bluetooth (only when not in Tauri)
   ...(!window.__TAURI_INTERNALS__ && navigator.bluetooth
     ? [{ label: "BLE", isWireless: true, connect: gatt_connect }]
     : []),
-].filter((t) => t !== undefined);
+].filter((transport) => transport !== undefined);
+
+const USB_DEVICE_INFO_TIMEOUT_MS = 5000;
+const WIRELESS_DEVICE_INFO_TIMEOUT_MS = 8000;
+
+async function callRpcWithFeedback(
+  conn: Parameters<typeof call_rpc>[0],
+  request: Parameters<typeof call_rpc>[1],
+  onFailure: () => void,
+) {
+  if ("callRpcOrNotify" in rpcLogging) {
+    return rpcLogging.callRpcOrNotify(conn, request, onFailure);
+  }
+  try {
+    return await call_rpc(conn, request);
+  } catch {
+    onFailure();
+    return undefined;
+  }
+}
 
 async function listen_for_notifications(
-  notification_stream: ReadableStream<Notification>,
-  signal: AbortSignal
+  notificationStream: ReadableStream<Notification>,
+  signal: AbortSignal,
 ): Promise<void> {
-  const reader = notification_stream.getReader();
+  const reader = notificationStream.getReader();
   const onAbort = () => {
-    reader.cancel();
+    void reader.cancel();
     reader.releaseLock();
   };
   signal.addEventListener("abort", onAbort, { once: true });
+
   for (;;) {
     try {
       const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      if (!value) {
-        continue;
-      }
+      if (done) break;
+      if (!value) continue;
 
       pub("rpc_notification", value);
+      const subsystem = Object.entries(value).find(([, data]) => data !== undefined);
+      if (!subsystem) continue;
 
-      const subsystem = Object.entries(value).find(
-        ([, v]) => v !== undefined
+      const [subsystemId, subsystemData] = subsystem;
+      const event = Object.entries(subsystemData).find(
+        ([, eventData]) => eventData !== undefined,
       );
-      if (!subsystem) {
-        continue;
-      }
-
-      const [subId, subData] = subsystem;
-      const event = Object.entries(subData).find(([, v]) => v !== undefined);
-
-      if (!event) {
-        continue;
-      }
+      if (!event) continue;
 
       const [eventName, eventData] = event;
-      const topic = ["rpc_notification", subId, eventName].join(".");
-
-      pub(topic, eventData);
-    } catch (e) {
+      pub(["rpc_notification", subsystemId, eventName].join("."), eventData);
+    } catch (error) {
       signal.removeEventListener("abort", onAbort);
       reader.releaseLock();
-      throw e;
+      throw error;
     }
   }
 
   signal.removeEventListener("abort", onAbort);
   reader.releaseLock();
-  notification_stream.cancel();
+  await notificationStream.cancel();
 }
 
 async function connect(
@@ -158,71 +159,44 @@ async function connect(
   setConn: Dispatch<ConnectionState>,
   setConnectedDeviceName: Dispatch<string | undefined>,
   abortController: AbortController,
-  onError: (msg: string) => void,
-  isWireless?: boolean
-): Promise<boolean> {
+  onUnexpectedDisconnect: () => void | Promise<void>,
+  isWireless?: boolean,
+): Promise<void> {
   const signal = abortController.signal;
   const conn = await create_rpc_connection(transport, { signal });
+  const timeout = isWireless
+    ? WIRELESS_DEVICE_INFO_TIMEOUT_MS
+    : USB_DEVICE_INFO_TIMEOUT_MS;
 
-  const timeout = isWireless ? 5000 : 1000;
-
-  const details = await Promise.race([
-    call_rpc(conn, { core: { getDeviceInfo: true } })
-      .then((r) => r?.core?.getDeviceInfo)
-      .catch(() => undefined),
-    valueAfter(undefined, timeout),
-  ]);
-
-  if (!details) {
-    onError("デバイスへの接続に失敗しました");
-    // Tear the transport down; a still-pending getDeviceInfo would otherwise
-    // hold the client's global RPC mutex and poison every later attempt.
-    abortController.abort("connect-failed");
-    return false;
+  let details;
+  try {
+    details = await requestDeviceInfo(conn, timeout, call_rpc, {
+      transport: isWireless ? "ble" : "usb",
+    });
+  } catch (error) {
+    console.error("Failed to initialize Studio connection:", error);
+    abortController.abort("Device info request failed");
+    await disposeTransport(transport, "Device info request failed");
+    throw error;
   }
 
-  listen_for_notifications(conn.notification_readable, signal)
-    .then(() => {
-      setConnectedDeviceName(undefined);
-      setConn({ conn: null });
-    })
-    .catch(() => {
-      setConnectedDeviceName(undefined);
-      setConn({ conn: null });
-    });
+  const onNotificationEnd = () =>
+    handleNotificationEnd(signal.aborted, onUnexpectedDisconnect);
+  void listen_for_notifications(conn.notification_readable, signal).then(
+    onNotificationEnd,
+    onNotificationEnd,
+  );
 
   setConnectedDeviceName(details.name);
   setConn({ conn });
-  return true;
 }
-
-type ActiveTab = "keymap" | "trackball" | "encoder" | "combo" | "bluetooth" | "battery" | "holdtap" | "settings";
-
-type TabDef = { id: ActiveTab; label: string; icon: React.ReactNode };
-type TabGroup = { tabs: TabDef[] };
-
-const TAB_GROUPS: TabGroup[] = [
-  {
-    tabs: [
-      { id: "keymap", label: "キーマップ", icon: <Grid3x3 className="w-4 h-4" /> },
-      { id: "holdtap", label: "長押し設定", icon: <Timer className="w-4 h-4" /> },
-      { id: "encoder", label: "エンコーダー", icon: <RotateCw className="w-4 h-4" /> },
-      { id: "combo", label: "コンボ", icon: <Combine className="w-4 h-4" /> },
-    ],
-  },
-  {
-    tabs: [
-      { id: "trackball", label: "トラックボール", icon: <MousePointer2 className="w-4 h-4" /> },
-      { id: "bluetooth", label: "Bluetooth", icon: <Bluetooth className="w-4 h-4" /> },
-      { id: "battery", label: "バッテリー", icon: <BatteryMedium className="w-4 h-4" /> },
-      { id: "settings", label: "設定", icon: <SlidersHorizontal className="w-4 h-4" /> },
-    ],
-  },
-];
 
 function AppInner() {
   const { toast } = useToast();
   const { trackEvent } = useTelemetry();
+  const session = useStudioSessionNavigation({
+    onTabChanged: (tab) => trackEvent("tab_switched", { tab }),
+  });
   const [conn, setConn] = useState<ConnectionState>({ conn: null });
   const [connectedDeviceName, setConnectedDeviceName] = useState<
     string | undefined
@@ -230,30 +204,26 @@ function AppInner() {
   const [doIt, undo, redo, canUndo, canRedo, reset] = useUndoRedo();
   const [showAbout, setShowAbout] = useState(false);
   const [showLicenseNotice, setShowLicenseNotice] = useState(false);
-  // Lifted from AppHeader so ConnectModal can defer to it: while the firmware
-  // wizard is open we must NOT stack ConnectModal on top of it, even if the RPC
-  // link drops mid-update (bootloader reboot makes conn null). (F-6)
   const [fwUpdateOpen, setFwUpdateOpen] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
-  const [activeTab, setActiveTab] = useState<ActiveTab>("keymap");
-  const [mountedTabs, setMountedTabs] = useState<Set<ActiveTab>>(new Set(["keymap"]));
   const [keymapVersion, setKeymapVersion] = useState(0);
   const [availableUpdate, setAvailableUpdate] = useState<ReleaseInfo | null>(null);
   const [isWireless, setIsWireless] = useState<boolean | undefined>(undefined);
-
   const [lockState, setLockState] = useState<LockState>(
-    LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED
+    LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED,
   );
 
-  useSub("rpc_notification.core.lockStateChanged", (ls) => {
-    setLockState(ls);
+  useSub("rpc_notification.core.lockStateChanged", (nextLockState) => {
+    setLockState(nextLockState);
   });
 
   const { startTour, promptOpen, acceptPrompt, declinePrompt } = useTour({
     connected: !!conn.conn,
     unlocked: lockState === LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED,
-    activeTab,
-    setActiveTab,
+    activeTab: session.activeTab,
+    setActiveTab: () => {
+      void session.requestTab("keymap");
+    },
   });
 
   useEffect(() => {
@@ -261,281 +231,369 @@ function AppInner() {
   }, [trackEvent]);
 
   useEffect(() => {
-    const check = () => checkForUpdate().then((result) => {
-      setAvailableUpdate(result.status === "available" ? result.release : null);
-    });
-    check();
+    const check = () =>
+      checkForUpdate().then((result) => {
+        setAvailableUpdate(
+          result.status === "available" ? result.release : null,
+        );
+      });
+    void check();
     const interval = window.setInterval(check, 24 * 60 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, []);
 
-  const prevConnRef = useRef(conn.conn);
+  const previousConnection = useRef(conn.conn);
   useEffect(() => {
-    if (conn.conn && !prevConnRef.current) {
+    if (conn.conn && !previousConnection.current) {
       trackEvent("device_connected");
-    } else if (!conn.conn && prevConnRef.current) {
+    } else if (!conn.conn && previousConnection.current) {
       trackEvent("device_disconnected");
     }
-    prevConnRef.current = conn.conn;
+    previousConnection.current = conn.conn;
   }, [conn.conn, trackEvent]);
 
   useEffect(() => {
     if (!conn.conn) {
       reset();
       setLockState(LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED);
-      setMountedTabs(new Set(["keymap"]));
-      setActiveTab("keymap");
+      return;
     }
 
+    const activeConn = conn.conn;
     async function updateLockState() {
-      if (!conn.conn) {
-        return;
-      }
-
-      const locked_resp = await callRpcOrNotify(
-        conn.conn,
+      const response = await callRpcWithFeedback(
+        activeConn,
         { core: { getLockState: true } },
-        () => toast("接続状態を確認できませんでした", "error")
+        () => toast("接続状態を確認できませんでした", "error"),
       );
-      if (!locked_resp) return;
+      if (!response) return;
 
       setLockState(
-        locked_resp.core?.getLockState ||
-          LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED
+        response.core?.getLockState ||
+          LockState.ZMK_STUDIO_CORE_LOCK_STATE_LOCKED,
       );
     }
 
     void updateLockState();
-  }, [conn, setLockState, reset, toast]);
+  }, [conn.conn, reset, toast]);
 
-  const save = useCallback(() => {
-    async function doSave() {
-      if (!conn.conn) {
-        return;
-      }
-
-      const resp = await callRpcOrNotify(
-        conn.conn,
-        { keymap: { saveChanges: true } },
-        () => toast("保存できませんでした", "error")
-      );
-      if (!resp) return;
-      if (!resp.keymap?.saveChanges || resp.keymap?.saveChanges.err) {
-        toast("保存できませんでした", "error");
-      } else {
-        toast("保存しました", "success");
-        trackEvent("keymap_saved");
-        pub("keymap_saved_success", true);
-      }
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!conn.conn) throw new Error("接続されていません");
+    const response = await callRpcWithFeedback(
+      conn.conn,
+      { keymap: { saveChanges: true } },
+      () => toast("保存できませんでした", "error"),
+    );
+    if (!response) throw new Error("保存できませんでした");
+    if (!response.keymap?.saveChanges || response.keymap.saveChanges.err) {
+      toast("保存できませんでした", "error");
+      throw new Error("保存できませんでした");
     }
 
-    void doSave();
-  }, [conn, toast, trackEvent]);
+    toast("保存しました", "success");
+    trackEvent("keymap_saved");
+    pub("keymap_saved_success", true);
+    return true;
+  }, [conn.conn, toast, trackEvent]);
 
-  const discard = useCallback(() => {
-    async function doDiscard() {
-      if (!conn.conn) {
-        return;
-      }
-
-      const resp = await callRpcOrNotify(
-        conn.conn,
-        { keymap: { discardChanges: true } },
-        () => toast("破棄できませんでした", "error")
-      );
-      if (!resp) return;
-      if (!resp.keymap?.discardChanges) {
-        toast("破棄できませんでした", "error");
-      } else {
-        toast("破棄しました", "info");
-        trackEvent("keymap_discarded");
-      }
-
-      reset();
-      // Re-mount Keyboard to re-fetch keymap (don't use setConn — it clears ALL data)
-      setKeymapVersion((v) => v + 1);
+  const discard = useCallback(async (): Promise<boolean> => {
+    if (!conn.conn) throw new Error("接続されていません");
+    const response = await callRpcWithFeedback(
+      conn.conn,
+      { keymap: { discardChanges: true } },
+      () => toast("破棄できませんでした", "error"),
+    );
+    if (!response) throw new Error("破棄できませんでした");
+    if (!response.keymap?.discardChanges) {
+      toast("破棄できませんでした", "error");
+      throw new Error("破棄できませんでした");
     }
 
-    void doDiscard();
-  }, [conn, toast, reset, trackEvent]);
+    toast("破棄しました", "info");
+    trackEvent("keymap_discarded");
+    reset();
+    setKeymapVersion((version) => version + 1);
+    return true;
+  }, [conn.conn, reset, toast, trackEvent]);
+
+  useDirtyRegistration("keymap", { dirty: canUndo, save, discard });
 
   const resetSettings = useCallback(() => {
     async function doReset() {
-      if (!conn.conn) {
+      if (!conn.conn) return;
+      const response = await callRpcWithFeedback(
+        conn.conn,
+        { core: { resetSettings: true } },
+        () => toast("設定の初期化に失敗しました", "error"),
+      );
+      if (!response) return;
+      if (!response.core?.resetSettings) {
+        toast("設定の初期化に失敗しました", "error");
         return;
       }
 
-      const resp = await callRpcOrNotify(
-        conn.conn,
-        { core: { resetSettings: true } },
-        () => toast("設定の初期化に失敗しました", "error")
-      );
-      if (!resp) return;
-      if (!resp.core?.resetSettings) {
-        toast("設定の初期化に失敗しました", "error");
-      } else {
-        toast("設定を初期化しました", "success");
-      }
-
+      toast("設定を初期化しました", "success");
       reset();
-      setKeymapVersion((v) => v + 1);
+      setKeymapVersion((version) => version + 1);
     }
 
     void doReset();
-  }, [conn, toast, reset]);
+  }, [conn.conn, reset, toast]);
+
+  const closeActiveConnection = useCallback(async () => {
+    if (!conn.conn) return;
+
+    connectionAbort.abort("Connection closed");
+    await conn.conn.request_writable.close().catch((error) => {
+      console.warn("Failed to close request stream:", error);
+    });
+    setConn({ conn: null });
+    setConnectedDeviceName(undefined);
+    setIsWireless(undefined);
+    setConnectionAbort(new AbortController());
+  }, [conn.conn, connectionAbort]);
 
   const disconnect = useCallback(() => {
-    async function doDisconnect() {
-      if (!conn.conn) {
-        return;
-      }
-
-      await conn.conn.request_writable.close();
-      connectionAbort.abort("User disconnected");
-      setConnectionAbort(new AbortController());
-    }
-
-    doDisconnect();
-  }, [conn, connectionAbort]);
+    void session.requestExplicitDisconnect(closeActiveConnection);
+  }, [closeActiveConnection, session]);
 
   const onConnect = useCallback(
-    async (t: RpcTransport, isWireless?: boolean): Promise<boolean> => {
-      setIsWireless(isWireless);
-      const ac = new AbortController();
-      setConnectionAbort(ac);
-      try {
-        return await connect(
-          t,
-          setConn,
-          setConnectedDeviceName,
-          ac,
-          (msg) => toast(msg, "error"),
-          isWireless
-        );
-      } catch {
-        toast("デバイスへの接続に失敗しました", "error");
-        return false;
-      }
+    async (transport: RpcTransport, wireless?: boolean): Promise<boolean> => {
+      setIsWireless(wireless);
+      const abortController = new AbortController();
+      setConnectionAbort(abortController);
+      await connect(
+        transport,
+        setConn,
+        setConnectedDeviceName,
+        abortController,
+        () =>
+          session.handleUnexpectedDisconnect(() => {
+            setConnectedDeviceName(undefined);
+            setConn({ conn: null });
+            setIsWireless(undefined);
+          }),
+        wireless,
+      );
+      toast("キーボードに接続しました", "success");
+      return true;
     },
-    [setConn, setConnectedDeviceName, toast]
+    [session, toast],
   );
 
   useEffect(() => {
     if (!conn.conn) return;
-
     const activeConn = conn.conn;
 
-    registerForceDisconnect(activeConn, () => {
+    if (!("registerForceDisconnect" in rpcLogging)) return;
+    rpcLogging.registerForceDisconnect(activeConn, () => {
       toast("デバイスの応答がありません。接続を解除しました", "error");
       connectionAbort.abort("rpc-timeout");
+      void session.handleUnexpectedDisconnect(() => {
+        setConnectedDeviceName(undefined);
+        setConn({ conn: null });
+        setIsWireless(undefined);
+      });
     });
 
-    return () => registerForceDisconnect(activeConn, null);
-  }, [conn.conn, connectionAbort, toast]);
+    return () => rpcLogging.registerForceDisconnect(activeConn, null);
+  }, [conn.conn, connectionAbort, session, toast]);
+
+  const probeStudioRpc = useCallback(
+    async (transport: RpcTransport) => {
+      await onConnect(transport, false);
+    },
+    [onConnect],
+  );
+  const rightUsb = useRightUsbConnection({ probeStudioRpc });
+  const { notifyBleReady } = rightUsb;
+
+  const handleFwUpdateOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        setFwUpdateOpen(false);
+        return;
+      }
+      void session.requestExplicitDisconnect(async () => {
+        await rightUsb.closeMonitor();
+        await closeActiveConnection();
+        setFwUpdateOpen(true);
+      });
+    },
+    [closeActiveConnection, rightUsb, session],
+  );
+
+  const onTransportCreated = useCallback(
+    async (transport: RpcTransport, wireless?: boolean): Promise<boolean> => {
+      const connected = await onConnect(transport, wireless);
+      if (wireless) notifyBleReady();
+      return connected;
+    },
+    [notifyBleReady, onConnect],
+  );
+
+  const connectBleFromMonitor = useCallback(async () => {
+    const ble = TRANSPORTS.find(
+      (transport) => transport.isWireless && transport.connect !== undefined,
+    );
+    if (!ble?.connect) {
+      toast("このブラウザではBLE接続を利用できません", "error");
+      return;
+    }
+    try {
+      const transport = await ble.connect();
+      await onTransportCreated(transport, true);
+    } catch (error) {
+      console.error(error);
+    }
+  }, [onTransportCreated, toast]);
+
+  const hasRightUsbFlow = !!window.__TAURI_INTERNALS__ || !!navigator.serial;
+  const showMonitorOnly = !conn.conn && rightUsb.monitorActive;
+  const header = (
+    <AppHeader
+      connectedDeviceLabel={connectedDeviceName}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      onUndo={undo}
+      onRedo={redo}
+      onSave={save}
+      onDiscard={() => {
+        void discard().catch(() => undefined);
+      }}
+      onDisconnect={disconnect}
+      onResetSettings={resetSettings}
+      onStartTour={startTour}
+      isWireless={isWireless}
+      availableUpdate={availableUpdate}
+      fwUpdateOpen={fwUpdateOpen}
+      onFwUpdateOpenChange={handleFwUpdateOpenChange}
+    />
+  );
 
   return (
     <ConnectionContext.Provider value={conn}>
       <LockStateContext.Provider value={lockState}>
         <UndoRedoContext.Provider value={doIt}>
           <BehaviorsProvider>
-          <CustomSubsystemsProvider>
-          <UnlockModal />
-          <TourPromptDialog
-            open={promptOpen}
-            onAccept={acceptPrompt}
-            onDecline={declinePrompt}
-          />
-          <ConnectModal
-            open={!conn.conn && !fwUpdateOpen}
-            transports={TRANSPORTS}
-            onTransportCreated={onConnect}
-          />
-          <AboutModal open={showAbout} onClose={() => setShowAbout(false)} />
-          <LicenseNoticeModal
-            open={showLicenseNotice}
-            onClose={() => setShowLicenseNotice(false)}
-          />
-          {/*
-            アプリの外枠。
+            <CustomSubsystemsProvider>
+              <TrackballPrecisionProvider>
+                <UnlockModal />
+                <TourPromptDialog
+                  open={promptOpen}
+                  onAccept={acceptPrompt}
+                  onDecline={declinePrompt}
+                />
+                <ConnectModal
+                  open={!conn.conn && !showMonitorOnly && !fwUpdateOpen}
+                  transports={TRANSPORTS}
+                  onTransportCreated={onTransportCreated}
+                  onConnectRightUsb={
+                    hasRightUsbFlow ? rightUsb.connectRightUsb : undefined
+                  }
+                  connectionNotice={
+                    rightUsb.state.phase !== "idle"
+                      ? {
+                          title: rightUsb.description.title,
+                          body: rightUsb.description.body,
+                        }
+                      : undefined
+                  }
+                />
 
-            以前は inline-grid ＋ grid-rows-[auto_auto_auto_1fr_auto] だった。
-            2つ壊れていた。
-
-            1. inline-grid は中身の大きさで決まる箱なので、外枠がウィンドウに
-               追従しない。
-            2. 行を5つ宣言しているのに、子要素は3つ（未接続時）か4つ（接続時）
-               しかない。nav が conn.conn の条件付きだから数が変わる。余った
-               1fr 行がフッターに割り当たり、ウィンドウを広げた分が全部そこへ
-               流れ込んでいた（実測: rows = 49px 304px 29px 906px 0px。中身は
-               304px のまま、906px が空いていた）。
-
-            行数を数え直しても、子の数が変わる作りでは同じ事故が起きる。
-            flex 列にして「中身が残りを取る」形にする（下の flex-1 min-h-0）。
-            これなら子が増えても減っても崩れない。
-          */}
-          <div className="bg-base-100 text-base-content flex h-screen w-full max-w-[100vw] flex-col overflow-hidden">
-            <AppHeader
-              connectedDeviceLabel={connectedDeviceName}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              onUndo={undo}
-              onRedo={redo}
-              onSave={save}
-              onDiscard={discard}
-              onDisconnect={disconnect}
-              onResetSettings={resetSettings}
-              onStartTour={startTour}
-              isWireless={isWireless}
-              availableUpdate={availableUpdate}
-              fwUpdateOpen={fwUpdateOpen}
-              onFwUpdateOpenChange={setFwUpdateOpen}
-            />
-            {conn.conn && (
-              <nav className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-1">
-                {TAB_GROUPS.map((group, gi) => (
-                  <div key={gi} className="flex items-center gap-0.5">
-                    {gi > 0 && <div className="w-px h-6 bg-gray-300 mx-2" />}
-                    {group.tabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        data-tour={`tab-${tab.id}`}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${
-                          activeTab === tab.id
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-base-content/60 hover:text-base-content hover:bg-base-200"
-                        }`}
-                        onClick={() => {
-                          setActiveTab(tab.id);
-                          setMountedTabs((prev) => new Set(prev).add(tab.id));
-                          trackEvent("tab_switched", { tab: tab.id });
-                        }}
-                      >
-                        {tab.icon}
-                        <span className="hidden sm:inline">{tab.label}</span>
-                      </button>
-                    ))}
+                {showMonitorOnly && !fwUpdateOpen && (
+                  <div className="h-screen w-full overflow-hidden bg-base-100 text-base-content">
+                    <MonitorPanel
+                      monitorStore={rightUsb.monitorStore}
+                      description={rightUsb.description}
+                      editorAvailable={false}
+                      busy={rightUsb.connecting}
+                      onRetryEditor={rightUsb.retryEditor}
+                      onConnectBle={connectBleFromMonitor}
+                      onClose={rightUsb.closeMonitor}
+                    />
                   </div>
-                ))}
-              </nav>
-            )}
-            {/* ヘッダー・nav・フッターを除いた残り全部を中身に渡す */}
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <div className={activeTab === "keymap" ? "h-full" : "hidden"}><Keyboard key={keymapVersion} /></div>
-              {mountedTabs.has("trackball") && <div className={activeTab === "trackball" ? "h-full" : "hidden"}><TrackballSettings /></div>}
-              {mountedTabs.has("encoder") && <div className={activeTab === "encoder" ? "h-full" : "hidden"}><EncoderSettings /></div>}
-              {mountedTabs.has("combo") && <div className={activeTab === "combo" ? "h-full" : "hidden"}><ComboComingSoon /></div>}
-              {mountedTabs.has("bluetooth") && <div className={activeTab === "bluetooth" ? "h-full" : "hidden"}><BleManagement /></div>}
-              {mountedTabs.has("holdtap") && <div className={activeTab === "holdtap" ? "h-full" : "hidden"}><HoldTapSettings /></div>}
-              {mountedTabs.has("battery") && <div className={activeTab === "battery" ? "h-full" : "hidden"}><BatteryHistory /></div>}
-              {mountedTabs.has("settings") && <div className={activeTab === "settings" ? "h-full" : "hidden"}><DeviceSettings /></div>}
-            </div>
-            <AppFooter
-              onShowAbout={() => setShowAbout(true)}
-              onShowLicenseNotice={() => setShowLicenseNotice(true)}
-            />
-          </div>
-        </CustomSubsystemsProvider>
-        </BehaviorsProvider>
+                )}
+
+                <AboutModal
+                  open={showAbout}
+                  onClose={() => setShowAbout(false)}
+                />
+                <LicenseNoticeModal
+                  open={showLicenseNotice}
+                  onClose={() => setShowLicenseNotice(false)}
+                />
+
+                {!conn.conn && fwUpdateOpen && (
+                  <div className="flex h-screen w-full flex-col overflow-hidden bg-base-100 text-base-content">
+                    {header}
+                  </div>
+                )}
+
+                {conn.conn && (
+                  <MonitorKeymapProvider>
+                    <RightUsbEditorShell
+                      header={header}
+                      monitorStore={rightUsb.monitorStore}
+                      monitorActive={rightUsb.monitorActive}
+                      editorAvailable
+                      connectionTitle={rightUsb.description.title}
+                      connectionBody={rightUsb.description.body}
+                      deviceName={connectedDeviceName}
+                      editor={
+                        <StudioTabView
+                          activeTab={session.activeTab}
+                          onSelectTab={(tab) => {
+                            void session.requestTab(tab);
+                          }}
+                          renderTab={(tab) => {
+                            switch (tab) {
+                              case "keymap":
+                                return (
+                                  <KeyboardWorkspace
+                                    editor={<Keyboard key={keymapVersion} />}
+                                    monitorStore={rightUsb.monitorStore}
+                                    monitorActive={rightUsb.monitorActive}
+                                    monitorBusy={rightUsb.connecting}
+                                    onConnectMonitor={
+                                      hasRightUsbFlow
+                                        ? rightUsb.connectRightUsb
+                                        : undefined
+                                    }
+                                  />
+                                );
+                              case "trackball":
+                                return <TrackballSettings />;
+                              case "encoder":
+                                return <EncoderSettings />;
+                              case "combo":
+                                return <ComboSettings />;
+                              case "bluetooth":
+                                return <BleManagement />;
+                              case "battery":
+                                return <BatteryHistory />;
+                              case "holdtap":
+                                return <HoldTapSettings />;
+                              case "settings":
+                                return <DeviceSettings />;
+                            }
+                          }}
+                        />
+                      }
+                      footer={
+                        <AppFooter
+                          onShowAbout={() => setShowAbout(true)}
+                          onShowLicenseNotice={() =>
+                            setShowLicenseNotice(true)
+                          }
+                        />
+                      }
+                    />
+                  </MonitorKeymapProvider>
+                )}
+              </TrackballPrecisionProvider>
+            </CustomSubsystemsProvider>
+          </BehaviorsProvider>
         </UndoRedoContext.Provider>
       </LockStateContext.Provider>
     </ConnectionContext.Provider>
@@ -543,12 +601,20 @@ function AppInner() {
 }
 
 function App() {
+  const isIntegratedPreview =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("preview") === "integrated";
+
+  if (isIntegratedPreview) return <UnifiedStudioPreview />;
+
   return (
     <ToastProvider>
       <OsModeProvider>
         <TelemetryProvider>
           <OptInDialog />
-          <AppInner />
+          <DirtyStateProvider>
+            <AppInner />
+          </DirtyStateProvider>
         </TelemetryProvider>
       </OsModeProvider>
     </ToastProvider>

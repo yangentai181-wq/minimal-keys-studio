@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { PickerTabs } from "./PickerTabs";
 import { OsModeProvider } from "../../OsModeContext";
 
@@ -8,6 +8,8 @@ const fakeBehaviors = [
   { id: 20, displayName: "Momentary Layer", metadata: [] },
   { id: 30, displayName: "Toggle Layer", metadata: [] },
   { id: 40, displayName: "Sticky Layer", metadata: [] },
+  { id: 50, displayName: "Mod-Tap", metadata: [] },
+  { id: 60, displayName: "Layer-Tap", metadata: [] },
 ];
 
 describe("PickerTabs", () => {
@@ -28,7 +30,170 @@ describe("PickerTabs", () => {
     expect(screen.getByText("修飾キー")).toBeDefined();
     expect(screen.getByText("日本語")).toBeDefined();
     expect(screen.getByText("システム")).toBeDefined();
+    const content = screen.getByTestId("picker-tab-content");
+    const viewport = screen.getByTestId("picker-scroll-viewport");
+    expect(viewport).toHaveClass("relative", "min-h-0", "flex-1", "overflow-hidden");
+    expect(content).toHaveClass(
+      "absolute",
+      "inset-0",
+      "overflow-y-auto",
+      "overscroll-contain",
+      "pb-2.5",
+      "[scrollbar-gutter:stable]",
+    );
+    expect(content).toHaveAttribute("aria-label", "キー割り当て候補");
+    expect(content).toHaveAttribute("role", "region");
+    expect(content).toHaveAttribute("tabindex", "0");
+    expect(screen.getByTestId("picker-tabs")).toHaveClass("overflow-hidden");
+    expect(screen.getByTestId("picker-tab-bar")).not.toHaveClass("overflow-y-auto");
     // OS toggle is now in AppHeader, not PickerTabs
+  });
+
+  it("タブ切替時に候補contentを先頭へ戻す", () => {
+    render(
+      <div style={{ display: "flex", flexDirection: "column", height: "8rem" }}>
+        <OsModeProvider>
+          <PickerTabs
+            keyPosition={37}
+            behaviors={fakeBehaviors}
+            layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+            onApplyBinding={() => {}}
+          />
+        </OsModeProvider>
+      </div>
+    );
+
+    const content = screen.getByTestId("picker-tab-content");
+    expect(content).toHaveClass("absolute", "inset-0", "overflow-y-auto");
+    content.scrollTop = 120;
+    fireEvent.click(screen.getByRole("button", { name: "文字・記号" }));
+
+    expect(content.scrollTop).toBe(0);
+    expect(screen.getByText("文字・記号")).toBeDefined();
+    expect(content).toContainElement(screen.getByRole("button", { name: "A" }));
+    expect(content).toContainElement(screen.getByRole("button", { name: "Z" }));
+    expect(content.firstElementChild).toHaveAttribute("data-motion-state", "enter");
+    expect(content.firstElementChild).toHaveAttribute("data-motion-view", "letters");
+  });
+
+  it("候補領域のキーボード操作は外側ではなく候補領域をスクロールする", () => {
+    render(
+      <div style={{ display: "flex", flexDirection: "column", height: "8rem" }}>
+        <OsModeProvider>
+          <PickerTabs
+            keyPosition={37}
+            behaviors={fakeBehaviors}
+            layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+            onApplyBinding={() => {}}
+          />
+        </OsModeProvider>
+      </div>
+    );
+
+    const content = screen.getByTestId("picker-tab-content");
+    Object.defineProperty(content, "clientHeight", { configurable: true, value: 80 });
+    content.scrollTop = 0;
+
+    expect(fireEvent.keyDown(content, { key: "PageDown" })).toBe(false);
+    expect(content.scrollTop).toBe(80);
+    expect(fireEvent.keyDown(content, { key: "ArrowDown" })).toBe(false);
+    expect(content.scrollTop).toBe(120);
+    expect(fireEvent.keyDown(content, { key: "Home" })).toBe(false);
+    expect(content.scrollTop).toBe(0);
+  });
+
+  it("フォーカス済み候補からのキー操作も候補領域だけをスクロールする", () => {
+    render(
+      <div
+        data-testid="outer-scroll-container"
+        style={{ display: "flex", flexDirection: "column", height: "8rem", overflowY: "auto" }}
+      >
+        <OsModeProvider>
+          <PickerTabs
+            keyPosition={37}
+            behaviors={fakeBehaviors}
+            layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+            onApplyBinding={() => {}}
+          />
+        </OsModeProvider>
+      </div>
+    );
+
+    const outer = screen.getByTestId("outer-scroll-container");
+    const content = screen.getByTestId("picker-tab-content");
+    const candidate = screen.getByRole("button", { name: /^Tab/ });
+    Object.defineProperty(content, "clientHeight", { configurable: true, value: 80 });
+    outer.scrollTop = 25;
+    content.scrollTop = 0;
+    candidate.focus();
+
+    expect(fireEvent.keyDown(candidate, { key: "PageDown" })).toBe(false);
+    expect(content.scrollTop).toBeGreaterThan(0);
+    expect(outer.scrollTop).toBe(25);
+
+    const afterPageDown = content.scrollTop;
+    expect(fireEvent.keyDown(candidate, { key: "ArrowDown" })).toBe(false);
+    expect(content.scrollTop).toBeGreaterThan(afterPageDown);
+    expect(outer.scrollTop).toBe(25);
+
+    expect(fireEvent.keyDown(candidate, { key: "Home" })).toBe(false);
+    expect(content.scrollTop).toBe(0);
+    expect(outer.scrollTop).toBe(25);
+  });
+
+  it.each(["ArrowDown", "PageDown", "Home"])(
+    "タップキー選択中の%sを候補スクロールが横取りしない",
+    (key) => {
+      render(
+        <div style={{ display: "flex", flexDirection: "column", height: "8rem" }}>
+          <OsModeProvider>
+            <PickerTabs
+              keyPosition={37}
+              behaviors={fakeBehaviors}
+              layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+              onApplyBinding={() => {}}
+            />
+          </OsModeProvider>
+        </div>,
+      );
+
+      fireEvent.click(screen.getByText("修飾キー"));
+      fireEvent.click(screen.getByText("Mod-Tap"));
+      fireEvent.click(screen.getByText("Ctrl (左)"));
+
+      const content = screen.getByTestId("picker-tab-content");
+      const select = screen.getByRole("combobox", { name: "タップキーを選択" });
+      content.scrollTop = 25;
+      select.focus();
+
+      expect(fireEvent.keyDown(select, { key })).toBe(true);
+      expect(content.scrollTop).toBe(25);
+    },
+  );
+
+  it("タブ切替はbindingを適用せず、候補選択時だけ適用する", () => {
+    const onApplyBinding = vi.fn();
+
+    render(
+      <OsModeProvider>
+        <PickerTabs
+          keyPosition={37}
+          behaviors={fakeBehaviors}
+          layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+          onApplyBinding={onApplyBinding}
+        />
+      </OsModeProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "文字・記号" }));
+    fireEvent.click(screen.getByRole("button", { name: "日本語" }));
+
+    expect(onApplyBinding).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "文字・記号" }));
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+
+    expect(onApplyBinding).toHaveBeenCalledTimes(1);
   });
 
   it("defaults to ショートカット tab with おすすめ for thumb key", () => {
@@ -57,5 +222,24 @@ describe("PickerTabs", () => {
       </OsModeProvider>
     );
     expect(screen.queryByText("おすすめ")).toBeNull();
+  });
+
+  it("passes the current OS mode to Mod-Tap choices", () => {
+    render(
+      <OsModeProvider>
+        <PickerTabs
+          keyPosition={37}
+          behaviors={fakeBehaviors}
+          layers={[{ id: 0, index: 0, name: "Layer 0" }]}
+          onApplyBinding={() => {}}
+        />
+      </OsModeProvider>,
+    );
+
+    fireEvent.click(screen.getByText("修飾キー"));
+    fireEvent.click(screen.getByText("Mod-Tap"));
+    fireEvent.click(screen.getByText("Ctrl (左)"));
+
+    expect(screen.getByRole("option", { name: "Win (左)" })).toBeTruthy();
   });
 });

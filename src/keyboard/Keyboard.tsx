@@ -20,7 +20,6 @@ import {
 } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 
 import { LayerPicker } from "./LayerPicker";
-import { ConfirmDialog } from "../ConfirmDialog";
 import { PhysicalLayoutPicker } from "./PhysicalLayoutPicker";
 import { Keymap as KeymapComp } from "./Keymap";
 import { useConnectedDeviceData } from "../rpc/useConnectedDeviceData";
@@ -31,11 +30,7 @@ import {
   getModifierFlags,
   replaceModifierFlags,
 } from "../behaviors/modifier-flags";
-import {
-  useBehaviorMap,
-  useBehaviorsLoading,
-  useBehaviorsStatus,
-} from "../behaviors/BehaviorsContext";
+import { useBehaviorMap, useBehaviorsLoading } from "../behaviors/BehaviorsContext";
 import { produce } from "immer";
 import { useToast } from "../misc/Toast";
 import { LockStateContext } from "../rpc/LockStateContext";
@@ -54,49 +49,27 @@ import {
   downloadJson,
   openFilePicker,
 } from "./keymap-io";
+import { canEditUserLayer, isPrecisionLayerId } from "./minimal-keys-layers";
+import { publishKeymapChanged } from "./keymap-events";
+import { runGuardedKeymapWrite } from "./keymap-operation-guards";
+import { ERROR_MESSAGES } from "../copy/errorMessages";
+import { usePublishMonitorKeymap } from "./MonitorKeymapContext";
 import {
   calculateImportChanges,
   calculateUnappliedLayerCount,
 } from "./import-diff";
 import { AutoMouseLayerControl } from "../trackball/AutoMouseLayerControl";
 
-// Keeps loading state visible for at least minMs so users always see feedback.
-function useMinLoadingTime(isLoading: boolean, minMs = 500): boolean {
-  const [show, setShow] = useState(isLoading);
-  const startRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (isLoading) {
-      startRef.current = Date.now();
-      setShow(true);
-    } else if (startRef.current !== null) {
-      const remaining = minMs - (Date.now() - startRef.current);
-      if (remaining > 0) {
-        const timer = setTimeout(() => {
-          setShow(false);
-          startRef.current = null;
-        }, remaining);
-        return () => clearTimeout(timer);
-      }
-      setShow(false);
-      startRef.current = null;
-    }
-  }, [isLoading, minMs]);
-
-  return show;
-}
-
 // Separate component for keyboard area — measures container and computes oneU.
 // Isolated so ResizeObserver doesn't cause feedback loops with the keyboard rendering.
 function KeyboardArea({
-  layouts, keymap, behaviors, behaviorsLoading, selectedPhysicalLayoutIndex,
+  layouts, keymap, behaviors, selectedPhysicalLayoutIndex,
   selectedLayerIndex, selectedKeyPosition, onKeyPositionClicked,
   encoderRotationLabel, showLoading,
 }: {
   layouts: PhysicalLayout[] | undefined;
   keymap: Keymap | undefined;
   behaviors: Record<number, import("@zmkfirmware/zmk-studio-ts-client/behaviors").GetBehaviorDetailsResponse> | undefined;
-  behaviorsLoading: boolean;
   selectedPhysicalLayoutIndex: number;
   selectedLayerIndex: number;
   selectedKeyPosition: number | undefined;
@@ -135,15 +108,13 @@ function KeyboardArea({
   return (
     <div
       ref={containerRef}
-      data-tour="keymap-area"
       className="p-4 col-start-2 row-start-1 flex items-center justify-center min-w-0 overflow-hidden bg-gray-200/50 rounded-lg"
     >
-      {!showLoading && layouts && keymap && behaviors ? (
+      {!showLoading && layout && keymap && behaviors ? (
         <KeymapComp
           keymap={keymap}
-          layout={layouts[selectedPhysicalLayoutIndex]}
+          layout={layout}
           behaviors={behaviors}
-          behaviorsLoading={behaviorsLoading}
           oneU={oneU}
           selectedLayerIndex={selectedLayerIndex}
           selectedKeyPosition={selectedKeyPosition}
@@ -161,9 +132,7 @@ function useLayouts(): [
   PhysicalLayout[] | undefined,
   React.Dispatch<SetStateAction<PhysicalLayout[] | undefined>>,
   number,
-  React.Dispatch<SetStateAction<number>>,
-  boolean,
-  () => void
+  React.Dispatch<SetStateAction<number>>
 ] {
   const connection = useContext(ConnectionContext);
   const lockState = useContext(LockStateContext);
@@ -173,10 +142,6 @@ function useLayouts(): [
   );
   const [selectedPhysicalLayoutIndex, setSelectedPhysicalLayoutIndex] =
     useState<number>(0);
-  const [error, setError] = useState(false);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  const retry = useCallback(() => setReloadToken((t) => t + 1), []);
 
   useEffect(() => {
     if (
@@ -184,33 +149,29 @@ function useLayouts(): [
       lockState != LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED
     ) {
       setLayouts(undefined);
-      setError(false);
       return;
     }
 
     async function startRequest() {
       setLayouts(undefined);
-      setError(false);
 
       if (!connection.conn) {
         return;
       }
 
-      try {
-        const response = await call_rpc(connection.conn, {
-          keymap: { getPhysicalLayouts: true },
-        });
+      const response = await call_rpc(connection.conn, {
+        keymap: { getPhysicalLayouts: true },
+      });
 
-        if (!ignore) {
-          setLayouts(response?.keymap?.getPhysicalLayouts?.layouts);
-          setSelectedPhysicalLayoutIndex(
-            response?.keymap?.getPhysicalLayouts?.activeLayoutIndex || 0
-          );
-        }
-      } catch (e) {
-        console.error("Failed to load physical layouts:", e);
-        if (!ignore) {
-          setError(true);
+      if (!ignore) {
+        const responseLayouts = response?.keymap?.getPhysicalLayouts?.layouts;
+        const activeLayoutIndex = response?.keymap?.getPhysicalLayouts?.activeLayoutIndex ?? 0;
+        if (responseLayouts?.[activeLayoutIndex]) {
+          setLayouts(responseLayouts);
+          setSelectedPhysicalLayoutIndex(activeLayoutIndex);
+        } else {
+          setLayouts(undefined);
+          setSelectedPhysicalLayoutIndex(0);
         }
       }
     }
@@ -221,33 +182,15 @@ function useLayouts(): [
     return () => {
       ignore = true;
     };
-  }, [connection, lockState, reloadToken]);
+  }, [connection, lockState]);
 
   return [
     layouts,
     setLayouts,
     selectedPhysicalLayoutIndex,
     setSelectedPhysicalLayoutIndex,
-    error,
-    retry,
   ];
 }
-
-// The layer set is fixed when the firmware is built: six numbered layers plus
-// MOUSE. This app does not add, remove, or reorder them.
-//
-// That is a deliberate product decision, and it is also what keeps the stored
-// settings honest. The layer references we persist on the keyboard (scroll
-// layers, runtime input processor active_layers, the auto-mouse temp layer) are
-// all indices. Removing or reordering a layer shifts every later index by one,
-// so a stored number would keep pointing at the same slot while a different
-// layer moved into it. Deleting also frees a layer id for reuse, which would
-// later let a brand-new layer inherit a setting meant for the deleted one.
-//
-// Holding the layer set still means neither can happen. Turning this on again
-// requires migrating those settings to layer ids first, and clearing a layer's
-// settings when it is deleted.
-const LAYER_SET_EDITABLE: boolean = false;
 
 export default function Keyboard() {
   const [
@@ -255,39 +198,23 @@ export default function Keyboard() {
     ,
     selectedPhysicalLayoutIndex,
     setSelectedPhysicalLayoutIndex,
-    layoutsError,
-    layoutsRetry,
   ] = useLayouts();
-  const [keymap, setKeymap, keymapError, keymapRetry] =
-    useConnectedDeviceData<Keymap>(
-      { keymap: { getKeymap: true } },
-      (keymap) => keymap?.keymap?.getKeymap,
-      true,
-      // getKeymap transfers the full keymap (several KB) over BLE and can take
-      // longer than the 8s default on a slow link; don't force-disconnect it.
-      15000
-    );
+  const [keymap, setKeymap] = useConnectedDeviceData<Keymap>(
+    { keymap: { getKeymap: true } },
+    (keymap) => keymap?.keymap?.getKeymap,
+    true
+  );
+  usePublishMonitorKeymap(keymap);
 
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
-  const [showRemoveLayerConfirm, setShowRemoveLayerConfirm] = useState(false);
   const [selectedKeyPosition, setSelectedKeyPosition] = useState<
     number | undefined
   >(undefined);
   const [modifierFlags, setModifierFlags] = useState(0);
   const behaviors = useBehaviorMap();
   const behaviorsLoading = useBehaviorsLoading();
-  const { error: behaviorsError, reload: behaviorsReload } =
-    useBehaviorsStatus();
-  // The keyboard grid only needs layouts + keymap; behavior details stream
-  // in afterwards so the first paint is not blocked on N detail RPCs.
-  const isDataLoading = !layouts || !keymap;
-  const showLoading = useMinLoadingTime(isDataLoading, 300);
-  const loadError = layoutsError || keymapError || behaviorsError;
-  const retryAll = useCallback(() => {
-    layoutsRetry();
-    keymapRetry();
-    behaviorsReload();
-  }, [layoutsRetry, keymapRetry, behaviorsReload]);
+  const isDataLoading = !layouts || !layouts[selectedPhysicalLayoutIndex] || !keymap || behaviorsLoading;
+  const showLoading = isDataLoading;
 
   const conn = useContext(ConnectionContext);
   const undoRedo = useContext(UndoRedoContext);
@@ -298,9 +225,6 @@ export default function Keyboard() {
   useEffect(() => {
     setSelectedLayerIndex(0);
     setSelectedKeyPosition(undefined);
-    // Close a pending delete confirmation on (re)connect so it cannot be
-    // confirmed against a different layer after selection resets to 0.
-    setShowRemoveLayerConfirm(false);
   }, [conn]);
 
   const keymapSentRef = useRef(false);
@@ -341,6 +265,7 @@ export default function Keyboard() {
       const new_keymap = resp?.keymap?.setActivePhysicalLayout?.ok;
       if (new_keymap) {
         setKeymap(new_keymap);
+        publishKeymapChanged();
       } else {
         console.error(
           "Failed to set the active physical layout err:",
@@ -397,9 +322,10 @@ export default function Keyboard() {
               draft.layers[layer].bindings[keyPosition] = binding;
             }) as (base: Keymap | undefined) => Keymap
           );
+          publishKeymapChanged();
         } else {
           console.error("Failed to set binding", resp.keymap?.setLayerBinding);
-          toast("Failed to set key binding", "error");
+          toast(ERROR_MESSAGES["keyboard.setBinding"], "error");
         }
 
         return async () => {
@@ -421,8 +347,9 @@ export default function Keyboard() {
                 draft.layers[layer].bindings[keyPosition] = oldBinding;
               }) as (base: Keymap | undefined) => Keymap
             );
+            publishKeymapChanged();
           } else {
-            toast("Failed to undo key binding change", "error");
+            toast(ERROR_MESSAGES["keyboard.undoBinding"], "error");
           }
         };
       });
@@ -447,189 +374,34 @@ export default function Keyboard() {
   const handleModifierFlagsChanged = useCallback(
     (flags: number) => {
       setModifierFlags(flags);
-
       const behavior = selectedBinding
         ? behaviors?.[selectedBinding.behaviorId]
         : undefined;
       if (!selectedBinding || behavior?.displayName !== "Key Press") return;
-
       doUpdateBinding(replaceModifierFlags(selectedBinding, flags));
     },
     [behaviors, doUpdateBinding, selectedBinding],
   );
 
-  // Memoized: Object.values() returns a fresh array every render, and it feeds
-  // useEncoderBindings' effect dependencies. Without this the encoder summary
-  // refetched (2 RPCs) on every re-render, saturating the serial RPC queue over
-  // BLE until unrelated calls hit the 8s timeout and poisoned the connection.
-  const behaviorList = useMemo(
-    () => (behaviors ? Object.values(behaviors) : []),
-    [behaviors],
+  const encoderSummary = useEncoderBindings(
+    behaviors ? Object.values(behaviors) : [],
+    selectedLayerIndex,
   );
-
-  const encoderSummary = useEncoderBindings(behaviorList, selectedLayerIndex);
-
-  const moveLayer = useCallback(
-    (start: number, end: number) => {
-      const doMove = async (startIndex: number, destIndex: number) => {
-        if (!conn.conn) {
-          return;
-        }
-
-        const resp = await call_rpc(conn.conn, {
-          keymap: { moveLayer: { startIndex, destIndex } },
-        });
-
-        if (resp.keymap?.moveLayer?.ok) {
-          setKeymap(resp.keymap?.moveLayer?.ok);
-          setSelectedLayerIndex(destIndex);
-        } else {
-          console.error("Error moving", resp);
-        }
-      };
-
-      undoRedo?.(async () => {
-        await doMove(start, end);
-        return () => doMove(end, start);
-      });
-    },
-    [undoRedo, conn.conn, setKeymap]
-  );
-
-  const addLayer = useCallback(() => {
-    async function doAdd(): Promise<number> {
-      if (!conn.conn || !keymap) {
-        throw new Error("Not connected");
-      }
-
-      const resp = await call_rpc(conn.conn, { keymap: { addLayer: {} } });
-
-      if (resp.keymap?.addLayer?.ok) {
-        const newSelection = keymap.layers.length;
-        setKeymap(
-          produce((draft: Keymap) => {
-            draft.layers.push(resp.keymap!.addLayer!.ok!.layer!);
-            draft.availableLayers--;
-          }) as (base: Keymap | undefined) => Keymap
-        );
-
-        setSelectedLayerIndex(newSelection);
-
-        return resp.keymap.addLayer.ok.index;
-      } else {
-        console.error("Add error", resp.keymap?.addLayer?.err);
-        throw new Error("Failed to add layer:" + resp.keymap?.addLayer?.err);
-      }
-    }
-
-    async function doRemove(layerIndex: number) {
-      if (!conn.conn) {
-        throw new Error("Not connected");
-      }
-
-      const resp = await call_rpc(conn.conn, {
-        keymap: { removeLayer: { layerIndex } },
-      });
-
-      if (resp.keymap?.removeLayer?.ok) {
-        setKeymap(
-          produce((draft: Keymap) => {
-            draft.layers.splice(layerIndex, 1);
-            draft.availableLayers++;
-          }) as (base: Keymap | undefined) => Keymap
-        );
-      } else {
-        console.error("Remove error", resp.keymap?.removeLayer?.err);
-        throw new Error(
-          "Failed to remove layer:" + resp.keymap?.removeLayer?.err
-        );
-      }
-    }
-
-    undoRedo?.(async () => {
-      const index = await doAdd();
-      return () => doRemove(index);
-    });
-  }, [conn, undoRedo, keymap, setKeymap]);
-
-  const removeLayer = useCallback(() => {
-    async function doRemove(layerIndex: number): Promise<void> {
-      if (!conn.conn || !keymap) {
-        throw new Error("Not connected");
-      }
-
-      const resp = await call_rpc(conn.conn, {
-        keymap: { removeLayer: { layerIndex } },
-      });
-
-      if (resp.keymap?.removeLayer?.ok) {
-        if (layerIndex == keymap.layers.length - 1) {
-          setSelectedLayerIndex(layerIndex - 1);
-        }
-        setKeymap(
-          produce((draft: Keymap) => {
-            draft.layers.splice(layerIndex, 1);
-            draft.availableLayers++;
-          }) as (base: Keymap | undefined) => Keymap
-        );
-      } else {
-        console.error("Remove error", resp.keymap?.removeLayer?.err);
-        throw new Error(
-          "Failed to remove layer:" + resp.keymap?.removeLayer?.err
-        );
-      }
-    }
-
-    async function doRestore(layerId: number, atIndex: number) {
-      if (!conn.conn) {
-        throw new Error("Not connected");
-      }
-
-      const resp = await call_rpc(conn.conn, {
-        keymap: { restoreLayer: { layerId, atIndex } },
-      });
-
-      if (resp.keymap?.restoreLayer?.ok) {
-        setKeymap(
-          produce((draft: Keymap) => {
-            draft.layers.splice(atIndex, 0, resp!.keymap!.restoreLayer!.ok!);
-            draft.availableLayers--;
-          }) as (base: Keymap | undefined) => Keymap
-        );
-        setSelectedLayerIndex(atIndex);
-      } else {
-        console.error("Remove error", resp.keymap?.restoreLayer?.err);
-        throw new Error(
-          "Failed to restore layer:" + resp.keymap?.restoreLayer?.err
-        );
-      }
-    }
-
-    if (!keymap) {
-      throw new Error("No keymap loaded");
-    }
-
-    const index = selectedLayerIndex;
-    const layerId = keymap.layers[index].id;
-    undoRedo?.(async () => {
-      await doRemove(index);
-      return () => doRestore(layerId, index);
-    });
-  }, [conn, undoRedo, selectedLayerIndex, keymap, setKeymap]);
 
   const changeLayerName = useCallback(
     (id: number, oldName: string, newName: string) => {
+      if (!keymap || !canEditUserLayer(id)) return;
       async function changeName(layerId: number, name: string) {
         if (!conn.conn) {
           throw new Error("Not connected");
         }
 
-        const resp = await call_rpc(conn.conn, {
+        const resp = await runGuardedKeymapWrite(canEditUserLayer(layerId), () => call_rpc(conn.conn!, {
           keymap: { setLayerProps: { layerId, name } },
-        });
+        }));
 
         if (
-          resp.keymap?.setLayerProps ==
+          resp?.keymap?.setLayerProps ==
           SetLayerPropsResponse.SET_LAYER_PROPS_RESP_OK
         ) {
           setKeymap(
@@ -640,9 +412,10 @@ export default function Keyboard() {
               draft.layers[layer_index].name = name;
             }) as (base: Keymap | undefined) => Keymap
           );
+          publishKeymapChanged();
         } else {
           throw new Error(
-            "Failed to change layer name:" + resp.keymap?.setLayerProps
+            "Failed to change layer name:" + resp?.keymap?.setLayerProps
           );
         }
       }
@@ -654,16 +427,21 @@ export default function Keyboard() {
         };
       });
     },
-    [conn, undoRedo, setKeymap]
+    [conn, undoRedo, setKeymap, keymap]
   );
 
   useEffect(() => {
     if (!keymap?.layers) return;
 
-    const layers = keymap.layers.length - 1;
-
-    if (selectedLayerIndex > layers) {
-      setSelectedLayerIndex(layers);
+    const selectedLayer = keymap.layers[selectedLayerIndex];
+    if (!selectedLayer || !canEditUserLayer(selectedLayer.id)) {
+      const firstEditableLayer = keymap.layers.findIndex((layer) =>
+        canEditUserLayer(layer.id),
+      );
+      if (firstEditableLayer >= 0) {
+        setSelectedLayerIndex(firstEditableLayer);
+        setSelectedKeyPosition(undefined);
+      }
     }
   }, [keymap, selectedLayerIndex]);
 
@@ -696,7 +474,14 @@ export default function Keyboard() {
     const behaviorList = Object.values(behaviors);
     const keyCount = layouts[selectedPhysicalLayoutIndex]?.keys?.length ?? 0;
     const maxLayers = keymap.layers.length + (keymap.availableLayers ?? 0);
-    const result = deserializeKeymap(json, behaviorList, keyCount, maxLayers);
+    const runtimeUserLayers = keymap.layers.filter((layer) => !isPrecisionLayerId(layer.id));
+    const result = deserializeKeymap(
+      json,
+      behaviorList,
+      keyCount,
+      maxLayers,
+      keymap.layers.map((layer) => layer.id),
+    );
 
     if (!result.ok) {
       const err = result.error;
@@ -715,14 +500,17 @@ export default function Keyboard() {
       return;
     }
 
-    const changes = calculateImportChanges(keymap, result.layers);
+    const changes = calculateImportChanges(
+      { layers: runtimeUserLayers },
+      result.layers,
+    );
     const unappliedLayerCount = calculateUnappliedLayerCount(
-      keymap.layers.length,
+      runtimeUserLayers.length,
       result.layers.length,
     );
     const writeCount = changes.layerProps.length + changes.bindings.length;
     const layerLimitWarning = unappliedLayerCount > 0
-      ? `\nこのファイルには${result.layers.length}つのレイヤーがありますが、書き込めるのは${keymap.layers.length}つまでです。残り${unappliedLayerCount}つは反映されません。続けますか？`
+      ? `\nこのファイルには${result.layers.length}つのレイヤーがありますが、書き込めるのは${runtimeUserLayers.length}つまでです。残り${unappliedLayerCount}つは反映されません。続けますか？`
       : "";
     if (!confirm(`${result.layers.length} レイヤー、${keyCount} キー/レイヤーをインポートします。\n変更のある ${writeCount} か所を書き込みます。\n現在のキーマップを上書きします。${layerLimitWarning || "続けますか？"}`)) {
       return;
@@ -746,7 +534,6 @@ export default function Keyboard() {
         completed += 1;
         setImportProgress({ completed, total: writeCount });
       };
-
       for (const { layerId, name } of changes.layerProps) {
         await call_rpc(conn.conn, {
           keymap: { setLayerProps: { layerId, name } },
@@ -760,77 +547,26 @@ export default function Keyboard() {
         advanceProgress();
       }
 
-      const resp = await call_rpc(
-        conn.conn,
-        { keymap: { getKeymap: true } },
-        15000
-      );
+      const resp = await call_rpc(conn.conn, { keymap: { getKeymap: true } });
       const refreshed = resp?.keymap?.getKeymap;
-      if (!refreshed) {
-        throw new Error("Keymap response was empty after import");
+      if (refreshed) {
+        setKeymap(() => refreshed);
+        publishKeymapChanged();
       }
-      setKeymap(() => refreshed);
 
-      toast(
-        unappliedLayerCount > 0
-          ? `書き込める${keymap.layers.length}つのレイヤーをインポートしました。残り${unappliedLayerCount}つのレイヤーは反映されていません`
-          : "キーマップをインポートしました",
-        unappliedLayerCount > 0 ? "info" : "success",
-      );
+      toast("キーマップをインポートしました", "success");
     } catch (e) {
       console.error("Import failed:", e);
-      try {
-        const resp = await call_rpc(
-          conn.conn,
-          { keymap: { getKeymap: true } },
-          15000,
-        );
-        const refreshed = resp?.keymap?.getKeymap;
-        if (!refreshed) {
-          throw new Error("Keymap response was empty after import failure");
-        }
-        setKeymap(() => refreshed);
-        toast(
-          "一部だけ書き込まれました。実機の現在状態を読み込みました。元に戻すには「破棄」を押してください",
-          "error",
-        );
-      } catch (refreshError) {
-        console.error("Failed to refresh keymap after import failure:", refreshError);
-        setKeymap(undefined);
-        toast(
-          "一部だけ書き込まれた可能性がありますが、実機の状態を確認できません。編集や保存をせず、「破棄」を押すか再接続してください",
-          "error",
-        );
-      }
+      toast("インポート中にエラーが発生しました", "error");
     } finally {
       setImporting(false);
       setImportProgress(null);
     }
   }, [keymap, conn, behaviors, layouts, selectedPhysicalLayoutIndex, toast, setKeymap]);
 
-  if (loadError) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 h-full bg-base-300">
-        <p className="text-base-content/70">読み込みに失敗しました</p>
-        <button
-          className="px-4 py-2 rounded bg-primary text-primary-content hover:opacity-90 text-sm"
-          onClick={retryAll}
-        >
-          再試行
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-[auto_1fr] grid-rows-[55fr_45fr] bg-base-300 max-w-full min-w-0 min-h-0 h-full">
-      {/*
-        左のサイドバー（レイヤー・保存/読込・自動マウスレイヤー・修飾キー）。
-        min-h-0 が無いと grid 行より高くなっても縮まらず、外枠の overflow-hidden に
-        下から切り落とされる（低いウィンドウで「自動マウスレイヤー」以降が消えて
-        いた）。切るのではなくスクロールさせる。
-      */}
-      <div className="p-2 flex flex-col gap-2 bg-gray-50 border-r border-gray-200 row-span-2 min-h-0 overflow-y-auto">
+    <div className="grid h-full min-h-0 min-w-0 max-w-full grid-cols-[auto_1fr] grid-rows-[minmax(150px,55fr)_minmax(160px,45fr)] bg-base-300">
+      <div className="p-2 flex min-h-0 flex-col gap-2 overflow-y-auto bg-gray-50 border-r border-gray-200 row-span-2">
         {!showLoading && layouts ? (
           <div className="col-start-3 row-start-1 row-end-2">
             <PhysicalLayoutPicker
@@ -847,21 +583,12 @@ export default function Keyboard() {
         )}
 
         {!showLoading && keymap ? (
-          <div className="col-start-1 row-start-1 row-end-2" data-tour="layer-picker">
+          <div className="col-start-1 row-start-1 row-end-2">
             <LayerPicker
               layers={keymap.layers}
               selectedLayerIndex={selectedLayerIndex}
               onLayerClicked={setSelectedLayerIndex}
-              onLayerMoved={moveLayer}
-              canAdd={(keymap.availableLayers || 0) > 0}
-              canRemove={(keymap.layers?.length || 0) > 1}
-              canReorder={LAYER_SET_EDITABLE}
-              onAddClicked={LAYER_SET_EDITABLE ? addLayer : undefined}
-              onRemoveClicked={
-                LAYER_SET_EDITABLE
-                  ? () => setShowRemoveLayerConfirm(true)
-                  : undefined
-              }
+              canReorder={false}
               onLayerNameChanged={changeLayerName}
             />
           </div>
@@ -875,7 +602,7 @@ export default function Keyboard() {
         )}
 
         {!showLoading && keymap && (
-          <div className="flex gap-1" data-tour="export-import">
+          <div className="flex gap-1">
             <button
               className="flex items-center gap-1 px-2 py-1 text-sm rounded border border-base-300 bg-white hover:bg-base-200 text-base-content/70 hover:text-base-content transition-colors"
               onClick={handleExport}
@@ -892,7 +619,7 @@ export default function Keyboard() {
             >
               {importing ? (
                 <>
-                  <span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                   {importProgress
                     ? `送信中 ${importProgress.completed} / ${importProgress.total}`
                     : "準備中..."}
@@ -919,7 +646,6 @@ export default function Keyboard() {
         layouts={layouts}
         keymap={keymap}
         behaviors={behaviors}
-        behaviorsLoading={behaviorsLoading}
         selectedPhysicalLayoutIndex={selectedPhysicalLayoutIndex}
         selectedLayerIndex={selectedLayerIndex}
         selectedKeyPosition={selectedKeyPosition}
@@ -928,14 +654,10 @@ export default function Keyboard() {
         showLoading={showLoading}
       />
       <div
-        // min-w-0: grid の 1fr 列は既定で中身より小さくならないため、これが
-        // 無いとウィンドウ幅の変化が中のタブバーまで伝わらない
-        className="p-3 col-start-2 row-start-2 min-w-0 bg-white border-t border-gray-200 overflow-y-auto"
-        data-tour="binding-panel"
+        data-testid="binding-picker-panel"
+        className="col-start-2 row-start-2 min-h-0 overflow-hidden border-t border-gray-200 bg-white p-2"
       >
-        {!showLoading && keymap && selectedBinding != null && behaviorsLoading ? (
-          <LoadingSpinner label="キー情報を読み込んでいます..." />
-        ) : !showLoading && keymap && selectedBinding != null ? (
+        {!showLoading && keymap && selectedBinding != null ? (
           <BehaviorBindingPicker
             binding={selectedBinding}
             behaviors={Object.values(behaviors)}
@@ -956,22 +678,6 @@ export default function Keyboard() {
           <LoadingSpinner label="設定パネルを準備しています..." />
         )}
       </div>
-
-      <ConfirmDialog
-        open={showRemoveLayerConfirm}
-        title="レイヤーを削除"
-        destructive
-        confirmLabel="削除する"
-        onConfirm={() => {
-          setShowRemoveLayerConfirm(false);
-          removeLayer();
-        }}
-        onCancel={() => setShowRemoveLayerConfirm(false)}
-      >
-        <p>
-          選択中のレイヤーを削除します。削除後もヘッダーの「元に戻す」（⌘/Ctrl+Z）で復元できます。続けますか？
-        </p>
-      </ConfirmDialog>
     </div>
   );
 }
