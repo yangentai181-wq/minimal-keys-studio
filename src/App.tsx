@@ -54,6 +54,7 @@ import { useStudioSessionNavigation } from "./navigation/StudioSessionNavigation
 import { handleNotificationEnd } from "./notificationEnd";
 import { RightUsbEditorShell } from "./connection/RightUsbEditorShell";
 import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
+import { publishKeymapChanged } from "./keyboard/keymap-events";
 
 declare global {
   interface Window {
@@ -275,6 +276,7 @@ function AppInner() {
       reset();
       // Re-mount Keyboard to re-fetch keymap (don't use setConn — it clears ALL data)
       setKeymapVersion((v) => v + 1);
+      publishKeymapChanged();
       return true;
   }, [conn, toast, reset, trackEvent]);
 
