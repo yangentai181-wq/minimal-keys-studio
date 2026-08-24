@@ -33,3 +33,22 @@ describe("resolveFactoryMonitorLayerTarget", () => {
     });
   });
 });
+
+describe("factory labels under a non-QWERTY alphabet layout", () => {
+  it("renames the default-layer keys and keeps the hold half", async () => {
+    const { resolveFactoryMonitorKeyLabel } = await import(
+      "./minimalKeysMonitorLabels"
+    );
+
+    expect(resolveFactoryMonitorKeyLabel(1, 1, "oonishi").label).toBe("L");
+    expect(resolveFactoryMonitorKeyLabel(21, 1, "oonishi").label).toBe("H");
+    expect(resolveFactoryMonitorKeyLabel(16, 1, "oonishi").label).toBe(
+      "Bsp / Fn",
+    );
+    // Non-default layers are unaffected by the alphabet layout.
+    expect(
+      resolveFactoryMonitorKeyLabel(1, (1 << 0) | (1 << 2), "oonishi").label,
+    ).toBe("Home");
+    expect(resolveFactoryMonitorKeyLabel(1, 1).label).toBe("W");
+  });
+});

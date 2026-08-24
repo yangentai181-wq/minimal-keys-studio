@@ -1,6 +1,8 @@
 // Realtime monitor surface driven purely by Raw HID frames.
 // Works without any Studio RPC connection (degraded/monitor-only mode).
 
+import { useState } from "react";
+
 import { Activity, Bluetooth, Cable, MousePointer2, X } from "lucide-react";
 
 import type { ConnectionDescription } from "../connection/coordinator";
@@ -13,6 +15,7 @@ import { useMonitorSnapshot } from "./useMonitorSnapshot";
 import { MinimalKeysMonitorLayout } from "./MinimalKeysMonitorLayout";
 import { resolveFactoryMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import { MONITOR_LAYER_NAMES } from "./layerNames";
+import { readStoredAlphaLayout } from "../keyboard/alpha-layouts";
 import { usePointerSummary } from "./usePointerSummary";
 
 export interface MonitorPanelProps {
@@ -31,6 +34,9 @@ function formatPointerDetails(pointer: PointerSample) {
 
 function MonitorLiveContent({ monitorStore }: { monitorStore: MonitorStore }) {
   const snapshot = useMonitorSnapshot(monitorStore);
+  // Monitor-only mode has no keymap to read, so fall back to the last layout
+  // written from the editor.
+  const [alphaLayout] = useState(readStoredAlphaLayout);
   const layers = MONITOR_LAYER_NAMES.map((name, id) => ({ id, name }));
   const pressedList = [...snapshot.pressed].sort((a, b) => a - b);
   const autoMouseActive = isLayerActive(snapshot.activeLayerMask, AUTO_MOUSE_LAYER_INDEX);
@@ -52,8 +58,8 @@ function MonitorLiveContent({ monitorStore }: { monitorStore: MonitorStore }) {
             {MONITOR_LAYER_NAMES[snapshot.activeLayerIndex] ?? `L${snapshot.activeLayerIndex}`}
           </span>
         </p>
-        <MinimalKeysMonitorLayout activeLayerMask={snapshot.activeLayerMask} pressed={snapshot.pressed} holdTapStates={snapshot.holdTapStates} />
-        <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"><h2 className="text-sm font-semibold text-base-content">押下中のキー</h2>{pressedList.length === 0 ? <p className="mt-2 text-xs text-base-content/60">（キーを押すとここに表示されます）</p> : <ul className="mt-2 flex flex-wrap gap-1.5">{pressedList.map((position) => <li key={position} className="rounded-md bg-primary/10 px-2 py-1 font-mono text-xs text-primary">#{position} {resolveFactoryMonitorKeyLabel(position, snapshot.activeLayerMask).label}</li>)}</ul>}</section>
+        <MinimalKeysMonitorLayout activeLayerMask={snapshot.activeLayerMask} pressed={snapshot.pressed} holdTapStates={snapshot.holdTapStates} alphaLayout={alphaLayout} />
+        <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"><h2 className="text-sm font-semibold text-base-content">押下中のキー</h2>{pressedList.length === 0 ? <p className="mt-2 text-xs text-base-content/60">（キーを押すとここに表示されます）</p> : <ul className="mt-2 flex flex-wrap gap-1.5">{pressedList.map((position) => <li key={position} className="rounded-md bg-primary/10 px-2 py-1 font-mono text-xs text-primary">#{position} {resolveFactoryMonitorKeyLabel(position, snapshot.activeLayerMask, alphaLayout).label}</li>)}</ul>}</section>
         <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"><h2 className="flex items-center gap-1.5 text-sm font-semibold text-base-content"><MousePointer2 className="h-4 w-4" aria-hidden="true" />トラックボール{autoMouseActive && <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] leading-none text-orange-600">Auto Mouse 使用中</span>}</h2>{snapshot.pointer ? <p className="mt-2 font-mono text-xs text-base-content/80">{pointerSummary}</p> : <p className="mt-2 text-xs text-base-content/60">（ボールを動かすとここに表示されます）</p>}</section>
         <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"><h2 className="text-sm font-semibold text-base-content">エンコーダー</h2>{Object.keys(snapshot.encoders).length === 0 ? <p className="mt-2 text-xs text-base-content/60">（回すとここに表示されます）</p> : <ul className="mt-2 flex flex-wrap gap-2">{Object.entries(snapshot.encoders).map(([sensor, sample]) => <li key={sensor} className="rounded-md bg-base-200 px-2 py-1 font-mono text-xs">#{sensor}: {sample.delta > 0 ? "+" : ""}{sample.delta}</li>)}</ul>}</section>
       </div>
