@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
 import { resolveFactoryMonitorKeyLabel } from "./minimalKeysMonitorLabels";
+import { resolveFactoryMonitorLayerTarget } from "./monitorLayerTargets";
 import type { HoldTapDisplayState } from "./monitorStore";
 import type { ResolvedMonitorBinding } from "./resolveMonitorBindings";
 
@@ -103,12 +104,21 @@ export function MinimalKeysMonitorLayout({
             ? `monitor-key-description-${index}`
             : undefined;
           const isLongLabel = label.length > 4 || label.includes(" / ");
+          const layerTarget = resolveFactoryMonitorLayerTarget(
+            index,
+            activeLayerMask,
+          );
+          const holdActive =
+            holdTapState === "hold" || holdTapState === "hold-afterglow";
+          // A layer key names its destination; the generic hold badge is
+          // folded into that chip so only one badge is ever shown.
+          const showDecisionBadge = Boolean(decisionLabel) && !layerTarget;
 
           return (
             <div
               key={position.id}
               role="gridcell"
-              aria-label={`pos ${index} ${label}${isPressed ? " 押下中" : ""}${decisionLabel ? ` ${decisionLabel}` : ""}`}
+              aria-label={`pos ${index} ${label}${isPressed ? " 押下中" : ""}${decisionLabel ? ` ${decisionLabel}` : ""}${layerTarget ? `${decisionLabel ? "" : " 長押しで"}${layerTarget.layerName}レイヤーへ` : ""}`}
               aria-describedby={descriptionId}
               aria-pressed={isPressed}
               title={`pos ${index}: ${label}`}
@@ -136,7 +146,7 @@ export function MinimalKeysMonitorLayout({
                   className={cx(
                     "line-clamp-2 break-words font-bold leading-tight",
                     isLongLabel ? "text-sm" : "text-base",
-                    decisionLabel && "-translate-y-1.5",
+                    (showDecisionBadge || layerTarget) && "-translate-y-1.5",
                   )}
                 >
                   {label}
@@ -146,12 +156,11 @@ export function MinimalKeysMonitorLayout({
                     {inheritedDescription}
                   </span>
                 )}
-                {decisionLabel && (
+                {showDecisionBadge && (
                   <span
                     className={cx(
                       "absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-extrabold leading-none shadow-sm",
-                      holdTapState === "hold" ||
-                        holdTapState === "hold-afterglow"
+                      holdActive
                         ? "bg-orange-500 text-white"
                         : holdTapState === "tap"
                           ? "bg-success/15 text-success"
@@ -159,6 +168,29 @@ export function MinimalKeysMonitorLayout({
                     )}
                   >
                     {decisionLabel}
+                  </span>
+                )}
+                {layerTarget && (
+                  <span
+                    data-testid={`monitor-key-layer-target-${index}`}
+                    className={cx(
+                      "absolute bottom-1 left-1/2 max-w-[95%] -translate-x-1/2 truncate rounded px-1 py-0.5 text-[10px] font-extrabold leading-none",
+                      holdActive
+                        ? "bg-orange-500 text-white shadow-sm"
+                        : holdTapState === "tap"
+                          ? "bg-success/15 text-success"
+                          : holdTapState === "pending"
+                            ? "bg-primary/15 text-primary"
+                            : "bg-orange-50 text-orange-600",
+                    )}
+                  >
+                    {holdActive
+                      ? `長押し → ${layerTarget.layerName}`
+                      : holdTapState === "tap"
+                        ? "単押し"
+                        : holdTapState === "pending"
+                          ? `判定中 → ${layerTarget.layerName}`
+                          : `→ ${layerTarget.layerName}`}
                   </span>
                 )}
               </div>
