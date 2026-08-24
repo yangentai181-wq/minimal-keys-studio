@@ -73,10 +73,10 @@ macOSの標準的なMission Control操作に合わせて次を初期値とする
 
 | フリック | ZMK binding | 表示 |
 |---|---|---|
-| 上 | `&kp LC(DOWN_ARROW)` | App Exposé |
-| 左 | `&kp LC(RIGHT_ARROW)` | 次のデスクトップ |
-| 右 | `&kp LC(LEFT_ARROW)` | 前のデスクトップ |
-| 下 | `&kp LC(UP_ARROW)` | Mission Control |
+| 上 | `&kp LC(DOWN)` | App Exposé |
+| 左 | `&kp LC(RIGHT)` | 次のデスクトップ |
+| 右 | `&kp LC(LEFT)` | 前のデスクトップ |
+| 下 | `&kp LC(UP)` | Mission Control |
 
 Studioで `何もしない` を選んだ方向は `&none` として保存し、その方向では入力を生成しない。隠しレイヤーの透明bindingへフォールバックして通常キーを誤発火させてはならない。
 
@@ -118,7 +118,7 @@ Studioで `何もしない` を選んだ方向は `&none` として保存し、�
 - 右: `&gesture_slot 20`
 - 下: `&gesture_slot 31`
 
-adapterは `zmk_keymap_get_layer_binding_at_idx(9, position)` でGesture Layerのbindingを取得し、そのbindingだけをpress/releaseする。透明bindingの通常レイヤー探索は行わない。positionが4つの許可値以外、layerが存在しない、binding取得に失敗した場合は何も実行せずエラーを記録する。
+adapterは `zmk_keymap_layer_index_to_id(9)` で予約indexを永続layer IDへ変換し、そのIDとpositionを `zmk_keymap_get_layer_binding_at_idx()` へ渡す。取得したbindingだけをpress/releaseし、透明bindingの通常レイヤー探索は行わない。positionが4つの許可値以外、layer ID変換またはbinding取得に失敗した場合は何も実行せずエラーを記録する。
 
 adapterの公開責務は `予約レイヤーの指定positionに保存された1 bindingを1回実行する` だけとし、方向判定、永続化、Studio通信を持たせない。
 
