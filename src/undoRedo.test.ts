@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useUndoRedo } from "./undoRedo";
 
@@ -59,6 +59,85 @@ describe("useUndoRedo", () => {
     });
 
     expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(false);
+  });
+
+  it("keeps undo history and unlocks when undo rejects, then permits a later undo", async () => {
+    const { result } = renderHook(() => useUndoRedo());
+    const undoCallback = vi.fn().mockRejectedValueOnce(new Error("undo failed"));
+
+    await act(async () => {
+      await result.current[0](async () => undoCallback);
+    });
+    await expect(act(async () => {
+      await result.current[1]();
+    })).rejects.toThrow("undo failed");
+
+    expect(result.current[3]).toBe(true);
+    expect(result.current[4]).toBe(false);
+
+    undoCallback.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      await result.current[1]();
+    });
+    expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(true);
+  });
+
+  it("keeps undo history when an undo callback reports no change", async () => {
+    const { result } = renderHook(() => useUndoRedo());
+    const undoCallback = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(undefined);
+
+    await act(async () => { await result.current[0](async () => undoCallback); });
+    await act(async () => { await result.current[1](); });
+
+    expect(result.current[3]).toBe(true);
+    expect(result.current[4]).toBe(false);
+
+    await act(async () => { await result.current[1](); });
+    expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(true);
+  });
+
+  it("keeps redo history when a redo has no undo callback, then permits a later redo", async () => {
+    const { result } = renderHook(() => useUndoRedo());
+    const undoCallback = vi.fn(async () => {});
+    const doCallback = vi.fn()
+      .mockResolvedValueOnce(undoCallback)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(undoCallback);
+
+    await act(async () => { await result.current[0](doCallback); });
+    await act(async () => { await result.current[1](); });
+    await act(async () => { await result.current[2](); });
+
+    expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(true);
+
+    await act(async () => { await result.current[2](); });
+    expect(result.current[3]).toBe(true);
+    expect(result.current[4]).toBe(false);
+  });
+
+  it("keeps redo history and unlocks when redo rejects, then permits a later redo", async () => {
+    const { result } = renderHook(() => useUndoRedo());
+    const undoCallback = vi.fn(async () => {});
+    const doCallback = vi.fn()
+      .mockResolvedValueOnce(undoCallback)
+      .mockRejectedValueOnce(new Error("redo failed"))
+      .mockResolvedValueOnce(undoCallback);
+
+    await act(async () => { await result.current[0](doCallback); });
+    await act(async () => { await result.current[1](); });
+    await expect(act(async () => {
+      await result.current[2]();
+    })).rejects.toThrow("redo failed");
+
+    expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(true);
+
+    await act(async () => { await result.current[2](); });
+    expect(result.current[3]).toBe(true);
     expect(result.current[4]).toBe(false);
   });
 });

@@ -51,7 +51,7 @@ function renderConnectedHook({
   const wrapper = ({ children }: { children: ReactNode }) => (
     <ConnectionContext.Provider value={{ conn }}>
       <LockStateContext.Provider value={LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED}>
-        <UndoRedoContext.Provider value={doIt as (dc: DoCallback) => Promise<void>}>{children}</UndoRedoContext.Provider>
+        <UndoRedoContext.Provider value={doIt as (dc: DoCallback) => Promise<boolean>}>{children}</UndoRedoContext.Provider>
       </LockStateContext.Provider>
     </ConnectionContext.Provider>
   );
@@ -158,7 +158,7 @@ describe("useConnectedGestureKeymap", () => {
     await waitFor(() => expect(result.current.availability).toBe("available"));
     await act(async () => { await result.current.updateBinding("up", nextBinding); });
 
-    expect(result.current.availability).toBe("error");
+    await waitFor(() => expect(result.current.availability).toBe("error"));
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
   });
 
@@ -190,6 +190,35 @@ describe("useConnectedGestureKeymap", () => {
     expect(result.current.availability).toBe("error");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
     expect(getUndoRedo()[3]).toBe(false);
+    expect(getUndoRedo()[4]).toBe(false);
+  });
+
+  it("keeps the gesture binding and undo entry when firmware rejects the undo write", async () => {
+    const keymap = keymapWithLayers(10);
+    let deviceKeymap = keymap;
+    callRpc.mockImplementation(async (_connection, request) => {
+      if (request.keymap?.getKeymap) return { keymap: { getKeymap: deviceKeymap } };
+      const change = request.keymap?.setLayerBinding;
+      if (change?.binding === oldBinding) return { keymap: { setLayerBinding: 0 } };
+      if (change) {
+        deviceKeymap = {
+          ...deviceKeymap,
+          layers: deviceKeymap.layers.map((layer) => layer.id === change.layerId
+            ? { ...layer, bindings: layer.bindings.map((current, position) => position === change.keyPosition ? change.binding : current) }
+            : layer),
+        };
+      }
+      return { keymap: { setLayerBinding: SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK } };
+    });
+    const { result, getUndoRedo } = renderWithUndoRedo();
+
+    await waitFor(() => expect(result.current.availability).toBe("available"));
+    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+    await act(async () => { await getUndoRedo()[1](); });
+
+    await waitFor(() => expect(result.current.availability).toBe("error"));
+    expect(result.current.keymap?.layers[9].bindings[7]).toEqual(nextBinding);
+    expect(getUndoRedo()[3]).toBe(true);
     expect(getUndoRedo()[4]).toBe(false);
   });
 

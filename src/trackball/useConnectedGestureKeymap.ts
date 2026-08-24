@@ -69,7 +69,6 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
       return invalidate;
     }
 
-    setError(null);
     void call_rpc(connection.conn, { keymap: { getKeymap: true } })
       .then((response) => {
         if (requestGeneration === generation.current) {
@@ -125,7 +124,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
           });
           if (undoResponse.keymap?.setLayerBinding !== SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK) {
             setError("ジェスチャー割当を元に戻せませんでした");
-            return;
+            return null;
           }
 
           setError(null);
