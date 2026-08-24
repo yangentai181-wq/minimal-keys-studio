@@ -94,6 +94,21 @@ describe("serializeKeymap", () => {
     expect(result.keymap.layers.map((layer) => layer.name)).not.toContain("Precision");
   });
 
+  it("omits precision and gesture layers from exported user data", () => {
+    const keymapWithTenLayers = {
+      ...sampleKeymap,
+      layers: Array.from({ length: 10 }, (_, index) => ({
+        id: index === 8 ? 91 : index === 9 ? 92 : index + 20,
+        name: index === 8 ? "Precision" : index === 9 ? "Gesture" : `Layer ${index}`,
+        bindings: sampleKeymap.layers[0].bindings,
+      })),
+    };
+
+    const result = serializeKeymap(keymapWithTenLayers, mockBehaviors, "1.0.0");
+
+    expect(result.keymap.layers).toHaveLength(8);
+    expect(result.keymap.layers.map((layer) => layer.name)).not.toContain("Gesture");
+  });
 
   it("handles unknown behaviorId gracefully", () => {
     const km = {
@@ -185,6 +200,27 @@ describe("deserializeKeymap", () => {
     });
 
     const result = deserializeKeymap(legacyPayload, mockBehaviors, 2, 9);
+
+    expect(result).toEqual({ ok: false, error: { type: "layerCount", requested: 9, max: 8 } });
+  });
+
+  it("keeps two reserved layers out of ten-layer import capacity", () => {
+    const nineUserLayerPayload = JSON.stringify({
+      format: "minimal-keys-studio-keymap",
+      version: 1,
+      keymap: {
+        layers: Array.from({ length: 9 }, (_, index) => ({
+          name: `Layer ${index}`,
+          bindings: sampleKeymap.layers[0].bindings.map((binding) => ({
+            behaviorName: binding.behaviorId === 1 ? "Key Press" : "Layer-Tap",
+            param1: binding.param1,
+            param2: binding.param2,
+          })),
+        })),
+      },
+    });
+
+    const result = deserializeKeymap(nineUserLayerPayload, mockBehaviors, 2, 10);
 
     expect(result).toEqual({ ok: false, error: { type: "layerCount", requested: 9, max: 8 } });
   });

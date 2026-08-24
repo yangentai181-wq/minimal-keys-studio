@@ -4,7 +4,7 @@ import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { hid_usage_from_page_and_id } from "../../hid-usages";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
-import { getMinimalKeysLayerRole, isPrecisionLayerIndex } from "../../keyboard/minimal-keys-layers";
+import { getMinimalKeysLayerRole, isInternalLayerIndex } from "../../keyboard/minimal-keys-layers";
 
 const KB = 7;
 
@@ -43,7 +43,7 @@ export function LayersTab({
     [behaviors],
   );
   const selectableLayers = useMemo(
-    () => layers.filter((_layer, index) => !isPrecisionLayerIndex(index)),
+    () => layers.filter((_layer, index) => !isInternalLayerIndex(index)),
     [layers],
   );
 

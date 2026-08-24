@@ -110,6 +110,17 @@ describe("LayerPicker minimal-keys layer badges", () => {
     expect(screen.queryByText("精密モード")).toBeNull();
   });
 
+  it("does not expose the internal gesture layer for selection or editing", () => {
+    const layers = Array.from({ length: 10 }, (_, index) => ({
+      id: index === 9 ? 92 : index + 20,
+      name: index === 9 ? "Gesture" : `Layer ${index}`,
+    }));
+
+    render(<LayerPicker layers={layers} selectedLayerIndex={0} onLayerClicked={vi.fn()} />);
+
+    expect(screen.queryByText("Gesture")).toBeNull();
+  });
+
   it("disables add and remove controls when the reserved layer is present", () => {
     const layers = Array.from({ length: 9 }, (_, index) => ({ id: index + 20, name: `Layer ${index}` }));
     const reason = "精密モード用レイヤーを保護するため、レイヤーの追加と削除はできません";
