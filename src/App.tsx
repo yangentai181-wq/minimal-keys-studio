@@ -5,7 +5,7 @@ import { call_rpc } from "./rpc/logging";
 
 import type { Notification } from "@zmkfirmware/zmk-studio-ts-client/studio";
 import { ConnectionState, ConnectionContext } from "./rpc/ConnectionContext";
-import { Dispatch, useCallback, useEffect, useRef, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { ConnectModal, TransportFactory } from "./ConnectModal";
 
 import type { RpcTransport } from "@zmkfirmware/zmk-studio-ts-client/transport/index";
@@ -42,6 +42,7 @@ import { LicenseNoticeModal } from "./misc/LicenseNoticeModal";
 import { ToastProvider, useToast } from "./misc/Toast";
 import { OsModeProvider } from "./OsModeContext";
 import { TelemetryProvider, useTelemetry } from "./telemetry/TelemetryProvider";
+import type { EventName } from "./telemetry/events";
 import { OptInDialog } from "./telemetry/OptInDialog";
 import { disposeTransport } from "./rpc/transportLifecycle";
 import { requestDeviceInfo } from "./rpc/deviceInfo";
@@ -184,6 +185,28 @@ async function connect(
   setConn({ conn });
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export async function discardKeymapChanges(
+  conn: NonNullable<ConnectionState["conn"]>,
+  reset: () => void,
+  setKeymapVersion: Dispatch<SetStateAction<number>>,
+  toast: (message: string, kind: "error" | "info") => void,
+  trackEvent: (event: EventName) => void,
+): Promise<boolean> {
+  const resp = await call_rpc(conn, { keymap: { discardChanges: true } });
+  if (!resp.keymap?.discardChanges) {
+    toast("破棄できませんでした", "error");
+    throw new Error("破棄できませんでした");
+  }
+
+  toast("破棄しました", "info");
+  trackEvent("keymap_discarded");
+  reset();
+  setKeymapVersion((v) => v + 1);
+  publishKeymapChanged();
+  return true;
+}
+
 function AppInner() {
   const { toast } = useToast();
   const { trackEvent } = useTelemetry();
@@ -262,22 +285,7 @@ function AppInner() {
 
   const discard = useCallback(async (): Promise<boolean> => {
       if (!conn.conn) throw new Error("接続されていません");
-      const resp = await call_rpc(conn.conn, {
-        keymap: { discardChanges: true },
-      });
-      if (!resp.keymap?.discardChanges) {
-        toast("破棄できませんでした", "error");
-        throw new Error("破棄できませんでした");
-      } else {
-        toast("破棄しました", "info");
-        trackEvent("keymap_discarded");
-      }
-
-      reset();
-      // Re-mount Keyboard to re-fetch keymap (don't use setConn — it clears ALL data)
-      setKeymapVersion((v) => v + 1);
-      publishKeymapChanged();
-      return true;
+      return discardKeymapChanges(conn.conn, reset, setKeymapVersion, toast, trackEvent);
   }, [conn, toast, reset, trackEvent]);
 
   useDirtyRegistration("keymap", { dirty: canUndo, save, discard });

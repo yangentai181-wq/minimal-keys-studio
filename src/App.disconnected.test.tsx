@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import App from "./App";
+import App, { discardKeymapChanges } from "./App";
 
 const mocks = vi.hoisted(() => ({
   createRpcConnection: vi.fn(),
   requestDeviceInfo: vi.fn(),
+  callRpc: vi.fn(),
+  publishKeymapChanged: vi.fn(),
 }));
 
 vi.mock("@zmkfirmware/zmk-studio-ts-client", () => ({
@@ -15,6 +17,8 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client", () => ({
 vi.mock("./rpc/deviceInfo", () => ({
   requestDeviceInfo: mocks.requestDeviceInfo,
 }));
+vi.mock("./rpc/logging", () => ({ call_rpc: mocks.callRpc }));
+vi.mock("./keyboard/keymap-events", () => ({ publishKeymapChanged: mocks.publishKeymapChanged }));
 
 vi.mock("./rpc/transportLifecycle", () => ({
   disposeTransport: vi.fn(),
@@ -113,6 +117,8 @@ describe("App disconnected shell", () => {
   beforeEach(() => {
     mocks.createRpcConnection.mockReset();
     mocks.requestDeviceInfo.mockReset();
+    mocks.callRpc.mockReset();
+    mocks.publishKeymapChanged.mockReset();
   });
 
   it("shows the connection modal without mounting the keymap editor behind it", () => {
@@ -146,5 +152,19 @@ describe("App disconnected shell", () => {
     expect(screen.queryByText(/RPC Failed/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Raw HID/)).not.toBeInTheDocument();
     expect(screen.queryByText(/0xff60/)).not.toBeInTheDocument();
+  });
+
+  it("publishes the keymap-changed event after a successful discard", async () => {
+    const reset = vi.fn();
+    const setKeymapVersion = vi.fn();
+    const toast = vi.fn();
+    const trackEvent = vi.fn();
+    mocks.callRpc.mockResolvedValue({ keymap: { discardChanges: true } });
+
+    await discardKeymapChanges({} as never, reset, setKeymapVersion, toast, trackEvent);
+
+    expect(mocks.publishKeymapChanged).toHaveBeenCalledOnce();
+    expect(reset).toHaveBeenCalledOnce();
+    expect(setKeymapVersion).toHaveBeenCalledOnce();
   });
 });

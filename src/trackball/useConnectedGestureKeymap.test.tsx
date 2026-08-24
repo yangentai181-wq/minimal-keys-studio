@@ -7,6 +7,7 @@ import { LockStateContext } from "../rpc/LockStateContext";
 import { publishKeymapChanged } from "../keyboard/keymap-events";
 import { UndoRedoContext } from "../undoRedo";
 import type { DoCallback } from "../undoRedo";
+import { useUndoRedo } from "../undoRedo";
 import { useConnectedGestureKeymap } from "./useConnectedGestureKeymap";
 
 const callRpc = vi.fn();
@@ -57,6 +58,22 @@ function renderConnectedHook({
   return { ...renderHook(() => useConnectedGestureKeymap(), { wrapper }), doIt };
 }
 
+function renderWithUndoRedo() {
+  let undoRedo: ReturnType<typeof useUndoRedo> | undefined;
+  const conn = {} as never;
+  function UndoRedoWrapper({ children }: { children: ReactNode }) {
+    undoRedo = useUndoRedo();
+    return (
+      <ConnectionContext.Provider value={{ conn }}>
+        <LockStateContext.Provider value={LockState.ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED}>
+          <UndoRedoContext.Provider value={undoRedo[0]}>{children}</UndoRedoContext.Provider>
+        </LockStateContext.Provider>
+      </ConnectionContext.Provider>
+    );
+  }
+  return { ...renderHook(() => useConnectedGestureKeymap(), { wrapper: UndoRedoWrapper }), getUndoRedo: () => undoRedo! };
+}
+
 describe("useConnectedGestureKeymap", () => {
   it("writes the reserved gesture slot through undo/redo and restores its original binding on undo", async () => {
     const gestureLayer = keymapWithLayers(10).layers[9];
@@ -105,6 +122,18 @@ describe("useConnectedGestureKeymap", () => {
     await waitFor(() => expect(result.current.availability).toBe("firmware-update-required"));
   });
 
+  it("requires every reserved gesture binding before making the layer available or writing", async () => {
+    const keymap = keymapWithLayers(10);
+    keymap.layers[9].bindings = keymap.layers[9].bindings.slice(0, 21);
+    callRpc.mockResolvedValue({ keymap: { getKeymap: keymap } });
+    const { result } = renderConnectedHook();
+
+    await waitFor(() => expect(result.current.availability).toBe("firmware-update-required"));
+    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+
+    expect(callRpc).toHaveBeenCalledTimes(1);
+  });
+
   it("reports a disconnected device without requesting the keymap", () => {
     const { result } = renderConnectedHook({ conn: null });
 
@@ -131,6 +160,37 @@ describe("useConnectedGestureKeymap", () => {
 
     expect(result.current.availability).toBe("error");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
+  });
+
+  it("unlocks, preserves undo state, and reports an error when the write RPC rejects", async () => {
+    const keymap = keymapWithLayers(10);
+    callRpc.mockResolvedValueOnce({ keymap: { getKeymap: keymap } })
+      .mockRejectedValueOnce(new Error("write failed"));
+    const { result, getUndoRedo } = renderWithUndoRedo();
+
+    await waitFor(() => expect(result.current.availability).toBe("available"));
+    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+
+    expect(result.current.availability).toBe("error");
+    expect(result.current.error).toBe("write failed");
+    expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
+    expect(getUndoRedo()[3]).toBe(false);
+    expect(getUndoRedo()[4]).toBe(false);
+  });
+
+  it("does not add an undo entry when the firmware rejects the write response", async () => {
+    const keymap = keymapWithLayers(10);
+    callRpc.mockResolvedValueOnce({ keymap: { getKeymap: keymap } })
+      .mockResolvedValueOnce({ keymap: { setLayerBinding: 0 } });
+    const { result, getUndoRedo } = renderWithUndoRedo();
+
+    await waitFor(() => expect(result.current.availability).toBe("available"));
+    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+
+    expect(result.current.availability).toBe("error");
+    expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
+    expect(getUndoRedo()[3]).toBe(false);
+    expect(getUndoRedo()[4]).toBe(false);
   });
 
   it("reloads availability and bindings when the existing keymap-change publisher fires", async () => {

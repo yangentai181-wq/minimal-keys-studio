@@ -35,6 +35,13 @@ function setBinding(
   };
 }
 
+function hasCompleteGestureBindings(keymap: Keymap): boolean {
+  const layer = keymap.layers[GESTURE_LAYER_INDEX];
+  return Boolean(layer) && GESTURE_DIRECTIONS.every(
+    ({ position }) => layer.bindings[position] != null,
+  );
+}
+
 export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
   const connection = useContext(ConnectionContext);
   const lockState = useContext(LockStateContext);
@@ -81,13 +88,15 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
     if (!connection.conn) return "disconnected";
     if (error) return "error";
     if (!keymap) return "loading";
-    return hasGestureLayer(keymap.layers) ? "available" : "firmware-update-required";
+    return hasGestureLayer(keymap.layers) && hasCompleteGestureBindings(keymap)
+      ? "available"
+      : "firmware-update-required";
   }, [connection.conn, error, keymap]);
 
   const updateBinding = useCallback(async (direction: GestureDirection, binding: BehaviorBinding) => {
     const slot = GESTURE_DIRECTIONS.find((candidate) => candidate.id === direction);
     const layer = keymap?.layers[GESTURE_LAYER_INDEX];
-    if (!connection.conn || !keymap || !layer || !slot || !undoRedo) {
+    if (!connection.conn || !keymap || !layer || !slot || !undoRedo || !hasCompleteGestureBindings(keymap)) {
       setError("ジェスチャー割当を更新できませんでした");
       return;
     }
@@ -96,33 +105,37 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
     const { position: keyPosition } = slot;
     const oldBinding = layer.bindings[keyPosition];
 
-    await undoRedo(async () => {
-      const response = await call_rpc(connection.conn!, {
-        keymap: { setLayerBinding: { layerId, keyPosition, binding } },
-      });
-      if (response.keymap?.setLayerBinding !== SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK) {
-        setError("ジェスチャー割当を更新できませんでした");
-        return async () => {};
-      }
-
-      setError(null);
-      setKeymap((current) => current ? setBinding(current, GESTURE_LAYER_INDEX, keyPosition, binding) : current);
-      publishKeymapChanged();
-
-      return async () => {
-        const undoResponse = await call_rpc(connection.conn!, {
-          keymap: { setLayerBinding: { layerId, keyPosition, binding: oldBinding } },
+    try {
+      await undoRedo(async () => {
+        const response = await call_rpc(connection.conn!, {
+          keymap: { setLayerBinding: { layerId, keyPosition, binding } },
         });
-        if (undoResponse.keymap?.setLayerBinding !== SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK) {
-          setError("ジェスチャー割当を元に戻せませんでした");
-          return;
+        if (response.keymap?.setLayerBinding !== SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK) {
+          setError("ジェスチャー割当を更新できませんでした");
+          return null;
         }
 
         setError(null);
-        setKeymap((current) => current ? setBinding(current, GESTURE_LAYER_INDEX, keyPosition, oldBinding) : current);
+        setKeymap((current) => current ? setBinding(current, GESTURE_LAYER_INDEX, keyPosition, binding) : current);
         publishKeymapChanged();
-      };
-    });
+
+        return async () => {
+          const undoResponse = await call_rpc(connection.conn!, {
+            keymap: { setLayerBinding: { layerId, keyPosition, binding: oldBinding } },
+          });
+          if (undoResponse.keymap?.setLayerBinding !== SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK) {
+            setError("ジェスチャー割当を元に戻せませんでした");
+            return;
+          }
+
+          setError(null);
+          setKeymap((current) => current ? setBinding(current, GESTURE_LAYER_INDEX, keyPosition, oldBinding) : current);
+          publishKeymapChanged();
+        };
+      });
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "ジェスチャー割当を更新できませんでした");
+    }
   }, [connection.conn, keymap, undoRedo]);
 
   return { availability, keymap, behaviors, error, updateBinding };

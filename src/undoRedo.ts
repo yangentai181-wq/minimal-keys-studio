@@ -2,7 +2,7 @@ import { createContext, useCallback, useMemo, useState } from "react";
 
 export type UndoCallback = () => Promise<void>;
 
-export type DoCallback = () => Promise<UndoCallback>;
+export type DoCallback = () => Promise<UndoCallback | null>;
 
 export function useUndoRedo(): [
   (dc: DoCallback) => Promise<void>,
@@ -29,13 +29,17 @@ export function useUndoRedo(): [
 
   const doIt = async (doCb: DoCallback, preserveRedo?: boolean) => {
     setLocked(true);
-    const undo = await doCb();
-
-    setUndoStack([[doCb, undo], ...undoStack]);
-    if (!preserveRedo) {
-      setRedoStack([]);
+    try {
+      const undo = await doCb();
+      if (undo) {
+        setUndoStack([[doCb, undo], ...undoStack]);
+        if (!preserveRedo) {
+          setRedoStack([]);
+        }
+      }
+    } finally {
+      setLocked(false);
     }
-    setLocked(false);
   };
 
   const undo = async () => {

@@ -37,4 +37,28 @@ describe("useUndoRedo", () => {
     expect(result.current[3]).toBe(false); // canUndo
     expect(result.current[4]).toBe(false); // canRedo
   });
+
+  it("unlocks without adding history when an operation rejects", async () => {
+    const { result } = renderHook(() => useUndoRedo());
+
+    await expect(act(async () => {
+      await result.current[0](async () => {
+        throw new Error("write failed");
+      });
+    })).rejects.toThrow("write failed");
+
+    expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(false);
+  });
+
+  it("does not add history when an operation returns no undo callback", async () => {
+    const { result } = renderHook(() => useUndoRedo());
+
+    await act(async () => {
+      await result.current[0](async () => null);
+    });
+
+    expect(result.current[3]).toBe(false);
+    expect(result.current[4]).toBe(false);
+  });
 });
