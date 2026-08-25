@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import App, { discardKeymapChanges } from "./App";
+import App, { discardKeymapChanges, saveKeymapChanges } from "./App";
 
 const mocks = vi.hoisted(() => ({
   createRpcConnection: vi.fn(),
@@ -170,5 +170,27 @@ describe("App disconnected shell", () => {
     expect(mocks.publishKeymapChanged).toHaveBeenCalledOnce();
     expect(reset).toHaveBeenCalledOnce();
     expect(setKeymapVersion).toHaveBeenCalledOnce();
+  });
+
+  it("clears the undo history only after keymap changes are saved", async () => {
+    const reset = vi.fn();
+    const toast = vi.fn();
+    const trackEvent = vi.fn();
+    mocks.callRpc.mockResolvedValue({ keymap: { saveChanges: {} } });
+
+    await saveKeymapChanges({} as never, reset, toast, trackEvent);
+
+    expect(reset).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the undo history when saving keymap changes fails", async () => {
+    const reset = vi.fn();
+    const toast = vi.fn();
+    const trackEvent = vi.fn();
+    mocks.callRpc.mockResolvedValue({ keymap: { saveChanges: { err: 1 } } });
+
+    await expect(saveKeymapChanges({} as never, reset, toast, trackEvent)).rejects.toThrow("保存できませんでした");
+
+    expect(reset).not.toHaveBeenCalled();
   });
 });

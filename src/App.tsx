@@ -207,6 +207,26 @@ export async function discardKeymapChanges(
   return true;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export async function saveKeymapChanges(
+  conn: NonNullable<ConnectionState["conn"]>,
+  reset: () => void,
+  toast: ReturnType<typeof useToast>["toast"],
+  trackEvent: (event: EventName) => void,
+): Promise<boolean> {
+  const resp = await call_rpc(conn, { keymap: { saveChanges: true } });
+  if (!resp.keymap?.saveChanges || resp.keymap.saveChanges.err) {
+    toast("保存できませんでした", "error");
+    throw new Error("保存できませんでした");
+  }
+
+  reset();
+  toast("保存しました", "success");
+  trackEvent("keymap_saved");
+  void pub("keymap_saved_success", true);
+  return true;
+}
+
 function AppInner() {
   const { toast } = useToast();
   const { trackEvent } = useTelemetry();
@@ -271,17 +291,8 @@ function AppInner() {
 
   const save = useCallback(async (): Promise<boolean> => {
       if (!conn.conn) throw new Error("接続されていません");
-      const resp = await call_rpc(conn.conn, { keymap: { saveChanges: true } });
-      if (!resp.keymap?.saveChanges || resp.keymap?.saveChanges.err) {
-        toast("保存できませんでした", "error");
-        throw new Error("保存できませんでした");
-      } else {
-        toast("保存しました", "success");
-        trackEvent("keymap_saved");
-        pub("keymap_saved_success", true);
-        return true;
-      }
-  }, [conn, toast, trackEvent]);
+      return saveKeymapChanges(conn.conn, reset, toast, trackEvent);
+  }, [conn, reset, toast, trackEvent]);
 
   const discard = useCallback(async (): Promise<boolean> => {
       if (!conn.conn) throw new Error("接続されていません");
