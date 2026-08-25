@@ -117,5 +117,6 @@ describe("TrackballGestureSettings", () => {
     expect(screen.queryByRole("button", { name: /保存|適用/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId("behavior-binding-picker")).not.toBeInTheDocument();
     expect(screen.getByTestId("gesture-announcement")).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByTestId("gesture-announcement")).toBeEmptyDOMElement();
   });
 });

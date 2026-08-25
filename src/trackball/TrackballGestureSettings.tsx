@@ -17,7 +17,7 @@ const STATUS_MESSAGES = {
 export function TrackballGestureSettings() {
   const { availability, keymap, behaviors, updateBinding } = useConnectedGestureKeymap();
   const [selectedDirection, setSelectedDirection] = useState<GestureDirection>("up");
-  const [announcement, setAnnouncement] = useState("選択中: 上フリック");
+  const [announcement, setAnnouncement] = useState("");
   const visibleLayers = keymap?.layers
     .map((layer, index) => ({ ...layer, index }))
     .filter(({ index }) => index !== GESTURE_LAYER_INDEX) ?? [];
