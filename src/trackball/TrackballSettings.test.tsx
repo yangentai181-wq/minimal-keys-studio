@@ -29,7 +29,7 @@ vi.mock("../navigation/DirtyStateContext", () => ({
 
 vi.mock("./TrackballPrecisionSettings", () => ({
   TrackballPrecisionSettings: () => (
-    <section aria-label="精密モード設定">
+    <section data-testid="precision-settings" aria-label="精密モード設定">
       <h3>精密モード</h3>
     </section>
   ),
@@ -57,6 +57,10 @@ function confirmReset() {
     })
   );
 }
+
+vi.mock("./TrackballGestureSettings", () => ({
+  TrackballGestureSettings: () => <section data-testid="gesture-settings">ジェスチャー</section>,
+}));
 
 describe("TrackballSettings", () => {
   beforeEach(() => {
@@ -748,6 +752,7 @@ describe("TrackballSettings", () => {
     const root = container.firstElementChild!;
     const precision = screen.getByRole("region", { name: "精密モード設定" });
     expect(root.firstElementChild).toBe(precision);
+    expect(screen.getByTestId("gesture-settings")).toBeVisible();
     expect(screen.getByRole("heading", { name: "トラックボール設定は利用できません" })).toBeVisible();
   });
 

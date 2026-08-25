@@ -1,11 +1,11 @@
 import { createContext, useCallback, useMemo, useState } from "react";
 
-export type UndoCallback = () => Promise<void>;
+export type UndoCallback = () => Promise<void | null>;
 
-export type DoCallback = () => Promise<UndoCallback>;
+export type DoCallback = () => Promise<UndoCallback | null>;
 
 export function useUndoRedo(): [
-  (dc: DoCallback) => Promise<void>,
+  (dc: DoCallback) => Promise<boolean>,
   () => Promise<void>,
   () => Promise<void>,
   boolean,
@@ -27,20 +27,26 @@ export function useUndoRedo(): [
     [locked, redoStack]
   );
 
-  const doIt = async (doCb: DoCallback, preserveRedo?: boolean) => {
+  const doIt = async (
+    doCb: DoCallback,
+    preserveRedo?: boolean,
+  ): Promise<boolean> => {
     if (locked) {
       console.warn("doIt ignored: another operation is in progress");
-      return;
+      return false;
     }
 
     setLocked(true);
     try {
       const undo = await doCb();
+      // A callback that reports failure must not enter the history.
+      if (!undo) return false;
 
       setUndoStack((stack) => [[doCb, undo], ...stack]);
       if (!preserveRedo) {
         setRedoStack([]);
       }
+      return true;
     } finally {
       setLocked(false);
     }
@@ -56,12 +62,13 @@ export function useUndoRedo(): [
     }
 
     setLocked(true);
+    const [doCb, undoCb] = undoStack[0];
     try {
-      const [doCb, undoCb] = undoStack[0];
+      const undone = await undoCb();
+      // Keep the entry when the undo could not be applied.
+      if (undone === null) return;
       setUndoStack((stack) => stack.slice(1));
       setRedoStack((stack) => [doCb, ...stack]);
-
-      await undoCb();
     } finally {
       setLocked(false);
     }
@@ -77,10 +84,9 @@ export function useUndoRedo(): [
     }
 
     const doCb = redoStack[0];
-
-    setRedoStack((stack) => stack.slice(1));
-
-    return await doIt(doCb, true);
+    const redone = await doIt(doCb, true);
+    // Only consume the redo entry once the operation actually succeeded.
+    if (redone) setRedoStack((stack) => stack.slice(1));
   };
 
   const reset = useCallback(() => {
@@ -92,5 +98,5 @@ export function useUndoRedo(): [
 }
 
 export const UndoRedoContext = createContext<
-  ((dc: DoCallback) => Promise<void>) | null
+  ((dc: DoCallback) => Promise<boolean>) | null
 >(null);

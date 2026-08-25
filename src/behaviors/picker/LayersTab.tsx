@@ -3,7 +3,7 @@ import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-clie
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
-import { getMinimalKeysLayerRole, isPrecisionLayerId } from "../../keyboard/minimal-keys-layers";
+import { getMinimalKeysLayerRole, isInternalLayerId } from "../../keyboard/minimal-keys-layers";
 
 import { encodeTapKey, getCommonTapKeys, type TapKeyItem } from "./common-tap-keys";
 import { buildFunctionalLayerTapBinding, type FunctionalLayerAction } from "./functional-layer-actions";
@@ -50,7 +50,7 @@ export function LayersTab({
     [behaviors],
   );
   const selectableLayers = useMemo(
-    () => layers.filter((layer) => !isPrecisionLayerId(layer.id)),
+    () => layers.filter((layer) => !isInternalLayerId(layer.id)),
     [layers],
   );
 

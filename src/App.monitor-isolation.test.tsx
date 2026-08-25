@@ -26,6 +26,10 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/core", () => ({
   },
 }));
 
+vi.mock("@zmkfirmware/zmk-studio-ts-client/keymap", () => ({
+  SetLayerBindingResponse: { SET_LAYER_BINDING_RESP_OK: 0 },
+}));
+
 vi.mock("./rpc/deviceInfo", () => ({ requestDeviceInfo: mocks.requestDeviceInfo }));
 vi.mock("./rpc/logging", () => ({ call_rpc: mocks.callRpc }));
 vi.mock("./rpc/transportLifecycle", () => ({ disposeTransport: vi.fn() }));

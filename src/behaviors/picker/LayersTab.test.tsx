@@ -312,4 +312,18 @@ describe("LayersTab", () => {
     fireEvent.click(screen.getByText("Scroll（スクロール）"));
     expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 7, param2: 0 });
   });
+
+  it("omits the internal gesture layer from layer behavior targets", () => {
+    const onApply = vi.fn();
+    const layersWithInternal = Array.from({ length: 10 }, (_, index) => ({
+      id: index,
+      index,
+      name: index === 9 ? "Gesture" : `Layer ${index}`,
+    }));
+    render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} osMode="mac" onApplyBinding={onApply} />);
+
+    fireEvent.click(screen.getByText("レイヤー切替"));
+
+    expect(screen.queryByText("Gesture")).toBeNull();
+  });
 });

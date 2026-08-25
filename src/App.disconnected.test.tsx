@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import App from "./App";
+import App, { discardKeymapChanges, saveKeymapChanges } from "./App";
 
 const mocks = vi.hoisted(() => ({
   createRpcConnection: vi.fn(),
   requestDeviceInfo: vi.fn(),
+  callRpc: vi.fn().mockResolvedValue({ core: { getLockState: 0 } }),
+  publishKeymapChanged: vi.fn(),
 }));
 
 vi.mock("@zmkfirmware/zmk-studio-ts-client", () => ({
@@ -15,13 +17,11 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client", () => ({
 vi.mock("./rpc/deviceInfo", () => ({
   requestDeviceInfo: mocks.requestDeviceInfo,
 }));
+vi.mock("./rpc/logging", () => ({ call_rpc: mocks.callRpc }));
+vi.mock("./keyboard/keymap-events", () => ({ publishKeymapChanged: mocks.publishKeymapChanged }));
 
 vi.mock("./rpc/transportLifecycle", () => ({
   disposeTransport: vi.fn(),
-}));
-
-vi.mock("./rpc/logging", () => ({
-  call_rpc: vi.fn().mockResolvedValue({ core: { getLockState: 0 } }),
 }));
 
 vi.mock("./transport/serial", () => ({
@@ -33,6 +33,10 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/core", () => ({
     ZMK_STUDIO_CORE_LOCK_STATE_LOCKED: 0,
     ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED: 1,
   },
+}));
+
+vi.mock("@zmkfirmware/zmk-studio-ts-client/keymap", () => ({
+  SetLayerBindingResponse: { SET_LAYER_BINDING_RESP_OK: 0 },
 }));
 
 vi.mock("./AppHeader", () => ({
@@ -121,6 +125,8 @@ describe("App disconnected shell", () => {
   beforeEach(() => {
     mocks.createRpcConnection.mockReset();
     mocks.requestDeviceInfo.mockReset();
+    mocks.callRpc.mockReset();
+    mocks.publishKeymapChanged.mockReset();
   });
 
   it("shows the connection modal without mounting the keymap editor behind it", () => {
@@ -167,5 +173,41 @@ describe("App disconnected shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "CONNECT_MODAL_OPEN" }));
 
     expect(await screen.findByText("キーボードに接続しました")).toHaveAttribute("role", "status");
+  });
+
+  it("publishes the keymap-changed event after a successful discard", async () => {
+    const reset = vi.fn();
+    const setKeymapVersion = vi.fn();
+    const toast = vi.fn();
+    const trackEvent = vi.fn();
+    mocks.callRpc.mockResolvedValue({ keymap: { discardChanges: true } });
+
+    await discardKeymapChanges({} as never, reset, setKeymapVersion, toast, trackEvent);
+
+    expect(mocks.publishKeymapChanged).toHaveBeenCalledOnce();
+    expect(reset).toHaveBeenCalledOnce();
+    expect(setKeymapVersion).toHaveBeenCalledOnce();
+  });
+
+  it("clears the undo history only after keymap changes are saved", async () => {
+    const reset = vi.fn();
+    const toast = vi.fn();
+    const trackEvent = vi.fn();
+    mocks.callRpc.mockResolvedValue({ keymap: { saveChanges: {} } });
+
+    await saveKeymapChanges({} as never, reset, toast, trackEvent);
+
+    expect(reset).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the undo history when saving keymap changes fails", async () => {
+    const reset = vi.fn();
+    const toast = vi.fn();
+    const trackEvent = vi.fn();
+    mocks.callRpc.mockResolvedValue({ keymap: { saveChanges: { err: 1 } } });
+
+    await expect(saveKeymapChanges({} as never, reset, toast, trackEvent)).rejects.toThrow("保存できませんでした");
+
+    expect(reset).not.toHaveBeenCalled();
   });
 });

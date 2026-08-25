@@ -2,8 +2,8 @@ import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import {
   getMinimalKeysLayerMetadata,
-  PRECISION_LAYER_ID,
-  isPrecisionLayerId,
+  getUserLayerCapacity,
+  isInternalLayerId,
   type MinimalKeysLayerMetadata,
 } from "./minimal-keys-layers";
 
@@ -85,7 +85,7 @@ export function serializeKeymap(
       ? { minimalKeys }
       : {}),
     keymap: {
-      layers: keymap.layers.filter((layer) => !isPrecisionLayerId(layer.id)).map((layer) => ({
+      layers: keymap.layers.filter((layer) => !isInternalLayerId(layer.id)).map((layer) => ({
         name: layer.name,
         bindings: layer.bindings.map((b) => ({
           behaviorName: behaviorIdToName.get(b.behaviorId) ?? `Unknown(${b.behaviorId})`,
@@ -134,7 +134,7 @@ export function deserializeKeymap(
   const exportLayers = km.layers as unknown[];
   const validLayerIdSet = validLayerIds ? new Set(validLayerIds) : undefined;
 
-  const maxUserLayers = maxLayers > PRECISION_LAYER_ID ? maxLayers - 1 : maxLayers;
+  const maxUserLayers = getUserLayerCapacity(maxLayers);
   if (exportLayers.length > maxUserLayers) {
     return {
       ok: false,

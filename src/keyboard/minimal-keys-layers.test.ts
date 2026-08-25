@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canChangeUserLayerStructure,
+  canEditUserLayer,
   canMoveUserLayer,
   getMinimalKeysLayerRole,
+  hasGestureLayer,
+  isInternalLayerId,
   isPrecisionLayerId,
 } from "./minimal-keys-layers";
 
@@ -23,6 +26,15 @@ describe("functional layer IDs", () => {
 });
 
 describe("precision layer operation guards", () => {
+  it("keeps the gesture layer out of user layer operations", () => {
+    expect(getMinimalKeysLayerRole(9)).toBe("gesture");
+    expect(isInternalLayerId(8)).toBe(true);
+    expect(isInternalLayerId(9)).toBe(true);
+    expect(canEditUserLayer(9)).toBe(false);
+    expect(hasGestureLayer([{ id: 0 }, { id: 8 }, { id: 9 }])).toBe(true);
+    expect(hasGestureLayer([{ id: 0 }, { id: 8 }])).toBe(false);
+  });
+
   it("rejects moves that start from or end at the internal layer ID", () => {
     expect(canMoveUserLayer(7, 0)).toBe(true);
     expect(canMoveUserLayer(7, 8)).toBe(false);

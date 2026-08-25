@@ -86,6 +86,66 @@ describe("MinimalKeysMonitorLayout", () => {
     expect(screen.getByLabelText("pos 2 E 押下中 長押し")).toBeTruthy();
   });
 
+  it("names the layer each hold key moves to", () => {
+    render(
+      <MinimalKeysMonitorLayout activeLayerMask={1} pressed={new Set()} />,
+    );
+
+    expect(screen.getByTestId("monitor-key-layer-target-15")).toHaveTextContent(
+      "数字",
+    );
+    expect(screen.getByTestId("monitor-key-layer-target-39")).toHaveTextContent(
+      "スクロール",
+    );
+    expect(screen.queryByTestId("monitor-key-layer-target-0")).toBeNull();
+    expect(
+      screen.getByLabelText("pos 15 MB1 / L1 長押しで数字レイヤーへ"),
+    ).toBeTruthy();
+  });
+
+  it("highlights the destination layer once the hold is decided", () => {
+    render(
+      <MinimalKeysMonitorLayout
+        activeLayerMask={1}
+        pressed={new Set([15])}
+        holdTapStates={{ 15: "hold" }}
+      />,
+    );
+
+    const chip = screen.getByTestId("monitor-key-layer-target-15");
+    expect(chip).toHaveTextContent("長押し → 数字");
+    expect(chip).toHaveClass("bg-orange-500", "text-white");
+  });
+
+  it("shows the currently active layer name in the monitor panel", () => {
+    const monitorStore = createMonitorStore((notify) => {
+      notify();
+      return () => {};
+    });
+    monitorStore.push({
+      kind: "layer",
+      defaultLayer: 0,
+      activeLayerMask: (1 << 0) | (1 << 1),
+    });
+
+    render(
+      <MonitorPanel
+        monitorStore={monitorStore}
+        description={{
+          title: "Raw HIDで監視中",
+          body: "編集接続は利用できません。",
+          monitorAvailable: true,
+          editorAvailable: false,
+        }}
+        editorAvailable={false}
+      />,
+    );
+
+    expect(screen.getByTestId("monitor-current-layer")).toHaveTextContent(
+      "現在のレイヤー数字",
+    );
+  });
+
   it("mirrors the factory fallback labels for standard controls and layer returns", () => {
     expect(MONITOR_LAYER_NAMES[1]).toBe("数字");
     expect(MONITOR_LAYER_NAMES[8]).toBe("精密モード");

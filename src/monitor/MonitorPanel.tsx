@@ -42,6 +42,16 @@ function MonitorLiveContent({ monitorStore }: { monitorStore: MonitorStore }) {
         <LayerPicker layers={layers} selectedLayerIndex={snapshot.activeLayerIndex} selectionLocked showInactiveAutoMouseLayer={false} />
       </section>
       <div className="flex flex-col gap-4">
+        <p
+          data-testid="monitor-current-layer"
+          role="status"
+          className="flex items-center gap-2 text-sm text-base-content/70"
+        >
+          現在のレイヤー
+          <span className="rounded-md bg-primary/10 px-2 py-0.5 text-sm font-bold text-primary">
+            {MONITOR_LAYER_NAMES[snapshot.activeLayerIndex] ?? `L${snapshot.activeLayerIndex}`}
+          </span>
+        </p>
         <MinimalKeysMonitorLayout activeLayerMask={snapshot.activeLayerMask} pressed={snapshot.pressed} holdTapStates={snapshot.holdTapStates} />
         <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"><h2 className="text-sm font-semibold text-base-content">押下中のキー</h2>{pressedList.length === 0 ? <p className="mt-2 text-xs text-base-content/60">（キーを押すとここに表示されます）</p> : <ul className="mt-2 flex flex-wrap gap-1.5">{pressedList.map((position) => <li key={position} className="rounded-md bg-primary/10 px-2 py-1 font-mono text-xs text-primary">#{position} {resolveFactoryMonitorKeyLabel(position, snapshot.activeLayerMask).label}</li>)}</ul>}</section>
         <section className="rounded-xl border border-base-300 bg-base-100 px-4 py-3"><h2 className="flex items-center gap-1.5 text-sm font-semibold text-base-content"><MousePointer2 className="h-4 w-4" aria-hidden="true" />トラックボール{autoMouseActive && <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] leading-none text-orange-600">Auto Mouse 使用中</span>}</h2>{snapshot.pointer ? <p className="mt-2 font-mono text-xs text-base-content/80">{pointerSummary}</p> : <p className="mt-2 text-xs text-base-content/60">（ボールを動かすとここに表示されます）</p>}</section>

@@ -8,6 +8,7 @@ import {
 import { useToast } from "../misc/Toast";
 import * as RIP from "../proto/rip";
 import { TrackballPrecisionSettings } from "./TrackballPrecisionSettings";
+import { TrackballGestureSettings } from "./TrackballGestureSettings";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { useStudioKeymap } from "../keyboard/useStudioKeymap";
 import { useDirtyRegistration } from "../navigation/DirtyStateContext";
@@ -360,6 +361,7 @@ export function TrackballSettings() {
     return (
       <div className="p-4 flex flex-col gap-4 overflow-y-auto max-h-full">
         <TrackballPrecisionSettings />
+        <TrackballGestureSettings />
         <SubsystemUnavailable
           featureName="トラックボール設定"
           explanation="キーボードのファームウェアがこの機能に対応していないか、接続方法を確認してください。"
@@ -381,6 +383,7 @@ export function TrackballSettings() {
       </h2>
 
       <TrackballPrecisionSettings />
+      <TrackballGestureSettings />
 
       <section className="rounded-xl border border-orange-200 bg-white p-3 shadow-sm space-y-3">
         <label className="flex flex-col gap-1">
