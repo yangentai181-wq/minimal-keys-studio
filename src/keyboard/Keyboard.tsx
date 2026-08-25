@@ -52,9 +52,10 @@ import {
   ALPHA_LAYOUT_LABELS,
   buildAlphaLayoutChanges,
   detectAlphaLayout,
-  readAlphaBaseline,
+  readAlphaLayoutSnapshot,
   snapshotAlphaBlock,
-  storeAlphaBaseline,
+  readStoredAlphaLayout,
+  storeAlphaSnapshot,
   storeAlphaLayout,
   type AlphaLayoutId,
 } from "./alpha-layouts";
@@ -601,13 +602,13 @@ export default function Keyboard() {
       const baseLayer = keymap?.layers[0];
       if (!baseLayer || !conn.conn || switchingAlphaLayout) return;
 
-      // Going back to the factory layout restores the bindings that the switch
-      // displaced (a moved Shift, Backspace, custom keys), when we have them.
+      // Each layout remembers its own alpha block, so switching back restores
+      // what the user last had there instead of a canned table.
       const result = buildAlphaLayoutChanges(
         baseLayer.bindings,
         behaviors ?? {},
         layoutId,
-        layoutId === "qwerty" ? readAlphaBaseline() : null,
+        readAlphaLayoutSnapshot(layoutId),
       );
       if (!result.ok) {
         toast(ERROR_MESSAGES["keyboard.setBinding"], "error");
@@ -626,8 +627,10 @@ export default function Keyboard() {
 
       setSwitchingAlphaLayout(true);
       try {
-        if (layoutId !== "qwerty") {
-          storeAlphaBaseline(snapshotAlphaBlock(baseLayer.bindings));
+        // Remember the block we are leaving, under the layout it belongs to.
+        const leaving = readStoredAlphaLayout();
+        if (leaving !== layoutId) {
+          storeAlphaSnapshot(leaving, snapshotAlphaBlock(baseLayer.bindings));
         }
 
         for (const change of result.changes) {

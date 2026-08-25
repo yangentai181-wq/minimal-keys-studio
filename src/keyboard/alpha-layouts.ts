@@ -103,7 +103,7 @@ export const ALPHA_LAYOUT_KEY_LABELS: Record<
 };
 
 const STORAGE_KEY = "minimal-keys-studio.alphaLayout";
-const BASELINE_KEY = "minimal-keys-studio.alphaBaseline";
+const SNAPSHOTS_KEY = "minimal-keys-studio.alphaSnapshots";
 
 function isAlphaLayoutId(value: unknown): value is AlphaLayoutId {
   return ALPHA_LAYOUT_IDS.includes(value as AlphaLayoutId);
@@ -123,28 +123,41 @@ export function readStoredAlphaLayout(): AlphaLayoutId {
   return "qwerty";
 }
 
+type AlphaSnapshots = Partial<
+  Record<AlphaLayoutId, Record<number, BehaviorBinding>>
+>;
+
 /**
- * Bindings displaced by a layout switch, so that switching back restores what
- * the user actually had (a moved Shift, a Backspace, a custom key) instead of
- * a canned QWERTY table.
+ * Per-layout memory of the alpha block, so switching away and back keeps the
+ * keys the user customised while that layout was active (and keeps a moved
+ * Shift or Backspace when returning to the factory arrangement).
  */
-export function readAlphaBaseline(): Record<number, BehaviorBinding> | null {
+export function readAlphaSnapshots(): AlphaSnapshots {
   try {
-    const stored = localStorage.getItem(BASELINE_KEY);
-    if (!stored) return null;
+    const stored = localStorage.getItem(SNAPSHOTS_KEY);
+    if (!stored) return {};
     const parsed: unknown = JSON.parse(stored);
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed as Record<number, BehaviorBinding>;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as AlphaSnapshots;
   } catch {
-    return null;
+    return {};
   }
 }
 
-export function storeAlphaBaseline(
+export function readAlphaLayoutSnapshot(
+  layoutId: AlphaLayoutId,
+): Record<number, BehaviorBinding> | null {
+  return readAlphaSnapshots()[layoutId] ?? null;
+}
+
+export function storeAlphaSnapshot(
+  layoutId: AlphaLayoutId,
   bindings: Record<number, BehaviorBinding>,
 ): void {
   try {
-    localStorage.setItem(BASELINE_KEY, JSON.stringify(bindings));
+    const snapshots = readAlphaSnapshots();
+    snapshots[layoutId] = bindings;
+    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(snapshots));
   } catch {
     // Persisting the snapshot is best effort only.
   }

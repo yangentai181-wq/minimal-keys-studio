@@ -6,7 +6,9 @@ import {
   ALPHA_LAYOUT_KEYS,
   buildAlphaLayoutChanges,
   detectAlphaLayout,
+  readAlphaLayoutSnapshot,
   snapshotAlphaBlock,
+  storeAlphaSnapshot,
 } from "./alpha-layouts";
 import { hid_usage_from_page_and_id } from "../hid-usages";
 import { MINIMAL_KEYS_KEY_COUNT } from "./minimal-keys-layout";
@@ -72,6 +74,34 @@ describe("alpha layouts", () => {
     // 大西 puts ";" where QWERTY has B.
     expect(ALPHA_LAYOUT_KEYS.oonishi[26]).toBe(0x33);
     expect(Object.keys(ALPHA_LAYOUT_KEYS.qwerty)).toHaveLength(31);
+  });
+
+  it("remembers each layout's own alpha block across switches", () => {
+    localStorage.clear();
+    const custom: BehaviorBinding = {
+      behaviorId: KEY_PRESS_ID,
+      param1: usage(0x35),
+      param2: 0,
+    };
+
+    // The user tweaked one key while 大西 was active.
+    const tweakedOonishi = layerBindings("oonishi");
+    tweakedOonishi[4] = custom;
+    storeAlphaSnapshot("oonishi", snapshotAlphaBlock(tweakedOonishi));
+
+    const result = buildAlphaLayoutChanges(
+      layerBindings("qwerty"),
+      behaviors,
+      "oonishi",
+      readAlphaLayoutSnapshot("oonishi"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const changed = new Map(result.changes.map((c) => [c.keyPosition, c.binding]));
+    expect(changed.get(4)).toEqual(custom);
+    // The rest of the block still lands on the 大西 letters.
+    expect(changed.get(1)).toEqual(kp(0x0f));
   });
 
   it("restores the displaced bindings instead of a canned table", () => {
