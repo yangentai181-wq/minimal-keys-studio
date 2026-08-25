@@ -85,6 +85,22 @@ describe("AppHeader", () => {
     }
   });
 
+  it("badges unsaved changes reported by the keyboard itself", () => {
+    render(
+      <AppHeader
+        connectedDeviceLabel="minimal-keys"
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        onStartTour={vi.fn()}
+      />,
+    );
+
+    // useConnectedDeviceData is mocked to report unsaved changes, standing in
+    // for a keyboard holding RAM-only edits after a page reload.
+    expect(screen.getByTestId("unsaved-badge")).toHaveTextContent("未保存");
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+  });
+
   it("fits the worst-case toolbar inside the 900px window width budget", () => {
     // Hand-measured rendered widths at the current font and spacing: each
     // control group includes its own padding, margins, and adjacent flex gaps.

@@ -32,14 +32,13 @@ import { Tooltip } from "./misc/Tooltip";
 import { useOsMode } from "./OsModeContext";
 import { ConnectionContext } from "./rpc/ConnectionContext";
 import { LockStateContext } from "./rpc/LockStateContext";
-import { useConnectedDeviceData } from "./rpc/useConnectedDeviceData";
 import {
   checkForUpdate,
   CURRENT_APP_VERSION,
   type ReleaseInfo,
   type UpdateCheckResult,
 } from "./update/versionCheck";
-import { useSub } from "./usePubSub";
+import { useUnsavedChanges } from "./rpc/useUnsavedChanges";
 
 export interface AppHeaderProps {
   connectedDeviceLabel?: string;
@@ -98,14 +97,7 @@ export const AppHeader = ({
   }, [lockState, showSettingsReset, connectionState.conn]);
 
   const showSettingsRef = useModalRef(showSettingsReset);
-  const [unsaved, setUnsaved] = useConnectedDeviceData<boolean>(
-    { keymap: { checkUnsavedChanges: true } },
-    (response) => response.keymap?.checkUnsavedChanges,
-  );
-
-  useSub("rpc_notification.keymap.unsavedChangesStatusChanged", (nextUnsaved) =>
-    setUnsaved(nextUnsaved),
-  );
+  const { unsaved } = useUnsavedChanges();
 
   const handleSave = async () => {
     const operation = ++saveOperationRef.current;
@@ -276,6 +268,15 @@ export const AppHeader = ({
         </div>
 
         <div className="flex shrink-0 items-center gap-1" data-tour="save-discard">
+          {unsaved && (
+            <span
+              data-testid="unsaved-badge"
+              role="status"
+              className="shrink-0 whitespace-nowrap rounded border border-warning bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold leading-none text-warning-content"
+            >
+              未保存
+            </span>
+          )}
           <Tooltip label="保存">
             <Button
               className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-1.5 enabled:hover:bg-base-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"

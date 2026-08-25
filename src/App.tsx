@@ -29,6 +29,7 @@ import { MonitorKeymapProvider } from "./keyboard/MonitorKeymapContext";
 import { LicenseNoticeModal } from "./misc/LicenseNoticeModal";
 import { ToastProvider, useToast } from "./misc/Toast";
 import { MonitorPanel } from "./monitor/MonitorPanel";
+import { useUnsavedChanges } from "./rpc/useUnsavedChanges";
 import {
   DirtyStateProvider,
   useDirtyRegistration,
@@ -266,6 +267,7 @@ function AppInner() {
   const [fwUpdateOpen, setFwUpdateOpen] = useState(false);
   const [connectionAbort, setConnectionAbort] = useState(new AbortController());
   const [keymapVersion, setKeymapVersion] = useState(0);
+  const { unsaved: deviceUnsaved } = useUnsavedChanges();
   const [availableUpdate, setAvailableUpdate] = useState<ReleaseInfo | null>(null);
   const [isWireless, setIsWireless] = useState<boolean | undefined>(undefined);
   const [lockState, setLockState] = useState<LockState>(
@@ -346,7 +348,30 @@ function AppInner() {
       return discardKeymapChanges(conn.conn, reset, setKeymapVersion, toast, trackEvent);
   }, [conn, toast, reset, trackEvent]);
 
-  useDirtyRegistration("keymap", { dirty: canUndo, save, discard });
+  // The keyboard keeps edits in RAM until they are saved to flash, and that
+  // state outlives the page: a reload empties the undo history while the
+  // keyboard is still holding unsaved changes that a power cycle would drop.
+  useDirtyRegistration("keymap", {
+    dirty: canUndo || deviceUnsaved,
+    save,
+    discard,
+  });
+
+  // Tell the user about unsaved changes they did not make in this session.
+  const announcedUnsavedRef = useRef(false);
+  useEffect(() => {
+    if (!conn.conn) {
+      announcedUnsavedRef.current = false;
+      return;
+    }
+    if (deviceUnsaved && !canUndo && !announcedUnsavedRef.current) {
+      announcedUnsavedRef.current = true;
+      toast(
+        "キーボードに未保存の変更が残っています。保存を押すと確定します",
+        "info",
+      );
+    }
+  }, [conn.conn, deviceUnsaved, canUndo, toast]);
 
   const resetSettings = useCallback(() => {
     async function doReset() {
