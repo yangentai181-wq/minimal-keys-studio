@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { MINIMAL_KEYS_POSITIONS } from "../keyboard/minimal-keys-layout";
 import { resolveFactoryMonitorKeyLabel } from "./minimalKeysMonitorLabels";
 import { resolveFactoryMonitorLayerTarget } from "./monitorLayerTargets";
+import type { AlphaLayoutId } from "../keyboard/alpha-layouts";
 import type { HoldTapDisplayState } from "./monitorStore";
 import type { ResolvedMonitorBinding } from "./resolveMonitorBindings";
 
@@ -33,6 +34,8 @@ export interface MinimalKeysMonitorLayoutProps {
   pressed: ReadonlySet<number>;
   holdTapStates?: Readonly<Record<number, HoldTapDisplayState>>;
   resolvedBindings?: readonly ResolvedMonitorBinding[];
+  /** Alphabet layout the keyboard is running, for factory label fallback. */
+  alphaLayout?: AlphaLayoutId;
   className?: string;
 }
 
@@ -41,6 +44,7 @@ export function MinimalKeysMonitorLayout({
   pressed,
   holdTapStates = {},
   resolvedBindings,
+  alphaLayout = "qwerty",
   className,
 }: MinimalKeysMonitorLayoutProps) {
   return (
@@ -96,7 +100,7 @@ export function MinimalKeysMonitorLayout({
           const resolvedBinding = resolvedBindings?.[index];
           const { label, transparent } = resolvedBinding
             ? { label: resolvedBinding.label, transparent: false }
-            : resolveFactoryMonitorKeyLabel(index, activeLayerMask);
+            : resolveFactoryMonitorKeyLabel(index, activeLayerMask, alphaLayout);
           const inheritedDescription = resolvedBinding?.inherited
             ? "下位レイヤーから継承"
             : undefined;

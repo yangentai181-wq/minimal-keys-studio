@@ -1,4 +1,8 @@
 import { MINIMAL_KEYS_KEY_COUNT } from "../keyboard/minimal-keys-layout";
+import {
+  ALPHA_LAYOUT_KEY_LABELS,
+  type AlphaLayoutId,
+} from "../keyboard/alpha-layouts";
 
 const DEFAULT_LAYER_LABELS = [
   "Q",
@@ -335,9 +339,30 @@ export interface MonitorKeyLabel {
  * Raw HID reports. Factory layer IDs are their L0..L8 indexes, so walk from
  * the highest-priority active layer down and only fall through empty entries.
  */
+/**
+ * Rewrites the tap half of a default-layer label when the keyboard runs a
+ * non-QWERTY alphabet layout. The hold half (" / Fn" etc.) is preserved.
+ */
+export function applyAlphaLayoutToDefaultLabel(
+  position: number,
+  label: string,
+  alphaLayout: AlphaLayoutId,
+): string {
+  // The factory labels already describe the QWERTY arrangement, including the
+  // Shift and Backspace slots that 大西 needs for letters.
+  if (alphaLayout === "qwerty") return label;
+
+  const override = ALPHA_LAYOUT_KEY_LABELS[alphaLayout]?.[position];
+  if (!override) return label;
+
+  const [, hold] = label.split(" / ");
+  return hold ? `${override} / ${hold}` : override;
+}
+
 export function resolveFactoryMonitorKeyLabel(
   position: number,
   activeLayerMask: number,
+  alphaLayout: AlphaLayoutId = "qwerty",
 ): MonitorKeyLabel {
   for (
     let layerIndex = MONITOR_KEY_LABELS_BY_LAYER.length - 1;
@@ -347,11 +372,23 @@ export function resolveFactoryMonitorKeyLabel(
     if ((activeLayerMask & (1 << layerIndex)) === 0) continue;
 
     const label = MONITOR_KEY_LABELS_BY_LAYER[layerIndex]?.[position];
-    if (label) return { label, transparent: false };
+    if (!label) continue;
+
+    return {
+      label:
+        layerIndex === 0
+          ? applyAlphaLayoutToDefaultLabel(position, label, alphaLayout)
+          : label,
+      transparent: false,
+    };
   }
 
   return {
-    label: DEFAULT_LAYER_LABELS[position] ?? `#${position}`,
+    label: applyAlphaLayoutToDefaultLabel(
+      position,
+      DEFAULT_LAYER_LABELS[position] ?? `#${position}`,
+      alphaLayout,
+    ),
     transparent: true,
   };
 }

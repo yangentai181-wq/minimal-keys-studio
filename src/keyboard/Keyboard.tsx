@@ -51,6 +51,18 @@ import {
 } from "./keymap-io";
 import { canEditUserLayer, isPrecisionLayerId } from "./minimal-keys-layers";
 import { publishKeymapChanged } from "./keymap-events";
+import { AlphaLayoutToggle } from "./AlphaLayoutToggle";
+import {
+  ALPHA_LAYOUT_LABELS,
+  buildAlphaLayoutChanges,
+  detectAlphaLayout,
+  readAlphaLayoutSnapshot,
+  snapshotAlphaBlock,
+  resolveCurrentAlphaLayout,
+  storeAlphaSnapshot,
+  storeAlphaLayout,
+  type AlphaLayoutId,
+} from "./alpha-layouts";
 import { runGuardedKeymapWrite } from "./keymap-operation-guards";
 import { ERROR_MESSAGES } from "../copy/errorMessages";
 import { usePublishMonitorKeymap } from "./MonitorKeymapContext";
@@ -451,6 +463,101 @@ export default function Keyboard() {
     total: number;
   } | null>(null);
 
+  const [switchingAlphaLayout, setSwitchingAlphaLayout] = useState(false);
+
+  const alphaLayout = useMemo(
+    () =>
+      keymap?.layers[0]
+        ? resolveCurrentAlphaLayout(keymap.layers[0].bindings, behaviors ?? {})
+        : "qwerty",
+    [keymap, behaviors],
+  );
+  const alphaLayoutCustomized = useMemo(
+    () =>
+      keymap?.layers[0]
+        ? detectAlphaLayout(keymap.layers[0].bindings, behaviors ?? {}) === null
+        : false,
+    [keymap, behaviors],
+  );
+
+  // Swaps the alphabet block of the default layer between QWERTY and 大西配列.
+  // Only the letter/symbol cells are touched; thumbs and layer keys stay put.
+  const handleAlphaLayoutSelect = useCallback(
+    async (layoutId: AlphaLayoutId) => {
+      const baseLayer = keymap?.layers[0];
+      if (!baseLayer || !conn.conn || switchingAlphaLayout) return;
+
+      // Each layout remembers its own alpha block, so switching back restores
+      // what the user last had there instead of a canned table.
+      const result = buildAlphaLayoutChanges(
+        baseLayer.bindings,
+        behaviors ?? {},
+        layoutId,
+        readAlphaLayoutSnapshot(layoutId),
+      );
+      if (!result.ok) {
+        toast(ERROR_MESSAGES["keyboard.setBinding"], "error");
+        return;
+      }
+      if (result.changes.length === 0) return;
+
+      const label = ALPHA_LAYOUT_LABELS[layoutId];
+      if (
+        !confirm(
+          `デフォルトレイヤーの文字キー ${result.changes.length} 個を${label}に書き換えます。続けますか？`,
+        )
+      ) {
+        return;
+      }
+
+      setSwitchingAlphaLayout(true);
+      try {
+        // Remember the block we are leaving, under the layout it belongs to.
+        // Derived from the keymap itself so it survives a new browser/machine.
+        const leaving = resolveCurrentAlphaLayout(
+          baseLayer.bindings,
+          behaviors ?? {},
+        );
+        if (leaving !== layoutId) {
+          storeAlphaSnapshot(leaving, snapshotAlphaBlock(baseLayer.bindings));
+        }
+
+        for (const change of result.changes) {
+          const resp = await call_rpc(conn.conn, {
+            keymap: {
+              setLayerBinding: {
+                layerId: baseLayer.id,
+                keyPosition: change.keyPosition,
+                binding: change.binding,
+              },
+            },
+          });
+          if (
+            resp.keymap?.setLayerBinding !==
+            SetLayerBindingResponse.SET_LAYER_BINDING_RESP_OK
+          ) {
+            throw new Error(`setLayerBinding failed at ${change.keyPosition}`);
+          }
+        }
+
+        const resp = await call_rpc(conn.conn, { keymap: { getKeymap: true } });
+        const refreshed = resp?.keymap?.getKeymap;
+        if (refreshed) {
+          setKeymap(() => refreshed);
+          publishKeymapChanged();
+        }
+        storeAlphaLayout(layoutId);
+        toast(`${label}に切り替えました`, "success");
+      } catch (e) {
+        console.error("Alpha layout switch failed:", e);
+        toast(ERROR_MESSAGES["keyboard.setBinding"], "error");
+      } finally {
+        setSwitchingAlphaLayout(false);
+      }
+    },
+    [keymap, conn, behaviors, toast, setKeymap, switchingAlphaLayout],
+  );
+
   const handleExport = useCallback(async () => {
     if (!keymap) return;
     const behaviorList = Object.values(behaviors);
@@ -599,6 +706,16 @@ export default function Keyboard() {
               <div key={i} className="h-7 w-full bg-base-300 rounded" />
             ))}
           </div>
+        )}
+
+        {!showLoading && keymap && (
+          <AlphaLayoutToggle
+            value={alphaLayout}
+            customized={alphaLayoutCustomized}
+            onSelect={handleAlphaLayoutSelect}
+            busy={switchingAlphaLayout}
+            disabled={!conn.conn}
+          />
         )}
 
         {!showLoading && keymap && (
