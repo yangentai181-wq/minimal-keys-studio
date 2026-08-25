@@ -48,9 +48,9 @@ export function TrackballGestureSettings() {
           <span className="rounded border border-base-300 bg-base-100 px-2 py-0.5 text-xs text-base-content/70">キーボード共通</span>
           {availability === "available" && <span className="rounded border border-primary/20 bg-primary/5 px-2 py-0.5 text-xs text-base-content/70">{STATUS_MESSAGES.available}</span>}
         </div>
-        <p className="text-sm text-base-content/70">I と O を同時押しするとジェスチャーモードが切り替わります。</p>
-        <p className="text-sm text-base-content/70">モード中にボールを上下左右へはじくと、設定した操作を実行します。</p>
-        <p className="text-sm text-base-content/70">起動キー: I + O（固定）</p>
+        <p className="text-sm text-base-content/70">ジェスチャーキーを押している間だけジェスチャーモードになります。</p>
+        <p className="text-sm text-base-content/70">押したままボールを上下左右へはじくと、設定した操作を実行します。キーを離すと通常のカーソル移動に戻ります。</p>
+        <p className="text-sm text-base-content/70">どのキーをジェスチャーキーにするかはファームウェア側で決まります。</p>
       </header>
 
       {availability !== "available" ? (
