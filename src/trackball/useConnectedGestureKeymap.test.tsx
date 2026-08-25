@@ -13,7 +13,7 @@ import { useConnectedGestureKeymap } from "./useConnectedGestureKeymap";
 const callRpc = vi.fn();
 const { LockState, SetLayerBindingResponse } = vi.hoisted(() => ({
   LockState: { ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED: 0 },
-  SetLayerBindingResponse: { SET_LAYER_BINDING_RESP_OK: 1 },
+  SetLayerBindingResponse: { SET_LAYER_BINDING_RESP_OK: 0 },
 }));
 const behaviors = [{ id: 1, displayName: "Key Press", metadata: [] }];
 const oldBinding: BehaviorBinding = { behaviorId: 1, param1: 0, param2: 0 };
@@ -104,11 +104,13 @@ describe("useConnectedGestureKeymap", () => {
     await act(async () => { updated = await result.current.updateBinding("up", nextBinding); });
 
     expect(updated).toBe(true);
+    expect(result.current.availability).toBe("available");
     expect(callRpc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       keymap: { setLayerBinding: { layerId: gestureLayer.id, keyPosition: 7, binding: nextBinding } },
     }));
     expect(doIt).toHaveBeenCalledOnce();
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(nextBinding);
+    expect(callRpc).toHaveBeenCalledTimes(2);
 
     await act(async () => { await undo?.(); });
 
@@ -155,7 +157,7 @@ describe("useConnectedGestureKeymap", () => {
   it("keeps the local binding unchanged and reports an error when the firmware rejects a write", async () => {
     const keymap = keymapWithLayers(10);
     callRpc.mockResolvedValueOnce({ keymap: { getKeymap: keymap } })
-      .mockResolvedValueOnce({ keymap: { setLayerBinding: 0 } });
+      .mockResolvedValueOnce({ keymap: { setLayerBinding: 1 } });
     const { result } = renderConnectedHook();
 
     await waitFor(() => expect(result.current.availability).toBe("available"));
@@ -163,7 +165,8 @@ describe("useConnectedGestureKeymap", () => {
     await act(async () => { updated = await result.current.updateBinding("up", nextBinding); });
 
     expect(updated).toBe(false);
-    await waitFor(() => expect(result.current.availability).toBe("error"));
+    expect(result.current.availability).toBe("available");
+    expect(result.current.error).toBe("ジェスチャー割当を更新できませんでした");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
   });
 
@@ -178,7 +181,7 @@ describe("useConnectedGestureKeymap", () => {
     await act(async () => { updated = await result.current.updateBinding("up", nextBinding); });
 
     expect(updated).toBe(false);
-    expect(result.current.availability).toBe("error");
+    expect(result.current.availability).toBe("available");
     expect(result.current.error).toBe("write failed");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
     expect(getUndoRedo()[3]).toBe(false);
@@ -188,13 +191,13 @@ describe("useConnectedGestureKeymap", () => {
   it("does not add an undo entry when the firmware rejects the write response", async () => {
     const keymap = keymapWithLayers(10);
     callRpc.mockResolvedValueOnce({ keymap: { getKeymap: keymap } })
-      .mockResolvedValueOnce({ keymap: { setLayerBinding: 0 } });
+      .mockResolvedValueOnce({ keymap: { setLayerBinding: 1 } });
     const { result, getUndoRedo } = renderWithUndoRedo();
 
     await waitFor(() => expect(result.current.availability).toBe("available"));
     await act(async () => { await result.current.updateBinding("up", nextBinding); });
 
-    expect(result.current.availability).toBe("error");
+    expect(result.current.availability).toBe("available");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
     expect(getUndoRedo()[3]).toBe(false);
     expect(getUndoRedo()[4]).toBe(false);
@@ -206,7 +209,7 @@ describe("useConnectedGestureKeymap", () => {
     callRpc.mockImplementation(async (_connection, request) => {
       if (request.keymap?.getKeymap) return { keymap: { getKeymap: deviceKeymap } };
       const change = request.keymap?.setLayerBinding;
-      if (change?.binding === oldBinding) return { keymap: { setLayerBinding: 0 } };
+      if (change?.binding === oldBinding) return { keymap: { setLayerBinding: 1 } };
       if (change) {
         deviceKeymap = {
           ...deviceKeymap,
@@ -223,7 +226,7 @@ describe("useConnectedGestureKeymap", () => {
     await act(async () => { await result.current.updateBinding("up", nextBinding); });
     await act(async () => { await getUndoRedo()[1](); });
 
-    await waitFor(() => expect(result.current.availability).toBe("error"));
+    expect(result.current.availability).toBe("available");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(nextBinding);
     expect(getUndoRedo()[3]).toBe(true);
     expect(getUndoRedo()[4]).toBe(false);

@@ -21,6 +21,8 @@ export interface ConnectedGestureKeymap {
   updateBinding(direction: GestureDirection, binding: BehaviorBinding): Promise<boolean>;
 }
 
+const GESTURE_EDITOR_EVENT_SOURCE = "trackball-gesture-editor";
+
 function setBinding(
   keymap: Keymap,
   layerIndex: number,
@@ -57,7 +59,8 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
     setKeymap(null);
   }, []);
 
-  useSub(KEYMAP_CHANGED_EVENT, () => {
+  useSub(KEYMAP_CHANGED_EVENT, (source) => {
+    if (source === GESTURE_EDITOR_EVENT_SOURCE) return;
     invalidate();
     setRefresh((current) => current + 1);
   });
@@ -85,7 +88,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
 
   const availability = useMemo<ConnectedGestureKeymap["availability"]>(() => {
     if (!connection.conn) return "disconnected";
-    if (error) return "error";
+    if (error && !keymap) return "error";
     if (!keymap) return "loading";
     return hasGestureLayer(keymap.layers) && hasCompleteGestureBindings(keymap)
       ? "available"
@@ -116,7 +119,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
 
         setError(null);
         setKeymap((current) => current ? setBinding(current, GESTURE_LAYER_INDEX, keyPosition, binding) : current);
-        publishKeymapChanged();
+        publishKeymapChanged(GESTURE_EDITOR_EVENT_SOURCE);
 
         return async () => {
           const undoResponse = await call_rpc(connection.conn!, {
@@ -129,7 +132,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
 
           setError(null);
           setKeymap((current) => current ? setBinding(current, GESTURE_LAYER_INDEX, keyPosition, oldBinding) : current);
-          publishKeymapChanged();
+          publishKeymapChanged(GESTURE_EDITOR_EVENT_SOURCE);
         };
       });
     } catch (reason: unknown) {

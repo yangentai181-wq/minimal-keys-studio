@@ -66,7 +66,7 @@ export function TrackballGestureSettings() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => selectDirection(direction.id)}
-                  className={`min-h-11 rounded-lg border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${selected ? "border-primary bg-primary/10" : "border-base-300 bg-base-100"}`}
+                  className={`min-h-11 rounded-lg border px-3 py-2 text-left hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${selected ? "border-primary bg-primary/10" : "border-base-300 bg-base-100"}`}
                 >
                   <span aria-hidden="true" className="mr-2">{direction.arrow}</span>
                   <span className="font-medium">{direction.label}</span>
@@ -76,7 +76,6 @@ export function TrackballGestureSettings() {
               );
             })}
           </div>
-          <p aria-live="polite" className="text-sm text-base-content/70">{announcement}</p>
           <BehaviorBindingPicker
             binding={selectedBinding}
             behaviors={behaviors}
@@ -97,6 +96,7 @@ export function TrackballGestureSettings() {
       ) : (
         <p role="status" className="text-sm text-base-content/70">設定を読み込んでいます…</p>
       )}
+      <p data-testid="gesture-announcement" aria-live="polite" className="text-sm text-base-content/70">{announcement}</p>
     </section>
   );
 }

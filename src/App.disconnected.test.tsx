@@ -35,6 +35,10 @@ vi.mock("@zmkfirmware/zmk-studio-ts-client/core", () => ({
   },
 }));
 
+vi.mock("@zmkfirmware/zmk-studio-ts-client/keymap", () => ({
+  SetLayerBindingResponse: { SET_LAYER_BINDING_RESP_OK: 0 },
+}));
+
 vi.mock("./AppHeader", () => ({
   AppHeader: () => <header>APP_HEADER</header>,
 }));
