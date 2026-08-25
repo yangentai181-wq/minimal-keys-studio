@@ -7,8 +7,10 @@ import {
 } from "./alpha-layouts";
 
 export interface AlphaLayoutToggleProps {
-  /** Layout currently on the default layer, or null when it is customised. */
-  value: AlphaLayoutId | null;
+  /** Layout the default layer is closest to. */
+  value: AlphaLayoutId;
+  /** True when the alpha block does not match that layout exactly. */
+  customized?: boolean;
   onSelect: (layoutId: AlphaLayoutId) => void;
   busy?: boolean;
   disabled?: boolean;
@@ -16,6 +18,7 @@ export interface AlphaLayoutToggleProps {
 
 export function AlphaLayoutToggle({
   value,
+  customized,
   onSelect,
   busy,
   disabled,
@@ -55,9 +58,9 @@ export function AlphaLayoutToggle({
           );
         })}
       </div>
-      {value === null && (
+      {customized && (
         <span className="text-[10px] leading-tight text-base-content/60">
-          カスタム配列
+          一部カスタム済み
         </span>
       )}
       {busy && (

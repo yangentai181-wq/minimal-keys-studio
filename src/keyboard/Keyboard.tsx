@@ -54,7 +54,7 @@ import {
   detectAlphaLayout,
   readAlphaLayoutSnapshot,
   snapshotAlphaBlock,
-  readStoredAlphaLayout,
+  resolveCurrentAlphaLayout,
   storeAlphaSnapshot,
   storeAlphaLayout,
   type AlphaLayoutId,
@@ -590,8 +590,15 @@ export default function Keyboard() {
   const alphaLayout = useMemo(
     () =>
       keymap?.layers[0]
-        ? detectAlphaLayout(keymap.layers[0].bindings, behaviors ?? {})
-        : null,
+        ? resolveCurrentAlphaLayout(keymap.layers[0].bindings, behaviors ?? {})
+        : "qwerty",
+    [keymap, behaviors],
+  );
+  const alphaLayoutCustomized = useMemo(
+    () =>
+      keymap?.layers[0]
+        ? detectAlphaLayout(keymap.layers[0].bindings, behaviors ?? {}) === null
+        : false,
     [keymap, behaviors],
   );
 
@@ -628,7 +635,11 @@ export default function Keyboard() {
       setSwitchingAlphaLayout(true);
       try {
         // Remember the block we are leaving, under the layout it belongs to.
-        const leaving = readStoredAlphaLayout();
+        // Derived from the keymap itself so it survives a new browser/machine.
+        const leaving = resolveCurrentAlphaLayout(
+          baseLayer.bindings,
+          behaviors ?? {},
+        );
         if (leaving !== layoutId) {
           storeAlphaSnapshot(leaving, snapshotAlphaBlock(baseLayer.bindings));
         }
@@ -802,6 +813,7 @@ export default function Keyboard() {
         {!showLoading && keymap && (
           <AlphaLayoutToggle
             value={alphaLayout}
+            customized={alphaLayoutCustomized}
             onSelect={handleAlphaLayoutSelect}
             busy={switchingAlphaLayout}
             disabled={!conn.conn}

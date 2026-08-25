@@ -260,6 +260,40 @@ export function buildAlphaLayoutChanges(
   return { ok: true, changes };
 }
 
+function layoutMatchScore(
+  bindings: readonly BehaviorBinding[],
+  behaviors: Record<number, GetBehaviorDetailsResponse>,
+  layoutId: AlphaLayoutId,
+): number {
+  let score = 0;
+  for (const [position, id] of Object.entries(ALPHA_LAYOUT_KEYS[layoutId])) {
+    const expected = hid_usage_from_page_and_id(KEYBOARD_USAGE_PAGE, id);
+    if (tapUsage(bindings[Number(position)], behaviors) === expected) score += 1;
+  }
+  return score;
+}
+
+/**
+ * The layout the layer is closest to, by how many alpha slots match. Unlike
+ * `detectAlphaLayout` this always commits to a direction, so a hand-customised
+ * block still switches the right way without any stored state.
+ */
+export function resolveCurrentAlphaLayout(
+  bindings: readonly BehaviorBinding[],
+  behaviors: Record<number, GetBehaviorDetailsResponse>,
+): AlphaLayoutId {
+  let best: AlphaLayoutId = "qwerty";
+  let bestScore = -1;
+  for (const layoutId of ALPHA_LAYOUT_IDS) {
+    const score = layoutMatchScore(bindings, behaviors, layoutId);
+    if (score > bestScore) {
+      best = layoutId;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 /** Which known layout the layer currently uses, or null when it is custom. */
 export function detectAlphaLayout(
   bindings: readonly BehaviorBinding[],

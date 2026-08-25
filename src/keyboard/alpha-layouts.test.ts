@@ -7,6 +7,7 @@ import {
   buildAlphaLayoutChanges,
   detectAlphaLayout,
   readAlphaLayoutSnapshot,
+  resolveCurrentAlphaLayout,
   snapshotAlphaBlock,
   storeAlphaSnapshot,
 } from "./alpha-layouts";
@@ -180,6 +181,19 @@ describe("alpha layouts", () => {
     };
 
     expect(ALPHA_LAYOUT_KEYS.qwerty).toEqual(measured);
+  });
+
+  it("still knows which layout is in use after the user customises a key", () => {
+    const customised = layerBindings("oonishi");
+    customised[4] = kp(0x35); // one slot re-bound by hand
+    customised[26] = kp(0xe1); // Shift parked in an alpha slot
+
+    // Exact detection gives up, but the toggle still needs a direction.
+    expect(detectAlphaLayout(customised, behaviors)).toBeNull();
+    expect(resolveCurrentAlphaLayout(customised, behaviors)).toBe("oonishi");
+    expect(
+      resolveCurrentAlphaLayout(layerBindings("qwerty"), behaviors),
+    ).toBe("qwerty");
   });
 
   it("detects which alpha layout the layer currently uses", () => {

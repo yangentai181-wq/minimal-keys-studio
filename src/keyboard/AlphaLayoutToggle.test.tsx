@@ -16,12 +16,13 @@ describe("AlphaLayoutToggle", () => {
     expect(onSelect).toHaveBeenCalledWith("oonishi");
   });
 
-  it("says the layer is customised when neither layout matches", () => {
-    render(<AlphaLayoutToggle value={null} onSelect={vi.fn()} />);
+  it("keeps the closest layout selected while flagging hand-made changes", () => {
+    render(
+      <AlphaLayoutToggle value="oonishi" customized onSelect={vi.fn()} />,
+    );
 
-    expect(screen.getByRole("radio", { name: "通常配列" })).not.toBeChecked();
-    expect(screen.getByRole("radio", { name: "大西配列" })).not.toBeChecked();
-    expect(screen.getByText("カスタム配列")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "大西配列" })).toBeChecked();
+    expect(screen.getByText("一部カスタム済み")).toBeInTheDocument();
   });
 
   it("blocks input while a write is in flight", async () => {
