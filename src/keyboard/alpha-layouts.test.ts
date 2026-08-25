@@ -6,6 +6,7 @@ import {
   ALPHA_LAYOUT_KEYS,
   buildAlphaLayoutChanges,
   detectAlphaLayout,
+  snapshotAlphaBlock,
 } from "./alpha-layouts";
 import { hid_usage_from_page_and_id } from "../hid-usages";
 import { MINIMAL_KEYS_KEY_COUNT } from "./minimal-keys-layout";
@@ -60,6 +61,44 @@ describe("alpha layouts", () => {
     );
   });
 
+  it("covers the whole 30-key alpha block, keeping Z X C V on their own slots", () => {
+    const letter = (c: string) => 0x04 + (c.charCodeAt(0) - "a".charCodeAt(0));
+    expect([22, 23, 24, 25, 26].map((p) => ALPHA_LAYOUT_KEYS.qwerty[p])).toEqual(
+      ["z", "x", "c", "v", "b"].map(letter),
+    );
+    expect([22, 23, 24, 25].map((p) => ALPHA_LAYOUT_KEYS.oonishi[p])).toEqual(
+      ["z", "x", "c", "v"].map(letter),
+    );
+    // 大西 puts ";" where QWERTY has B.
+    expect(ALPHA_LAYOUT_KEYS.oonishi[26]).toBe(0x33);
+    expect(Object.keys(ALPHA_LAYOUT_KEYS.qwerty)).toHaveLength(31);
+  });
+
+  it("restores the displaced bindings instead of a canned table", () => {
+    const oonishi = layerBindings("oonishi");
+    const baseline = snapshotAlphaBlock(layerBindings("qwerty"));
+    // The user had Shift parked in the Z slot before switching.
+    const shift: BehaviorBinding = {
+      behaviorId: KEY_PRESS_ID,
+      param1: usage(0xe1),
+      param2: 0,
+    };
+    baseline[22] = shift;
+
+    const result = buildAlphaLayoutChanges(
+      oonishi,
+      behaviors,
+      "qwerty",
+      baseline,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const changed = new Map(result.changes.map((c) => [c.keyPosition, c.binding]));
+    expect(changed.get(22)).toEqual(shift);
+    expect(changed.get(21)).toEqual(kp(0x2a));
+  });
+
   it("builds only the bindings that actually differ", () => {
     const result = buildAlphaLayoutChanges(
       layerBindings("qwerty"),
@@ -96,6 +135,21 @@ describe("alpha layouts", () => {
   it("reports a missing Key Press behavior instead of writing nothing silently", () => {
     const result = buildAlphaLayoutChanges(layerBindings("qwerty"), {}, "oonishi");
     expect(result).toEqual({ ok: false, error: "missing-key-press-behavior" });
+  });
+
+  // Measured with a getKeymap dump from the real board (2026-08-25). Guards the
+  // table against drifting away from the physical alpha block again.
+  it("matches the QWERTY usage ids the keyboard actually reports", () => {
+    const measured: Record<number, number> = {
+      0: 0x14, 1: 0x1a, 2: 0x08, 3: 0x15, 4: 0x17,
+      5: 0x1c, 6: 0x18, 7: 0x0c, 8: 0x12, 9: 0x13,
+      10: 0x04, 11: 0x16, 12: 0x07, 13: 0x09, 14: 0x0a,
+      16: 0x2d, 17: 0x0b, 18: 0x0d, 19: 0x0e, 20: 0x0f, 21: 0x2a,
+      22: 0x1d, 23: 0x1b, 24: 0x06, 25: 0x19, 26: 0x05,
+      29: 0x11, 30: 0x10, 31: 0x36, 32: 0x37, 33: 0x38,
+    };
+
+    expect(ALPHA_LAYOUT_KEYS.qwerty).toEqual(measured);
   });
 
   it("detects which alpha layout the layer currently uses", () => {

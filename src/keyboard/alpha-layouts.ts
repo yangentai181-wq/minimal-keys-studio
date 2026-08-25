@@ -1,17 +1,17 @@
 // L0 alphabet arrangements the user can toggle between.
 //
-// minimal-keys drops two of the 30 standard alpha slots (left ring bottom, and
-// the right pinky home cell is Backspace), so each layout below is the closest
-// faithful fit for this 43-key board:
+// The board exposes the full 30-key alpha block (3 rows x 5 columns per hand);
+// the factory keymap simply parks Shift and Backspace in two of those slots
+// instead of letters:
 //
 //   通常（QWERTY）      Q W E R T | Y U I O P      大西            Q L U , . | F W R Y P
 //                      A S D F G | H J K L Bsp                    E I A O - | K T N S H
-//                        Z C V B | N M , . /                        Z C V ; | G D M J B
+//                      Z X C V B | N M , . /                      Z X C V ; | G D M J B
 //
-// 大西 keeps its own column assignments, so Backspace moves to the right
-// centre key (position 16), whose L5 hold is preserved. The left ring bottom
-// key does not exist on this board, so X (QWERTY) / X (大西) is unavailable in
-// both layouts, unchanged from the factory keymap.
+// 大西 needs the右小指ホーム slot for H, so Backspace moves to the right centre
+// key (position 16), whose L5 hold is preserved. Switching back restores the
+// bindings that were displaced, so a customised Shift/Backspace survives the
+// round trip.
 
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
@@ -45,22 +45,23 @@ function usageId(key: string): number {
 }
 
 // Physical positions of the alpha block, in the row order shown above.
+// 15 / 27 / 28 are centre keys and 34-42 are thumbs: both stay untouched.
 const ALPHA_POSITIONS: readonly number[] = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
   10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21,
-  23, 24, 25, 26, 29, 30, 31, 32, 33,
+  22, 23, 24, 25, 26, 29, 30, 31, 32, 33,
 ];
 
 const ALPHA_LAYOUT_KEY_NAMES: Record<AlphaLayoutId, readonly string[]> = {
   qwerty: [
     "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
     "a", "s", "d", "f", "g", "-", "h", "j", "k", "l", "bspc",
-    "z", "c", "v", "b", "n", "m", ",", ".", "/",
+    "z", "x", "c", "v", "b", "n", "m", ",", ".", "/",
   ],
   oonishi: [
     "q", "l", "u", ",", ".", "f", "w", "r", "y", "p",
     "e", "i", "a", "o", "-", "bspc", "k", "t", "n", "s", "h",
-    "z", "c", "v", ";", "g", "d", "m", "j", "b",
+    "z", "x", "c", "v", ";", "g", "d", "m", "j", "b",
   ],
 };
 
@@ -102,6 +103,7 @@ export const ALPHA_LAYOUT_KEY_LABELS: Record<
 };
 
 const STORAGE_KEY = "minimal-keys-studio.alphaLayout";
+const BASELINE_KEY = "minimal-keys-studio.alphaBaseline";
 
 function isAlphaLayoutId(value: unknown): value is AlphaLayoutId {
   return ALPHA_LAYOUT_IDS.includes(value as AlphaLayoutId);
@@ -119,6 +121,45 @@ export function readStoredAlphaLayout(): AlphaLayoutId {
     // Storage unavailable (private mode, tests): fall back to the factory layout.
   }
   return "qwerty";
+}
+
+/**
+ * Bindings displaced by a layout switch, so that switching back restores what
+ * the user actually had (a moved Shift, a Backspace, a custom key) instead of
+ * a canned QWERTY table.
+ */
+export function readAlphaBaseline(): Record<number, BehaviorBinding> | null {
+  try {
+    const stored = localStorage.getItem(BASELINE_KEY);
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as Record<number, BehaviorBinding>;
+  } catch {
+    return null;
+  }
+}
+
+export function storeAlphaBaseline(
+  bindings: Record<number, BehaviorBinding>,
+): void {
+  try {
+    localStorage.setItem(BASELINE_KEY, JSON.stringify(bindings));
+  } catch {
+    // Persisting the snapshot is best effort only.
+  }
+}
+
+/** The alpha-block bindings of a layer, keyed by position. */
+export function snapshotAlphaBlock(
+  bindings: readonly BehaviorBinding[],
+): Record<number, BehaviorBinding> {
+  const snapshot: Record<number, BehaviorBinding> = {};
+  for (const position of ALPHA_POSITIONS) {
+    const binding = bindings[position];
+    if (binding) snapshot[position] = { ...binding };
+  }
+  return snapshot;
 }
 
 export function storeAlphaLayout(layoutId: AlphaLayoutId): void {
@@ -169,6 +210,7 @@ export function buildAlphaLayoutChanges(
   bindings: readonly BehaviorBinding[],
   behaviors: Record<number, GetBehaviorDetailsResponse>,
   layoutId: AlphaLayoutId,
+  restore?: Record<number, BehaviorBinding> | null,
 ): AlphaLayoutChangeResult {
   const keyPress = Object.values(behaviors).find(
     (behavior) => behavior.displayName === "Key Press",
@@ -184,9 +226,12 @@ export function buildAlphaLayoutChanges(
 
     const usage = hid_usage_from_page_and_id(KEYBOARD_USAGE_PAGE, id);
     const name = behaviorName(current, behaviors);
-    const binding: BehaviorBinding = HOLD_TAP_BEHAVIORS.includes(name ?? "")
-      ? { ...current, param2: usage }
-      : { behaviorId: keyPress.id, param1: usage, param2: 0 };
+    const restored = restore?.[keyPosition];
+    const binding: BehaviorBinding = restored
+      ? restored
+      : HOLD_TAP_BEHAVIORS.includes(name ?? "")
+        ? { ...current, param2: usage }
+        : { behaviorId: keyPress.id, param1: usage, param2: 0 };
 
     if (
       binding.behaviorId === current.behaviorId &&

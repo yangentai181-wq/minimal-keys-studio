@@ -348,6 +348,10 @@ export function applyAlphaLayoutToDefaultLabel(
   label: string,
   alphaLayout: AlphaLayoutId,
 ): string {
+  // The factory labels already describe the QWERTY arrangement, including the
+  // Shift and Backspace slots that 大西 needs for letters.
+  if (alphaLayout === "qwerty") return label;
+
   const override = ALPHA_LAYOUT_KEY_LABELS[alphaLayout]?.[position];
   if (!override) return label;
 

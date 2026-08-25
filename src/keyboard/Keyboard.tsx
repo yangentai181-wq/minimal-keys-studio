@@ -52,6 +52,9 @@ import {
   ALPHA_LAYOUT_LABELS,
   buildAlphaLayoutChanges,
   detectAlphaLayout,
+  readAlphaBaseline,
+  snapshotAlphaBlock,
+  storeAlphaBaseline,
   storeAlphaLayout,
   type AlphaLayoutId,
 } from "./alpha-layouts";
@@ -598,10 +601,13 @@ export default function Keyboard() {
       const baseLayer = keymap?.layers[0];
       if (!baseLayer || !conn.conn || switchingAlphaLayout) return;
 
+      // Going back to the factory layout restores the bindings that the switch
+      // displaced (a moved Shift, Backspace, custom keys), when we have them.
       const result = buildAlphaLayoutChanges(
         baseLayer.bindings,
         behaviors ?? {},
         layoutId,
+        layoutId === "qwerty" ? readAlphaBaseline() : null,
       );
       if (!result.ok) {
         toast(ERROR_MESSAGES["keyboard.setBinding"], "error");
@@ -620,6 +626,10 @@ export default function Keyboard() {
 
       setSwitchingAlphaLayout(true);
       try {
+        if (layoutId !== "qwerty") {
+          storeAlphaBaseline(snapshotAlphaBlock(baseLayer.bindings));
+        }
+
         for (const change of result.changes) {
           const resp = await call_rpc(conn.conn, {
             keymap: {
