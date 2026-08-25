@@ -10,7 +10,7 @@ const STATUS_MESSAGES = {
   loading: "設定を読み込んでいます…",
   disconnected: "キーボードに接続すると設定できます",
   "firmware-update-required": "ファームウェアの更新が必要です",
-  error: "設定の読み込みに失敗しました",
+  error: "設定を読み込むか更新できませんでした",
   available: "利用可能",
 } as const;
 
@@ -81,9 +81,16 @@ export function TrackballGestureSettings() {
             binding={selectedBinding}
             behaviors={behaviors}
             layers={visibleLayers}
-            onBindingChanged={(binding) => {
-              void updateBinding(selectedDirection, binding);
-              setAnnouncement(`${GESTURE_DIRECTIONS.find((candidate) => candidate.id === selectedDirection)?.label}フリックの割当を変更しました`);
+            onBindingChanged={async (binding) => {
+              const directionLabel = GESTURE_DIRECTIONS.find((candidate) => candidate.id === selectedDirection)?.label;
+              try {
+                const updated = await updateBinding(selectedDirection, binding);
+                setAnnouncement(updated
+                  ? `${directionLabel}フリックの割当を変更しました`
+                  : `${directionLabel}フリックの割当を変更できませんでした`);
+              } catch {
+                setAnnouncement(`${directionLabel}フリックの割当を変更できませんでした`);
+              }
             }}
           />
         </>

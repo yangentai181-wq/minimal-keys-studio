@@ -1,6 +1,6 @@
 import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-client/behaviors";
 import type { BehaviorBinding, Keymap } from "@zmkfirmware/zmk-studio-ts-client/keymap";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TrackballGestureSettings } from "./TrackballGestureSettings";
 import { useConnectedGestureKeymap } from "./useConnectedGestureKeymap";
@@ -40,7 +40,7 @@ vi.mock("../behaviors/BehaviorBindingPicker", () => ({
 
 describe("TrackballGestureSettings", () => {
   beforeEach(() => {
-    updateBinding.mockReset().mockResolvedValue(undefined);
+    updateBinding.mockReset().mockResolvedValue(true);
     vi.mocked(useConnectedGestureKeymap).mockReturnValue({
       availability: "available",
       keymap: keymap(),
@@ -79,10 +79,32 @@ describe("TrackballGestureSettings", () => {
   });
 
   it.each([
+    ["a rejected update", () => updateBinding.mockRejectedValueOnce(new Error("write failed"))],
+    ["a rejected firmware response", () => updateBinding.mockResolvedValueOnce(false)],
+  ])("announces failure instead of success after %s", async (_scenario, arrange) => {
+    arrange();
+    render(<TrackballGestureSettings />);
+
+    fireEvent.click(screen.getByTestId("behavior-binding-picker"));
+
+    await waitFor(() => expect(screen.getByText("上フリックの割当を変更できませんでした")).toBeVisible());
+    expect(screen.queryByText("上フリックの割当を変更しました")).not.toBeInTheDocument();
+  });
+
+  it("announces success only after the update succeeds", async () => {
+    updateBinding.mockResolvedValueOnce(true);
+    render(<TrackballGestureSettings />);
+
+    fireEvent.click(screen.getByTestId("behavior-binding-picker"));
+
+    await waitFor(() => expect(screen.getByText("上フリックの割当を変更しました")).toBeVisible());
+  });
+
+  it.each([
     ["loading", "設定を読み込んでいます…"],
     ["disconnected", "キーボードに接続すると設定できます"],
     ["firmware-update-required", "ファームウェアの更新が必要です"],
-    ["error", "設定の読み込みに失敗しました"],
+    ["error", "設定を読み込むか更新できませんでした"],
   ] as const)("shows the truthful %s state without an editor", (availability, message) => {
     vi.mocked(useConnectedGestureKeymap).mockReturnValue({
       availability, keymap: null, behaviors: [], error: availability === "error" ? "read failed" : null, updateBinding,

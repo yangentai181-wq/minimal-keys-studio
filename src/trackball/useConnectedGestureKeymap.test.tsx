@@ -43,7 +43,7 @@ function keymapWithLayers(count: number): Keymap {
 
 function renderConnectedHook({
   conn = {} as never,
-  doIt = vi.fn(async (operation: () => Promise<() => Promise<void>>) => { await operation(); }),
+  doIt = vi.fn(async (operation: () => Promise<() => Promise<void> | null>) => Boolean(await operation())),
 }: {
   conn?: never | null;
   doIt?: ReturnType<typeof vi.fn>;
@@ -82,6 +82,7 @@ describe("useConnectedGestureKeymap", () => {
     let undo: (() => Promise<void>) | undefined;
     const doIt = vi.fn(async (operation: () => Promise<() => Promise<void>>) => {
       undo = await operation();
+      return true;
     });
     callRpc.mockImplementation(async (_connection, request) => {
       if (request.keymap?.getKeymap) return { keymap: { getKeymap: deviceKeymap } };
@@ -99,8 +100,10 @@ describe("useConnectedGestureKeymap", () => {
     const { result } = renderConnectedHook({ doIt });
 
     await waitFor(() => expect(result.current.availability).toBe("available"));
-    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+    let updated = false;
+    await act(async () => { updated = await result.current.updateBinding("up", nextBinding); });
 
+    expect(updated).toBe(true);
     expect(callRpc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       keymap: { setLayerBinding: { layerId: gestureLayer.id, keyPosition: 7, binding: nextBinding } },
     }));
@@ -156,8 +159,10 @@ describe("useConnectedGestureKeymap", () => {
     const { result } = renderConnectedHook();
 
     await waitFor(() => expect(result.current.availability).toBe("available"));
-    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+    let updated = true;
+    await act(async () => { updated = await result.current.updateBinding("up", nextBinding); });
 
+    expect(updated).toBe(false);
     await waitFor(() => expect(result.current.availability).toBe("error"));
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);
   });
@@ -169,8 +174,10 @@ describe("useConnectedGestureKeymap", () => {
     const { result, getUndoRedo } = renderWithUndoRedo();
 
     await waitFor(() => expect(result.current.availability).toBe("available"));
-    await act(async () => { await result.current.updateBinding("up", nextBinding); });
+    let updated = true;
+    await act(async () => { updated = await result.current.updateBinding("up", nextBinding); });
 
+    expect(updated).toBe(false);
     expect(result.current.availability).toBe("error");
     expect(result.current.error).toBe("write failed");
     expect(result.current.keymap?.layers[9].bindings[7]).toEqual(oldBinding);

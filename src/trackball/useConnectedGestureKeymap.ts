@@ -18,7 +18,7 @@ export interface ConnectedGestureKeymap {
   keymap: Keymap | null;
   behaviors: GetBehaviorDetailsResponse[];
   error: string | null;
-  updateBinding(direction: GestureDirection, binding: BehaviorBinding): Promise<void>;
+  updateBinding(direction: GestureDirection, binding: BehaviorBinding): Promise<boolean>;
 }
 
 function setBinding(
@@ -97,7 +97,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
     const layer = keymap?.layers[GESTURE_LAYER_INDEX];
     if (!connection.conn || !keymap || !layer || !slot || !undoRedo || !hasCompleteGestureBindings(keymap)) {
       setError("ジェスチャー割当を更新できませんでした");
-      return;
+      return false;
     }
 
     const { id: layerId } = layer;
@@ -105,7 +105,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
     const oldBinding = layer.bindings[keyPosition];
 
     try {
-      await undoRedo(async () => {
+      return await undoRedo(async () => {
         const response = await call_rpc(connection.conn!, {
           keymap: { setLayerBinding: { layerId, keyPosition, binding } },
         });
@@ -134,6 +134,7 @@ export function useConnectedGestureKeymap(): ConnectedGestureKeymap {
       });
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "ジェスチャー割当を更新できませんでした");
+      return false;
     }
   }, [connection.conn, keymap, undoRedo]);
 
