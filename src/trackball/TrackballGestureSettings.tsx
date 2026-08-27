@@ -50,7 +50,7 @@ export function TrackballGestureSettings() {
         </div>
         <p className="text-sm text-base-content/70">ジェスチャーキーを押している間だけジェスチャーモードになります。</p>
         <p className="text-sm text-base-content/70">押したままボールを上下左右へはじくと、設定した操作を実行します。キーを離すと通常のカーソル移動に戻ります。</p>
-        <p className="text-sm text-base-content/70">どのキーをジェスチャーキーにするかはファームウェア側で決まります。</p>
+        <p className="text-sm text-base-content/70">ジェスチャーキーは、キーマップ画面で好きなキーの長押しに「ジェスチャー」レイヤーを割り当てて決めます。</p>
       </header>
 
       {availability !== "available" ? (

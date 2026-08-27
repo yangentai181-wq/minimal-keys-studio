@@ -3,7 +3,7 @@ import type { GetBehaviorDetailsResponse } from "@zmkfirmware/zmk-studio-ts-clie
 import type { BehaviorBinding } from "@zmkfirmware/zmk-studio-ts-client/keymap";
 import { getBehaviorDescription } from "../behavior-descriptions";
 import { mouseItems, type ActionItem } from "./actions-data";
-import { getMinimalKeysLayerRole, isInternalLayerId } from "../../keyboard/minimal-keys-layers";
+import { getMinimalKeysLayerRole, isPrecisionLayerId } from "../../keyboard/minimal-keys-layers";
 
 import { encodeTapKey, getCommonTapKeys, type TapKeyItem } from "./common-tap-keys";
 import { buildFunctionalLayerTapBinding, type FunctionalLayerAction } from "./functional-layer-actions";
@@ -50,7 +50,9 @@ export function LayersTab({
     [behaviors],
   );
   const selectableLayers = useMemo(
-    () => layers.filter((layer) => !isInternalLayerId(layer.id)),
+    // The gesture layer stays selectable: holding a key bound to it is how the
+    // trackball enters gesture mode. Only the precision layer is off limits.
+    () => layers.filter((layer) => !isPrecisionLayerId(layer.id)),
     [layers],
   );
 
@@ -113,8 +115,10 @@ export function LayersTab({
   };
 
   const layerButtonLabel = (layer: { id: number; name: string; index: number }): string => {
-    const base = layer.name || `Layer ${layer.index}`;
     const role = getMinimalKeysLayerRole(layer.id);
+    // The reserved gesture layer carries no user-facing name of its own.
+    if (role === "gesture") return layer.name || "ジェスチャー";
+    const base = layer.name || `Layer ${layer.index}`;
     if (role === "scroll") return `${base}（スクロール）`;
     if (role === "autoMouse") return `${base}（自動マウス）`;
     return base;

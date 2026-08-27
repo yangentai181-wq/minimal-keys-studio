@@ -313,17 +313,34 @@ describe("LayersTab", () => {
     expect(onApply).toHaveBeenCalledWith({ behaviorId: 11, param1: 7, param2: 0 });
   });
 
-  it("omits the internal gesture layer from layer behavior targets", () => {
+  it("offers the gesture layer as a hold target so any key can trigger gestures", () => {
+    const onApply = vi.fn();
+    const layersWithGesture = Array.from({ length: 10 }, (_, index) => ({
+      id: index,
+      index,
+      name: index === 9 ? "" : `Layer ${index}`,
+    }));
+    render(<LayersTab behaviors={mockBehaviors} layers={layersWithGesture} osMode="mac" onApplyBinding={onApply} />);
+
+    fireEvent.click(screen.getByText("レイヤー切替"));
+
+    // Named by role: the reserved layer has no user-facing name of its own.
+    expect(screen.getByText("ジェスチャー")).toBeInTheDocument();
+    // The precision layer (id 8) stays hidden; it is not something to switch to.
+    expect(screen.queryByText("Layer 8")).toBeNull();
+  });
+
+  it("omits the internal precision layer from layer behavior targets", () => {
     const onApply = vi.fn();
     const layersWithInternal = Array.from({ length: 10 }, (_, index) => ({
       id: index,
       index,
-      name: index === 9 ? "Gesture" : `Layer ${index}`,
+      name: index === 8 ? "Precision" : `Layer ${index}`,
     }));
     render(<LayersTab behaviors={mockBehaviors} layers={layersWithInternal} osMode="mac" onApplyBinding={onApply} />);
 
     fireEvent.click(screen.getByText("レイヤー切替"));
 
-    expect(screen.queryByText("Gesture")).toBeNull();
+    expect(screen.queryByText("Precision")).toBeNull();
   });
 });
