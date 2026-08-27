@@ -39,3 +39,4 @@ storybook-static
 # Local Codex/Superpowers workspaces and design mockups
 .worktrees/
 .superpowers/
+state.md
