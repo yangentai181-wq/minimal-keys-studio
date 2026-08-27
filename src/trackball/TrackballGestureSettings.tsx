@@ -76,6 +76,12 @@ export function TrackballGestureSettings() {
               );
             })}
           </div>
+          {/* The picker fills its parent and scrolls its list absolutely, so it
+              needs a definite height here; a plain card would collapse it. */}
+          <div
+            data-testid="gesture-binding-picker-frame"
+            className="h-80 min-h-0 sm:h-96"
+          >
           <BehaviorBindingPicker
             binding={selectedBinding}
             behaviors={behaviors}
@@ -92,6 +98,7 @@ export function TrackballGestureSettings() {
               }
             }}
           />
+          </div>
         </>
       ) : (
         <p role="status" className="text-sm text-base-content/70">設定を読み込んでいます…</p>

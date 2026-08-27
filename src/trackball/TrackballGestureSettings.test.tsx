@@ -50,6 +50,15 @@ describe("TrackballGestureSettings", () => {
     });
   });
 
+  it("gives the binding picker a bounded height so its options stay visible", () => {
+    render(<TrackballGestureSettings />);
+
+    // The picker fills its parent (h-full) and positions its list absolutely,
+    // so an auto-height card would collapse the options to nothing.
+    const frame = screen.getByTestId("gesture-binding-picker-frame");
+    expect(frame.className).toMatch(/\bh-\d+\b/);
+  });
+
   it("shows four direction tiles and edits only the selected direction", () => {
     const currentKeymap = keymap();
     currentKeymap.layers[9].bindings[31] = none;
