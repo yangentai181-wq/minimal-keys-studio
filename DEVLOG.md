@@ -140,3 +140,26 @@ config/west.yml                # モジュール定義 (ble-management, runtime-
 - `945f3dd` ci: Disable auto-deploy until repo is public
 - `e3457c2` fix: Remove unused generate-data script that fails in CI
 - `c44bc04` feat: minimal-keys Studio - Custom ZMK Studio Web UI
+
+### 2026-08-25〜28: トラックボールジェスチャー / 文字配列トグル / 未保存警告
+
+**トラックボールジェスチャー**
+- ジェスチャー機能をmainへ取り込む際、ブランチがレイヤーを**index**で扱う旧設計の上に作られていたため、mainの**ID**設計へ移植（`GESTURE_LAYER_ID = 9`、`isInternalLayerId`へ統合）
+- 起動方法を I+O のトグルから**ロジクール方式（キーを押している間だけ有効）**へ変更。`trackball_listener` のレイヤー別入力処理で、ジェスチャーレイヤーが出ている間だけ `zip_mouse_gesture` を通す
+- 判定レイヤーを数字パッド兼用の6番から**予約レイヤー9**へ移し、どのキーで発動するかをキーマップ側の選択に。Studioの操作ピッカーからジェスチャーレイヤーを長押し先として選べる（＝ファームを焼き直さずにキーを変更できる）
+- 感度調整: `stroke-size` 200→100、`gesture-cooldown-ms` 500→250、`partial-gesture-timeout-ms` 400→600。レイヤー別処理では runtime processor を先に通し、回転・反転設定と向きを揃える
+
+**文字配列トグル（通常⇄大西）**
+- L0の文字ブロック31スロットのみを書き換える。Layer-Tapキーは長押し側を保ったままタップ側だけ差し替え
+- 当初、設定ファイルの見た目から「左下段は4キー」と誤読し、変換表が1列ずれてXを潰すバグを作った。**実機の getKeymap ダンプ**で31スロット全一致を確認して修正し、実測値を回帰テストに固定
+- 現在の配列は一致度で判定（保存データ非依存）。配列ごとのカスタム内容はアプリ側に記憶し、往復しても失われない
+
+**未保存の変更**
+- ZMKはキーマップ編集をRAMに置き、`saveChanges` でフラッシュへ書く。未保存警告が `canUndo`（セッションの編集履歴）基準だったため、**再読込すると警告が消え、電源断で変更が黙って失われていた**
+- 判定をデバイスの `checkUnsavedChanges` / `unsavedChangesStatusChanged` 基準に変更し、未保存バッジと接続時通知を追加
+
+**接続まわり**
+- 「接続できない」の主因は、他のタブ・アプリがシリアル/HIDを掴んだままだったこと。Raw HID側はブラウザの英語メッセージがそのまま出ていたので、対処方法つきの日本語に変更
+
+**道具**
+- `scripts/studio_keymap_dump.py`: キーボードのキーマップを直接読む（getKeymapのみ）。画面表示とデバイスの食い違いや、保存済み／RAMのみの区別に使う
