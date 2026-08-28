@@ -87,7 +87,16 @@ export async function openRawHidMonitor(
   onFrame: (frame: RawHidFrame) => void,
 ): Promise<RawHidSubscription> {
   if (!device.opened) {
-    await device.open();
+    try {
+      await device.open();
+    } catch (error) {
+      // Chrome hands back its own English wording here, and by far the most
+      // common cause is another Studio tab still holding the keyboard.
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `キーボードが他のタブ・アプリに使用中の可能性があります。Studioを開いている他のタブを閉じてから再試行してください。（${detail}）`,
+      );
+    }
   }
 
   const listener: EventListener = (event) => {
